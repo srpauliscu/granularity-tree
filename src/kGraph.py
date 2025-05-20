@@ -1,10 +1,11 @@
 
 
 
-
+import numpy as np
 
 
 from entities import *
+
 
 import logging
 
@@ -30,43 +31,7 @@ class Entity(object):
         self.value = None
 
 
-class DEdge(object):
 
-    """
-    Class that represents a directed edge between two nodes.
-
-    Invariants:
-        self.weight must be between 0 and 1, inclusive, or None.
-        The variables with specified types must always be those types or None.
-    """
-
-    def __init__(self) -> 'DEdge':
-
-        #: Node: The origin node of this edge.
-        self.source = None
-        
-        #: Node
-        self.destination = None
-
-        #: float
-        self.weight = None
-
-        #: EdgeWeight
-        self.label = None
-
-        #: logging.logger
-        self.logger = logging.getLogger(__name__)
-
-
-    
-    def __CheckInvariants(self) -> bool:
-
-        """
-        Function that should be called whenever a change is made to ensure
-        that the class invariants still hold true.
-        """
-
-        pass
 
 
 class Node(object):
@@ -86,10 +51,7 @@ class Node(object):
 
 
         #: list[DEdge]
-        self.outgoing = None
-        
-        #: list[DEdge]
-        self.incoming = None
+        self.edges = None
 
         #: StrEnum (either GEID or TID for now)
         self.id = None
@@ -115,6 +77,66 @@ class Node(object):
         """
 
         return self.path == value.path
+    
+
+class Edge(object):
+
+    """
+    Class that represents an undirected edge between two nodes.
+
+    Invariants:
+        The variables with specified types must always be those types or None.
+        Weights must be >= 0.
+    """
+
+    def __init__(self, _n1: Node, _n2: Node) -> 'Edge':
+
+        #: Node: One node of this edge
+        self.n1 = _n1
+        
+        #: Node: The second node of this edge
+        self.n2 = _n2
+
+        #: dict: The set of weights that can be used for this edge
+        self.weights = {}
+
+        #: logging.logger
+        self.logger = logging.getLogger(__name__)
+
+        if not self.__CheckInvariants():
+            raise RuntimeError("Cannot instantiate edge with given parameters.")
+
+
+    def AddWeight(self, weightType: EdgeWeight, weight: float) -> None:
+
+        """
+        Add a new weight for this edge.
+
+        Args:
+            self (Edge): This edge.
+            weightType (EdgeWeight): The type of the new weight.
+            weight (float): The weight to be added.
+
+        """
+
+        # Overwrite the weight if it already exists
+        self.weights[weightType] = weight
+
+    def GetWeight(self, weightType: EdgeWeight) -> float:
+        return self.weights[weightType]    
+    
+    def __CheckInvariants(self) -> bool:
+
+        """
+        Function that should be called whenever a change is made to ensure
+        that the class invariants still hold true.
+        """
+        for w in self.weights:
+            if w < 0:
+                return False
+
+        
+        return True
 
 class FusionPath(object):
 
@@ -146,20 +168,95 @@ class GranularityGraph(object):
         Each unique entity has exactly one node.  Note that counties with the same name
             in different states are unique and would need unique nodes, eg.  In other words,
             the path from the root to each node must be unique, ignoring edge weights/labels.
-        The root node has no incoming edges.
-        Leaf nodes have no outgoing edges.
-        For each edge from node x to node y, there must be an edge going from node y to node x.
+        The graph is stored as a symmetric matrix, so if i,j exists, j,i must also exist and match.
     """
 
     def __init__(self) -> 'GranularityGraph':
 
-        #: Node: The 'root' node
-        self.root = None
+        """
+        Each entry in the adjacency matrix is an Edge object that stores
+        all known weights for that edge.  Essentially a dict of weights.
 
-        #: list[Node]: All the nodes of this tree, excluding the root.
-        self.nodes = None
+        """
+        #: int: The current dimensions of the adj matrix
+        self.maxSize = 8
+
+        #: int: The number of valid rows/columns in the adj matrix
+        self.size = 0
+
+        #: np.array: The adjacency matrix
+        self.graph = np.zeros(self.maxSize)
+
+        #: dict: A map from node object to array index
+        self.indexMap = {}
+
+
+
+    def NodeExists(self, node: Node):
+        return node in self.indexMap
+
+    def EdgeExists(self, edge: Edge):
+        # Get both nodes of the edge
+        n1 = edge.n1
+        n2 = edge.n2
+
+        # Check that both nodes exist
+        if not n1 in self.indexMap or not n2 in self.indexMap:
+            return False
+        
+        # Check that there is an edge object there
+        if np
+
 
         pass
+
+    def AddNode(self, newEntity: StrEnum, existingNode: Node, weight: float) -> Node:
+
+        """
+        Function to add a new entity to the graph by creating an edge to the existing node with the given weight.
+
+        Args:
+            self (GranularityGraph): This graph.
+            newNode (StrEnum): The name of the entity to be added.
+            existingNode (Node): The node that exists in the graph to connect the new node to
+            weight (float): The weight of the edge.
+
+        Returns:
+            Node: A reference to the new node object.
+        
+        """
+
+    def AddEdge(self, n1: Node, n2: Node, weight: float) -> bool:
+
+        """
+        Add an edge between two nodes that already exist in the tree.
+
+        Args:
+            self (GranularityGraph): This graph.
+            n1 (Node): The first node.
+            n2 (Node): The second node.
+            weight (float): The weight of the new edge
+        
+        
+        """
+        
+        pass
+
+    def RemoveNode(self, node: Node) -> None:
+
+        """
+        Delete an existing node and all of its edges.
+        
+        """
+        
+        raise NotImplementedError
+
+
+
+
+
+
+
 
     def FindPath(self, source: list[Node] | Node, destination: Node | list[Node]) -> list[StrEnum]:
         
