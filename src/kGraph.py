@@ -2,12 +2,13 @@
 
 
 import numpy as np
-
+import logging
+from pathlib import Path
 
 from entities import *
 
 
-import logging
+
 
 
 class Entity(object):
@@ -78,7 +79,7 @@ class Node(object):
 
         return self.path == value.path
     
-
+'''
 class Edge(object):
 
     """
@@ -137,6 +138,7 @@ class Edge(object):
 
         
         return True
+'''
 
 class FusionPath(object):
 
@@ -171,76 +173,178 @@ class GranularityGraph(object):
         The graph is stored as a symmetric matrix, so if i,j exists, j,i must also exist and match.
     """
 
-    def __init__(self) -> 'GranularityGraph':
+    def __init__(self, logfile: Path) -> 'GranularityGraph':
 
         """
-        Each entry in the adjacency matrix is an Edge object that stores
-        all known weights for that edge.  Essentially a dict of weights.
+        Each entry in the adjacency matrix is the weight, and there
+        is a matrix for each weight type.  This allows us
+        to use numpy arrays for the matrices.
 
         """
-        #: int: The current dimensions of the adj matrix
+        #: int: The current dimensions of the adj matrices
         self.maxSize = 8
 
-        #: int: The number of valid rows/columns in the adj matrix
+        #: int: The number of valid rows/columns in the adj matrices
         self.size = 0
 
-        #: np.array: The adjacency matrix
-        self.graph = np.zeros(self.maxSize)
+        #: dict[EdgeWeight: np.array]: The adjacency matrices
+        self.graphs = {w: np.zeros(self.maxSize, self.maxSize) for w in EdgeType}
 
-        #: dict: A map from node object to array index
+        # Initialize them with
+        for k in self.graphs:
+            self.graphs[k][:] = None
+
+        #: dict[Node: int]: A map from node object to array index
         self.indexMap = {}
+
+        #: logging.Logger: A logging object
+        logger = logging.getLogger(__name__)
+        logging.basicConfig(filename=str(logfile), encoding='utf-8', level=logging.DEBUG)
+        self.logger = logger
 
 
 
     def NodeExists(self, node: Node):
         return node in self.indexMap
 
+    '''
     def EdgeExists(self, edge: Edge):
         # Get both nodes of the edge
         n1 = edge.n1
         n2 = edge.n2
 
         # Check that both nodes exist
-        if not n1 in self.indexMap or not n2 in self.indexMap:
+        if not self.NodeExists(n1) or not self.NodeExists(n2):
             return False
         
         # Check that there is an edge object there
-        if np
+        if 
 
 
         pass
+    '''
 
-    def AddNode(self, newEntity: StrEnum, existingNode: Node, weight: float) -> Node:
+    def EdgeExists(self, n1: Node, n2: Node, edgeType: EdgeType) -> bool:
 
         """
-        Function to add a new entity to the graph by creating an edge to the existing node with the given weight.
+        Check if an edge exists between n1 and n2 of the specified type
+        """
 
+        # Check that both nodes exist
+        if not self.NodeExists(n1) or not self.NodeExists(n2):
+            return False
+        
+        # Check that there exists an edge of that type
+        adjMat = self.graphs[edgeType]             
+        n1i = self.indexMap[n1]
+        n2i = self.indexMap[n2]
+
+        # Check for symmetry
+        if not adjMat[n1i, n2i] == adjMat[n2i, n1i]:
+            msg = f'Matrix symmetry broken at {n1i},{n2i}'
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+
+        return not adjMat[n1i, n2i] is None
+
+    def AddNode(self, newNode: Node) -> AddStatus:
+
+        """
+        Function to add a new, unconnected Node to the graph
         Args:
             self (GranularityGraph): This graph.
-            newNode (StrEnum): The name of the entity to be added.
-            existingNode (Node): The node that exists in the graph to connect the new node to
-            weight (float): The weight of the edge.
+            newNode (Node): The node to be added.
 
         Returns:
             Node: A reference to the new node object.
         
         """
 
-    def AddEdge(self, n1: Node, n2: Node, weight: float) -> bool:
+        try:
+            # Check if the node exists already
+            if self.NodeExists(newNode):
+                return AddStatus.EXISTS
+            
+            # Add the new node to the array, resizing as needed
+            if self.size == self.maxSize:
+
+                # Pad the existing arrays with Nones, doubling the size
+                for k in self.graphs:
+                    self.graphs[k] = np.pad(self.graphs[k], (0, self.maxSize), mode='constant', constant_values=None)
+
+                # Record the new max size
+                self.maxSize *= 2
+                
+            # Assign the current size as the index of the new node
+            self.indexMap[newNode] = self.size
+
+            # Update the valid size
+            self.size += 1
+
+            return AddStatus.SUCCESS
+
+            
+        except Exception as e:
+            self.logger.error(e)
+            return AddStatus.ERROR
+
+
+    def UpdateEdge(self, n1: Node, n2: Node, weight: float, edgeType: EdgeType) -> AddStatus:
 
         """
-        Add an edge between two nodes that already exist in the tree.
+        Add or update an edge between two nodes that already exist in the tree.
 
         Args:
             self (GranularityGraph): This graph.
             n1 (Node): The first node.
             n2 (Node): The second node.
-            weight (float): The weight of the new edge
-        
+            weight (float): The weight of the new edge.
+            edgeType (EdgeType): The type of the new edge.
         
         """
+
+        try:
+
+            # Check that both nodes exist
+            if not self.NodeExists(n1) or not self.NodeExists(n2):
+                return AddStatus.NOTEXISTS
+            
+            # Get their indices
+            n1i = self.indexMap[n1]
+            n2i = self.indexMap[n2]
+
+            # If the indices match but the nodes aren't equal, error
+            if not n1 == n2 and n1i == n2i:
+                raise RuntimeError("Different nodes assigned same index.")
+
+
+            # Update both i,j and j,i to maintain symmetry
+            adjMat = self.graphs[edgeType]
+            adjMat[n1i, n2i] = weight
+            adjMat[n2i, n1i] = weight
+
+            # Make sure the graph is saved again
+            self.graphs[edgeType] = adjMat
+
+        except Exception as e:
+            self.logger.error(e)
+            return AddStatus.ERROR
         
-        pass
+        
+        return AddStatus.SUCCESS
+
+    
+    def SaveGraph(self, filename: Path):
+
+        try:
+
+            # We need to flatten the object
+            
+
+        except Exception as e:
+            self.logger.error(e)
+            raise e
+
 
     def RemoveNode(self, node: Node) -> None:
 

@@ -4,6 +4,23 @@
 
 import numpy as np
 
+
+s = 4
+
+a = np.zeros((s,s))
+
+
+quit()
+
+a = np.pad(a, (0,s), mode='constant', constant_values=None)
+
+
+print(a)
+
+
+quit()
+
+
 class Test(object):
     pass
 

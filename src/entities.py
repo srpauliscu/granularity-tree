@@ -8,7 +8,20 @@ from enum import Enum, StrEnum
 ENTITY_DELIMETER = '_;_'
 
 
-class EdgeWeight(StrEnum):
+
+class AddStatus(Enum):
+    """
+    Enumeration to provide more information when adding nodes to the graph.
+    """
+    ERROR = 0
+    SUCCESS = 1
+    EXISTS = 2
+    NOTEXISTS = 3
+
+
+
+
+class EdgeType(StrEnum):
     
     """
     Enumeration that specifies what methods of sectioning
