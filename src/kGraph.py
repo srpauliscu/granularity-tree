@@ -3,6 +3,7 @@
 
 import numpy as np
 import logging
+import json
 from pathlib import Path
 
 from entities import *
@@ -48,11 +49,8 @@ class Node(object):
     
     """
 
-    def __init__(self) -> 'Node':
+    def __init__(self, connectedNodes: list['Node'], ) -> 'Node':
 
-
-        #: list[DEdge]
-        self.edges = None
 
         #: StrEnum (either GEID or TID for now)
         self.id = None
@@ -173,7 +171,7 @@ class GranularityGraph(object):
         The graph is stored as a symmetric matrix, so if i,j exists, j,i must also exist and match.
     """
 
-    def __init__(self, logfile: Path) -> 'GranularityGraph':
+    def __init__(self, _name: str, logfile: Path) -> 'GranularityGraph':
 
         """
         Each entry in the adjacency matrix is the weight, and there
@@ -181,6 +179,10 @@ class GranularityGraph(object):
         to use numpy arrays for the matrices.
 
         """
+
+        #: str: The name of this graph
+        self.name = _name
+
         #: int: The current dimensions of the adj matrices
         self.maxSize = 8
 
@@ -247,7 +249,7 @@ class GranularityGraph(object):
 
         return not adjMat[n1i, n2i] is None
 
-    def AddNode(self, newNode: Node) -> AddStatus:
+    def AddNode(self, newNode: Node) -> Status:
 
         """
         Function to add a new, unconnected Node to the graph
@@ -263,7 +265,7 @@ class GranularityGraph(object):
         try:
             # Check if the node exists already
             if self.NodeExists(newNode):
-                return AddStatus.EXISTS
+                return Status.EXISTS
             
             # Add the new node to the array, resizing as needed
             if self.size == self.maxSize:
@@ -281,15 +283,15 @@ class GranularityGraph(object):
             # Update the valid size
             self.size += 1
 
-            return AddStatus.SUCCESS
+            return Status.SUCCESS
 
             
         except Exception as e:
             self.logger.error(e)
-            return AddStatus.ERROR
+            return Status.ERROR
 
 
-    def UpdateEdge(self, n1: Node, n2: Node, weight: float, edgeType: EdgeType) -> AddStatus:
+    def UpdateEdge(self, n1: Node, n2: Node, weight: float, edgeType: EdgeType) -> Status:
 
         """
         Add or update an edge between two nodes that already exist in the tree.
@@ -307,7 +309,7 @@ class GranularityGraph(object):
 
             # Check that both nodes exist
             if not self.NodeExists(n1) or not self.NodeExists(n2):
-                return AddStatus.NOTEXISTS
+                return Status.NOTEXISTS
             
             # Get their indices
             n1i = self.indexMap[n1]
@@ -328,22 +330,93 @@ class GranularityGraph(object):
 
         except Exception as e:
             self.logger.error(e)
-            return AddStatus.ERROR
+            return Status.ERROR
         
         
-        return AddStatus.SUCCESS
+        return Status.SUCCESS
 
     
-    def SaveGraph(self, filename: Path):
+    def SaveGraph(self, parentDir: Path):
 
         try:
 
             # We need to flatten the object
+            resDict = {}
+
+            # Save the individual stats
+            resDict['maxSize'] = self.maxSize
+            resDict['size'] = self.size
+            resDict['indexMap'] = self.indexMap
+
+            # Make the folder, if needed
+            saveDir = parentDir / Path(self.name)
+            if not saveDir.exists():
+                saveDir.mkdir(parents=True)
+
+            # We need to save each numpy matrix as its own file
+            graphFiles = {}
+            for k in self.graphs:
+
+                # Use the type to form the filename
+                # TODO: Main need to access k.value directly
+                curFilepath = saveDir / Path(k.value)
+
+                # Save the array out
+                np.save(curFilepath, self.graphs[k])
+
+                # Save the filepath
+                # TODO: Main need to access k.value directly
+                graphFiles[k] = curFilepath
+
+            # Put the filenames in the final file
+            resDict['graphFilenames'] = graphFiles
+
+            # Dump the dict to a json
+            with open(saveDir / Path('main.json'), "w") as f:
+                json.dump(resDict, f)
             
+
 
         except Exception as e:
             self.logger.error(e)
             raise e
+        
+    def LoadGraph(self, parentDir: Path) -> Status:
+
+        # Function to load a graph from files
+
+        # First, check that the folder for this graph exists
+        saveDir = parentDir / Path(self.name)
+        if not saveDir.exists():
+            return Status.NOTEXISTS
+        
+        try:
+
+            # Grab the main file first
+            with open(saveDir / Path('main.json'), 'r') as f:
+                mainDict = json.load(f)
+
+            # Get the main parameters
+            self.maxSize = mainDict['maxSize']
+            self.size = mainDict['size']
+            self.indexMap = mainDict['indexMap']
+
+            # Load the graphs from the files
+            graphFiles = mainDict['graphFilenames']
+            self.graphs = {}
+            for k in graphFiles:
+                graph = np.load(graphFiles[k])
+
+                # Put it in the main graphs dict
+                # TODO: May need to instantiate an EdgeType object
+                self.graphs[k] = graph
+                 
+
+        
+        except Exception as e:
+            self.logger.error(e)
+            return Status.ERROR
+
 
 
     def RemoveNode(self, node: Node) -> None:
@@ -429,6 +502,15 @@ class GranularityGraph(object):
         """
 
 
+# Dead simple tests
+def main():
+
+    graph = GranularityGraph('test', Path('./logs/test.log'))
+
+    emptyNode = Node()
+
+if __name__ == "__main__":
+    main()
 
 
 

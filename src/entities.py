@@ -9,9 +9,9 @@ ENTITY_DELIMETER = '_;_'
 
 
 
-class AddStatus(Enum):
+class Status(Enum):
     """
-    Enumeration to provide more information when adding nodes to the graph.
+    Enumeration to provide more information when performing graph operations.
     """
     ERROR = 0
     SUCCESS = 1
