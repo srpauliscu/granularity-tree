@@ -20,7 +20,7 @@ class Entity(object):
     
     """
 
-    def __init__(self) -> 'Entity':
+    def __init__(self):
 
         #: StrEnum: The id of the entity (currently a GEID or TID)
         self.id = None
@@ -49,7 +49,7 @@ class Node(object):
     
     """
 
-    def __init__(self, connectedNodes: list['Node'], ) -> 'Node':
+    def __init__(self, connectedNodes: list['Node']):
 
 
         #: StrEnum (either GEID or TID for now)
@@ -147,7 +147,7 @@ class FusionPath(object):
     
     """
 
-    def __init__(self) -> 'FusionPath':
+    def __init__(self):
 
         #: Node: The origin node.
         self.source = None
@@ -171,7 +171,7 @@ class GranularityGraph(object):
         The graph is stored as a symmetric matrix, so if i,j exists, j,i must also exist and match.
     """
 
-    def __init__(self, _name: str, logfile: Path) -> 'GranularityGraph':
+    def __init__(self, _name: str, logfile: Path):
 
         """
         Each entry in the adjacency matrix is the weight, and there
@@ -416,6 +416,8 @@ class GranularityGraph(object):
         except Exception as e:
             self.logger.error(e)
             return Status.ERROR
+        
+        return Status.SUCCESS
 
 
 
