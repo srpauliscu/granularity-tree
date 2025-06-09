@@ -4,6 +4,14 @@
 
 import numpy as np
 
+from src.entities import *
+
+e = EdgeType.AREA
+e2 = EdgeType('Area')
+print()
+print(e2)
+
+quit()
 
 s = 4
 

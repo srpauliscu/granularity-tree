@@ -49,21 +49,22 @@ class Node(object):
     
     """
 
-    def __init__(self, connectedNodes: list['Node']):
+    def __init__(self, id: str):
 
 
-        #: StrEnum (either GEID or TID for now)
-        self.id = None
-
-        #: str: Full chain of nodes from root to this one.  Not unique.
-        self.path = None
+        #: str: the GISJOIN value as defined by NHGIS
+        # Provides globally unique ID
+        self.id = id 
 
         #: dict: kv pairs for data used to calculate edge weights
         self.values = None
 
     pass
 
-    def __eq__(self, value: 'Node') -> bool:
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, value) -> bool:
         """
         Determine if two nodes reference the same entity.
 
@@ -75,7 +76,7 @@ class Node(object):
             bool: True if the two nodes reference the same entity.
         """
 
-        return self.path == value.path
+        return self.id == value.id
     
 '''
 class Edge(object):
@@ -190,7 +191,7 @@ class GranularityGraph(object):
         self.size = 0
 
         #: dict[EdgeWeight: np.array]: The adjacency matrices
-        self.graphs = {w: np.zeros(self.maxSize, self.maxSize) for w in EdgeType}
+        self.graphs = {w: np.zeros((self.maxSize, self.maxSize)) for w in EdgeType}
 
         # Initialize them with
         for k in self.graphs:
@@ -204,9 +205,12 @@ class GranularityGraph(object):
         logging.basicConfig(filename=str(logfile), encoding='utf-8', level=logging.DEBUG)
         self.logger = logger
 
+    def __len__(self):
+        # Returns number of nodes
+        return len(self.indexMap)
 
 
-    def NodeExists(self, node: Node):
+    def NodeExists(self, node: Node) -> bool:
         return node in self.indexMap
 
     '''
@@ -248,6 +252,23 @@ class GranularityGraph(object):
             raise RuntimeError(msg)
 
         return not adjMat[n1i, n2i] is None
+    
+    def GetWeight(self, n1: Node, n2: Node, edgeType: EdgeType):
+        """
+        Get the weight for the edge between the two nodes, if it exists
+        """
+
+        # Check that the edge exists
+        if not self.EdgeExists(n1, n2, edgeType):
+            self.logger.warning(f"Tried to access {n1.id} - {n2.id} but failed.")
+            return None
+
+        adjMat = self.graphs[edgeType]
+        n1i = self.indexMap[n1]
+        n2i = self.indexMap[n2]
+
+        return adjMat[n1i, n2i]
+
 
     def AddNode(self, newNode: Node) -> Status:
 
@@ -290,8 +311,7 @@ class GranularityGraph(object):
             self.logger.error(e)
             return Status.ERROR
 
-
-    def UpdateEdge(self, n1: Node, n2: Node, weight: float, edgeType: EdgeType) -> Status:
+    def UpdateEdge(self, n1: Node, n2: Node,  edgeType: EdgeType, weight: float) -> Status:
 
         """
         Add or update an edge between two nodes that already exist in the tree.
@@ -317,7 +337,8 @@ class GranularityGraph(object):
 
             # If the indices match but the nodes aren't equal, error
             if not n1 == n2 and n1i == n2i:
-                raise RuntimeError("Different nodes assigned same index.")
+                msg = f"Nodes {n1.id} and {n2.id} were assigned same index."
+                raise RuntimeError(msg)
 
 
             # Update both i,j and j,i to maintain symmetry
@@ -334,6 +355,26 @@ class GranularityGraph(object):
         
         
         return Status.SUCCESS
+    
+
+    def AddNodes(self, n1: Node, n2: Node, edgeType: EdgeType, weight: float) -> Status:
+
+        # Use existing nodes if possible, otherwise add them
+        if not self.NodeExists(n1):
+            status = self.AddNode(n1)
+            if status != Status.SUCCESS:
+                self.logger.warning(f"Tried to add node {n1.id} but failed with status {status}")
+                return status
+            
+        if not self.NodeExists(n2):
+            status = self.AddNode(n2)
+            if status != Status.SUCCESS:
+                self.logger.warning(f"Tried to add node {n2.id} but failed with status {status}")
+                return status
+            
+        # Call update edge
+        return self.UpdateEdge(n1, n2, edgeType, weight)
+
 
     
     def SaveGraph(self, parentDir: Path):
@@ -346,7 +387,11 @@ class GranularityGraph(object):
             # Save the individual stats
             resDict['maxSize'] = self.maxSize
             resDict['size'] = self.size
-            resDict['indexMap'] = self.indexMap
+
+            # Need to save the info from each node separately
+            resDict['indexMap'] = {}
+            for node in self.indexMap:
+                resDict['indexMap'][self.indexMap[node]] = node.__dict__
 
             # Make the folder, if needed
             saveDir = parentDir / Path(self.name)
@@ -358,15 +403,15 @@ class GranularityGraph(object):
             for k in self.graphs:
 
                 # Use the type to form the filename
-                # TODO: Main need to access k.value directly
+                # TODO: May need to access k.value directly
                 curFilepath = saveDir / Path(k.value)
 
                 # Save the array out
                 np.save(curFilepath, self.graphs[k])
 
                 # Save the filepath
-                # TODO: Main need to access k.value directly
-                graphFiles[k] = curFilepath
+                # TODO: May need to access k.value directly
+                graphFiles[k.value] = str(curFilepath)
 
             # Put the filenames in the final file
             resDict['graphFilenames'] = graphFiles
@@ -399,17 +444,32 @@ class GranularityGraph(object):
             # Get the main parameters
             self.maxSize = mainDict['maxSize']
             self.size = mainDict['size']
-            self.indexMap = mainDict['indexMap']
+
+            # Need to instantiate node objects manually
+            indexMap = mainDict['indexMap']
+            self.indexMap = {}
+            for matIndex in indexMap:
+
+                # Instantiate blank node object
+                newNode = Node("")
+
+                # Load all member variables
+                for k in indexMap[matIndex]:
+                    newNode.__dict__[k] = indexMap[matIndex][k]
+                
+                # Add it to the final indexMap
+                self.indexMap[newNode] = matIndex
 
             # Load the graphs from the files
             graphFiles = mainDict['graphFilenames']
             self.graphs = {}
             for k in graphFiles:
-                graph = np.load(graphFiles[k])
+                # Instantiate as Paths to avoid any weirdness
+                fileName = Path(graphFiles[k])
+                graph = np.load(fileName)
 
                 # Put it in the main graphs dict
-                # TODO: May need to instantiate an EdgeType object
-                self.graphs[k] = graph
+                self.graphs[EdgeType(k)] = graph
                  
 
         
