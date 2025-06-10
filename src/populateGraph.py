@@ -13,16 +13,26 @@ OVERLAY_AREA_COLUMN = 'Overlay_Area'
 
 # Load a logger
 if __name__ == "__main__":
-    populateLogger = logging.getLogger(__file__)
-    logging.basicConfig(filename="./logs/populateGraph.log", encoding='utf-8', level=logging.DEBUG)
+    populateLogger = logging.getLogger(__name__)
+    logging.basicConfig(filename="./logs/populateGraph.log", encoding='utf-8', level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    populateLogger.info("\n\n")
 else:
     populateLogger = None
 
 def AddNodes(row, curGraph: GranularityGraph, edgeType: EdgeType):
 
+    # Form the full values dict
+    v1 = {w: None for w in EdgeType}
+    v2 = {w: None for w in EdgeType}
+
+    # We're populating area this time
+    v1[edgeType] = row['Shape_Area_1']
+    v2[edgeType] = row['Shape_Area_2']
+
     # Use the GISJOIN as the id
-    node1 = Node(row['GISJOIN_1'])
-    node2 = Node(row['GISJOIN_2'])
+    node1 = Node(row['GISJOIN_1'], v1)
+    node2 = Node(row['GISJOIN_2'], v2)
 
     # Add them to the graph
     status = curGraph.AddNodes(node1, node2, edgeType, row[OVERLAY_AREA_COLUMN])
@@ -53,6 +63,9 @@ def AddLevel(curGraph: GranularityGraph,
 
     # Add the area as an extra column
     ov[OVERLAY_AREA_COLUMN] = ov.geometry.area
+
+    # Remove false positives
+    ov = ov[ov[OVERLAY_AREA_COLUMN] > 0]
 
     # Step 2: Add a node for each entity, using the area as the edge weight
     ov.apply(AddNodes, axis=1, args=(curGraph, EdgeType.AREA))
@@ -98,7 +111,7 @@ def LoadShapefile(parentDir: Path, name: str) -> gpd.GeoDataFrame:
     
     raise RuntimeError(f"Files not found in {str(shapeFileFolder)}")
 
-def main(load: bool = False, overwrite: bool = True):
+def main(load: bool = True, overwrite: bool = True):
 
     # Folder information
     parentDir = Path("./data/tiger")
@@ -114,14 +127,17 @@ def main(load: bool = False, overwrite: bool = True):
     regionGdf = LoadShapefile(parentDir, 'region')
     stateGdf = LoadShapefile(parentDir, 'state')
 
-    # Region - State
+    ### Region - State ###
     msg = "Starting Region-State overlay..."
     print(msg)
     populateLogger.info(msg)
 
     #graph = AddLevel(graph, regionGdf, stateGdf)
 
-    # State - County
+
+
+
+    ### State - County ###
     countyGdf = LoadShapefile(parentDir, 'county')
     msg = "Starting State-County overlay..."
     print(msg)
@@ -130,10 +146,8 @@ def main(load: bool = False, overwrite: bool = True):
     # For testing, just look at alabama
     countyGdf = countyGdf[countyGdf['STATEFP'] == '01']
 
-    print(stateGdf[stateGdf['GISJOIN'] == "G120"])
+    #stateGdf = stateGdf[stateGdf['GISJOIN'] == "G120"]
     #print(countyGdf)
-
-    return
 
     graph = AddLevel(graph, stateGdf, countyGdf)
 

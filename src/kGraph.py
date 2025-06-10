@@ -49,15 +49,15 @@ class Node(object):
     
     """
 
-    def __init__(self, id: str):
+    def __init__(self, _id: str, _values: dict):
 
 
         #: str: the GISJOIN value as defined by NHGIS
         # Provides globally unique ID
-        self.id = id 
+        self.id = _id 
 
         #: dict: kv pairs for data used to calculate edge weights
-        self.values = None
+        self.values = _values
 
     pass
 
@@ -202,7 +202,8 @@ class GranularityGraph(object):
 
         #: logging.Logger: A logging object
         logger = logging.getLogger(__name__)
-        logging.basicConfig(filename=str(logfile), encoding='utf-8', level=logging.DEBUG)
+        logging.basicConfig(filename=str(logfile), encoding='utf-8', level=logging.DEBUG,
+                            format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
         self.logger = logger
 
     def __len__(self):
@@ -350,6 +351,8 @@ class GranularityGraph(object):
             self.graphs[edgeType] = adjMat
 
         except Exception as e:
+            print(n1i, n2i)
+            print(type(n1i), type(n2i))
             self.logger.error(e)
             return Status.ERROR
         
@@ -451,21 +454,25 @@ class GranularityGraph(object):
             for matIndex in indexMap:
 
                 # Instantiate blank node object
-                newNode = Node("")
+                newNode = Node("", None)
 
                 # Load all member variables
                 for k in indexMap[matIndex]:
                     newNode.__dict__[k] = indexMap[matIndex][k]
                 
+                # Go through the values and instantiate EdgeType objects
+                newVals = {EdgeType(w): newNode.values[w] for w in newNode.values}
+                newNode.values = newVals
+
                 # Add it to the final indexMap
-                self.indexMap[newNode] = matIndex
+                self.indexMap[newNode] = int(matIndex)
 
             # Load the graphs from the files
             graphFiles = mainDict['graphFilenames']
             self.graphs = {}
             for k in graphFiles:
                 # Instantiate as Paths to avoid any weirdness
-                fileName = Path(graphFiles[k])
+                fileName = Path(graphFiles[k] + '.npy')
                 graph = np.load(fileName)
 
                 # Put it in the main graphs dict
