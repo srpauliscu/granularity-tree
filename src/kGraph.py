@@ -10,32 +10,6 @@ from entities import *
 
 
 
-
-
-class Entity(object):
-
-    """
-    Class for storing data in specific entities, forms the basis of the aggregation/deaggregation chain
-
-    
-    """
-
-    def __init__(self):
-
-        #: StrEnum: The id of the entity (currently a GEID or TID)
-        self.id = None
-
-        #: str: The name for this instance (e.g. "Illinois")
-        self.name = None
-
-        #: int: The value of interest (e.g. number of people with COVID)
-        # Remains None if unknown
-        self.value = None
-
-
-
-
-
 class Node(object):
 
     """
@@ -78,66 +52,6 @@ class Node(object):
 
         return self.id == value.id
     
-'''
-class Edge(object):
-
-    """
-    Class that represents an undirected edge between two nodes.
-
-    Invariants:
-        The variables with specified types must always be those types or None.
-        Weights must be >= 0.
-    """
-
-    def __init__(self, _n1: Node, _n2: Node) -> 'Edge':
-
-        #: Node: One node of this edge
-        self.n1 = _n1
-        
-        #: Node: The second node of this edge
-        self.n2 = _n2
-
-        #: dict: The set of weights that can be used for this edge
-        self.weights = {}
-
-        #: logging.logger
-        self.logger = logging.getLogger(__name__)
-
-        if not self.__CheckInvariants():
-            raise RuntimeError("Cannot instantiate edge with given parameters.")
-
-
-    def AddWeight(self, weightType: EdgeWeight, weight: float) -> None:
-
-        """
-        Add a new weight for this edge.
-
-        Args:
-            self (Edge): This edge.
-            weightType (EdgeWeight): The type of the new weight.
-            weight (float): The weight to be added.
-
-        """
-
-        # Overwrite the weight if it already exists
-        self.weights[weightType] = weight
-
-    def GetWeight(self, weightType: EdgeWeight) -> float:
-        return self.weights[weightType]    
-    
-    def __CheckInvariants(self) -> bool:
-
-        """
-        Function that should be called whenever a change is made to ensure
-        that the class invariants still hold true.
-        """
-        for w in self.weights:
-            if w < 0:
-                return False
-
-        
-        return True
-'''
 
 class FusionPath(object):
 
@@ -246,7 +160,7 @@ class GranularityGraph(object):
         n1i = self.indexMap[n1]
         n2i = self.indexMap[n2]
 
-        # Check for symmetry
+        # Check for symmetry (internal sanity check)
         if not adjMat[n1i, n2i] == adjMat[n2i, n1i]:
             msg = f'Matrix symmetry broken at {n1i},{n2i}'
             self.logger.error(msg)
@@ -351,8 +265,6 @@ class GranularityGraph(object):
             self.graphs[edgeType] = adjMat
 
         except Exception as e:
-            print(n1i, n2i)
-            print(type(n1i), type(n2i))
             self.logger.error(e)
             return Status.ERROR
         
@@ -500,7 +412,7 @@ class GranularityGraph(object):
 
 
 
-
+'''
 
 
 
@@ -569,7 +481,7 @@ class GranularityGraph(object):
                 2.) Path is longer than one step, so break it down into Tract -> County and County -> State
                 3.) Call this function on each step individually and sequentially to calculate the final value
         """
-
+'''
 
 # Dead simple tests
 def main():
