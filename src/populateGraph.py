@@ -31,8 +31,8 @@ def AddNodes(row, curGraph: GranularityGraph, edgeType: EdgeType):
     v2[edgeType] = row['Shape_Area_2']
 
     # Use the GISJOIN as the id
-    node1 = Node(row['GISJOIN_1'], v1)
-    node2 = Node(row['GISJOIN_2'], v2)
+    node1 = Node(row['GISJOIN_1'], v1, GEID.TEST)
+    node2 = Node(row['GISJOIN_2'], v2, GEID.TEST)
 
     # Add them to the graph
     status = curGraph.AddNodes(node1, node2, edgeType, row[OVERLAY_AREA_COLUMN])
@@ -147,7 +147,20 @@ def main(load: bool = True, overwrite: bool = True):
     countyGdf = countyGdf[countyGdf['STATEFP'] == '01']
 
     #stateGdf = stateGdf[stateGdf['GISJOIN'] == "G120"]
-    #print(countyGdf)
+    print(regionGdf)
+    print(stateGdf)
+    print(countyGdf)
+
+    tractGdf = LoadShapefile(parentDir, 'tract')
+    #print(tractGdf)
+
+    cityGdf = LoadShapefile(parentDir, 'city')
+    print(cityGdf)
+
+    schoolGdf = LoadShapefile(parentDir, 'school')
+    print(schoolGdf)
+
+    return
 
     graph = AddLevel(graph, stateGdf, countyGdf)
 

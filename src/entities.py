@@ -38,6 +38,9 @@ class GEID(StrEnum):
     Enumeration to define U.S. geographic entities.
     """
 
+    ### ID only used in testing ###
+    TEST = 'Test'
+
     ### Primary IDs ###
     NATION = 'Nation'
     REGION = 'Region'

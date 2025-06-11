@@ -21,15 +21,18 @@ class Node(object):
     
     """
 
-    def __init__(self, _id: str, _values: dict):
+    def __init__(self, _id: str, _values: dict[EdgeType, float], _entityType: StrEnum):
 
 
-        #: str: the GISJOIN value as defined by NHGIS
-        # Provides globally unique ID
+        #: str: a globally unique ID
+        # (e.g. for spatial data, the GISJOIN value as defined by NHGIS)
         self.id = _id 
 
         #: dict: kv pairs for data used to calculate edge weights
         self.values = _values
+
+        #: StrEnum: An enum that says what this node represents (e.g. CITY, HOUR, etc.)
+        self.entityType = _entityType
 
     pass
 
@@ -48,7 +51,8 @@ class Node(object):
             bool: True if the two nodes reference the same entity.
         """
 
-        return self.id == value.id
+        # ID match should be enough, but use entityType as reassurance
+        return self.id == value.id and self.entityType == value.entityType
     
 
 class FusionPath(object):
@@ -365,7 +369,7 @@ class GranularityGraph(object):
             for matIndex in indexMap:
 
                 # Instantiate blank node object
-                newNode = Node("", None)
+                newNode = Node("", None, None)
 
                 # Load all member variables
                 for k in indexMap[matIndex]:
@@ -407,6 +411,61 @@ class GranularityGraph(object):
         """
         
         raise NotImplementedError
+
+
+ 
+
+
+    def FindPaths(self, sources: list[Node], destinations: list[Node]):
+
+        # Check that all nodes in each list are the same entity type
+        for i in range(len(sources) - 1):
+            if sources[i].entityType != sources[i+1].entityType:
+                msg = f"Each node in the source list must be the same entityType, \
+                    but nodes {i} and {i+1} aren't."
+                self.logger.error(msg)
+                raise RuntimeWarning(msg)
+            
+        for i in range(len(destinations) - 1):
+            if destinations[i].entityType != destinations[i+1].entityType:
+                msg = f"Each node in the destination list must be the same entityType, \
+                    but nodes {i} and {i+1} aren't."
+                self.logger.error(msg)
+                raise RuntimeWarning(msg)
+
+        """
+        This function needs to do the following:
+            For each node in sources, find the shortest path to one of the nodes in the destination.
+            Use the inverse of the weights as the edge weights for e.g. Dijkstra's Algorithm.  Thus, the
+            'shortest' path would be the one with the most overlap.  The overlap is calculated as a fraction
+            as compared to the smallest of the two nodes in question.
+
+            Example:
+                The city of Chicago has an area of 234 sq miles and is contained entirely within the
+                state of Illinois, which has an area of ~58,000 sq miles.
+                Their weight on the graph would be 234, since Chicago is entirely inside Illinois.
+                For the weight for shortest path, it would be 1 / (234/234) = 1, which is the cheapest
+                possible path between two nodes.
+
+            Then, depending on which is the smaller area (current node or next node), we aggregate or deaggregate
+
+            TODO: Just make each edge weight the overlapping area / smaller area of the two nodes.  From this,
+            we can calculate anything
+        
+            Note: Instead, we can do a "fully connected" graph such that if there is any overlapping between two
+            entities, the weight between them in the graph reflects that, even if it skips granularity levels.
+            For example, say a ZIP code crosses a state line.  Even though there are levels of granularity between
+            state and ZIP (e.g. county), we can just aggregate directly.  This removes any concept of a 'tree', as
+            there will no longer be levels of granularity.
+
+            Instead, the bigger problem is:
+                For aggregation, we need to determine if we can fully cover an entity through unions of mutually
+                    exclusive entities (e.g. can we count for 100% of Illinois by combining ZIP codes?)
+                For deaggregation, we need to find the other entities that match the target's EntityType so we can
+                estimate each entity (e.g. we have data for all of Illinois, but we need data by ZIP code)
+        
+        """
+
 
 
 

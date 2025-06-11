@@ -21,7 +21,7 @@ def HashWeight(i, j, wm):
 def MakeTestSamples(sampleSize: int, weightModifier: float, WeightCalc: Callable):
 
     # Make the nodes programatically for testing
-    sampleNodes = [Node(f"node{i}", {w: i for w in EdgeType}) for i in range(sampleSize)]
+    sampleNodes = [Node(f"node{i}", {w: i for w in EdgeType}, GEID.TEST) for i in range(sampleSize)]
 
     # Need actual loops to form the numpy arrays
     # Note: This is NOT the array(s) that the graph keeps - 
