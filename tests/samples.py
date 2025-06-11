@@ -3,9 +3,8 @@
 # Contains hard-coded node samples for testing
 
 # Import block
-from src.entities import *
+#from src.entities import *
 from src.kGraph import *
-import pytest
 from pathlib import Path
 import shutil
 from collections.abc import Callable
@@ -45,10 +44,11 @@ def ResetForTest(sampleSize: int, weightModifier: float, testName: str, WeightCa
 
     # Erase all of the files associated with the graph
     graphSaveDir = Path(f"./graphs/{TEST_GRAPH_NAME}")
-    shutil.rmtree(graphSaveDir)
+    if graphSaveDir.exists():
+        shutil.rmtree(graphSaveDir)
 
     # Get the samples
-    sampleNodes, sampleGraphs = MakeTestSamples(sampleSize, weightModifier)
+    sampleNodes, sampleGraphs = MakeTestSamples(sampleSize, weightModifier, WeightCalc)
 
     # Clear the log file if it exists
     logfile = Path(f"./logs/{testName}.log")

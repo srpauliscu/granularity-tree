@@ -10,6 +10,32 @@ from src.entities import *
 
 
 
+
+s = 4
+
+a = np.zeros((s,s))
+
+print(a)
+
+a = np.pad(a, (0,s), mode='constant', constant_values=None)
+
+print(a)
+
+
+quit()
+
+
+def foo() -> Status:
+    return Status.SUCCESS
+
+s = foo()
+print(s == Status.SUCCESS)
+assert s == Status.SUCCESS
+
+quit()
+
+
+
 for i in range(5):
     for j in range(i+1, 5):
         print(i,j)

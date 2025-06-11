@@ -1,14 +1,15 @@
 
 from pathlib import Path
 
-from samples import ResetForTest, TEST_GRAPH_NAME, HashWeight
-from src.entities import *
-from src.kGraph import GranularityGraph
-
-
 import pytest
 import numpy as np
 
+from samples import ResetForTest, TEST_GRAPH_NAME, HashWeight
+
+# kGraph imports the entities, so we only need to import kGraph
+from src.kGraph import *
+
+np.set_printoptions(precision=1)
 
 @pytest.mark.basic
 def testAddBasic():
@@ -25,8 +26,10 @@ def testAddBasic():
     # Go ahead and add one node at a time
     for i, node in enumerate(sampleNodes):
         status = kGraph.AddNode(node)
+        print(id(status))
+        print(id(Status.SUCCESS))
         assert status == Status.SUCCESS
-        assert len(kGraph) == i
+        assert len(kGraph) == i + 1
 
     # We've added 10 nodes, so the sizes should reflect that
     assert kGraph.size == 10
@@ -138,7 +141,7 @@ def testEdgeBasic():
             assert status == Status.SUCCESS
     
     # Make sure they were all added
-    assert len(kGraph) == sampleSize
+    assert len(kGraph) == sampleSize - 1
 
     # Check that all the edges exist
     for i in range(sampleSize - 1):
@@ -202,7 +205,7 @@ def testSaveLoad():
 
     # Reset and get samples and a graph object
     # Use hash weights to make sure the arrays are preserved
-    sampleSize = 25
+    sampleSize = 50
     sampleNodes, sampleGraphs, kGraph = ResetForTest(sampleSize, 1, 'SaveLoad', HashWeight)
 
     # Add all the nodes with their weights

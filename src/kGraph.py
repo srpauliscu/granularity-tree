@@ -8,8 +8,6 @@ from pathlib import Path
 
 from entities import *
 
-
-
 class Node(object):
 
     """
@@ -107,9 +105,9 @@ class GranularityGraph(object):
         #: dict[EdgeWeight: np.array]: The adjacency matrices
         self.graphs = {w: np.zeros((self.maxSize, self.maxSize)) for w in EdgeType}
 
-        # Initialize them with
-        for k in self.graphs:
-            self.graphs[k][:] = None
+        # Initialize them with None to identify invalid accesses
+        #for k in self.graphs:
+        #    self.graphs[k][:] = None
 
         #: dict[Node: int]: A map from node object to array index
         self.indexMap = {}
@@ -162,11 +160,11 @@ class GranularityGraph(object):
 
         # Check for symmetry (internal sanity check)
         if not adjMat[n1i, n2i] == adjMat[n2i, n1i]:
-            msg = f'Matrix symmetry broken at {n1i},{n2i}'
+            msg = f'Matrix symmetry broken at {n1i},{n2i}\n{adjMat}'
             self.logger.error(msg)
             raise RuntimeError(msg)
 
-        return not adjMat[n1i, n2i] is None
+        return not adjMat[n1i, n2i] == 0
     
     def GetWeight(self, n1: Node, n2: Node, edgeType: EdgeType):
         """
@@ -208,7 +206,8 @@ class GranularityGraph(object):
 
                 # Pad the existing arrays with Nones, doubling the size
                 for k in self.graphs:
-                    self.graphs[k] = np.pad(self.graphs[k], (0, self.maxSize), mode='constant', constant_values=None)
+                    print(self.graphs[k])
+                    self.graphs[k] = np.pad(self.graphs[k], (0, self.maxSize), mode='constant', constant_values=0)
 
                 # Record the new max size
                 self.maxSize *= 2
@@ -251,7 +250,7 @@ class GranularityGraph(object):
             n2i = self.indexMap[n2]
 
             # If the indices match but the nodes aren't equal, error
-            if not n1 == n2 and n1i == n2i:
+            if (not n1 == n2) and n1i == n2i:
                 msg = f"Nodes {n1.id} and {n2.id} were assigned same index."
                 raise RuntimeError(msg)
 
