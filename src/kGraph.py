@@ -13,15 +13,10 @@ class Node(object):
     """
 
     Class that represents a unique node for a given entity in the graph.
-
-    Invariants:
-
-
-    
     
     """
 
-    def __init__(self, _id: str, _values: dict[EdgeType, float], _entityType: StrEnum):
+    def __init__(self, _id: str, _values: dict[EdgeType, float] | None, _entityType: StrEnum):
 
 
         #: str: a globally unique ID
@@ -88,7 +83,7 @@ class GranularityGraph(object):
         The graph is stored as a symmetric matrix, so if i,j exists, j,i must also exist and match.
     """
 
-    def __init__(self, _name: str, logfile: Path):
+    def __init__(self, _name: str, logFile: Path):
 
         """
         Each entry in the adjacency matrix is the weight, and there
@@ -118,7 +113,7 @@ class GranularityGraph(object):
 
         #: logging.Logger: A logging object
         logger = logging.getLogger(__name__)
-        logging.basicConfig(filename=str(logfile), encoding='utf-8', level=logging.DEBUG,
+        logging.basicConfig(filename=str(logFile), encoding='utf-8', level=logging.DEBUG,
                             format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
         self.logger = logger
 
@@ -177,7 +172,7 @@ class GranularityGraph(object):
 
         # Check that the edge exists
         if not self.EdgeExists(n1, n2, edgeType):
-            self.logger.warning(f"Tried to access {n1.id} - {n2.id} but failed.")
+            #self.logger.warning(f"Tried to access {n1.id} - {n2.id} but failed.")
             return None
 
         adjMat = self.graphs[edgeType]
@@ -411,9 +406,59 @@ class GranularityGraph(object):
         """
         
         raise NotImplementedError
+    
+    def GetMatches(self, source: Node, destNodes: list[Node], edgeType: EdgeType) -> dict[Node, float]:
 
+        """
+        Check destNodes for all matches with source and return the weights of the matches.
+        
+        """
 
- 
+        output = {}
+        for dn in destNodes:
+            weight = self.GetWeight(source, dn, edgeType)
+            if not weight is None:
+                output[dn] = weight
+
+        return output
+
+    def FindMatches(self, source: Node, destType: GEID | TID, edgeType: EdgeType) -> dict[Node, float]:
+
+        """
+        For the given node, find all nodes of the desired type that the source node
+        has a connection with (i.e. an edge exists).
+
+        There may be multiple (i.e. a ZIP code crossing state lines) - return all matching nodes
+        
+        """
+
+        # Make sure the node exists
+        if not self.NodeExists(source):
+            self.logger.warning(f"Tried to find matches for {source} but it doesn't exist.")
+            return None
+
+        # Grab the index and graph for this node and edgeType
+        sourceI = self.indexMap[source]
+        adjMat = self.graphs[edgeType]
+
+        # Go through all other nodes and check if a weight exists
+        destNodes = {}
+        for n in self.indexMap:
+            # Skip when the nodes are the same
+            if n == source:
+                continue
+
+            # Check that the node is the correct type
+            if not n.entityType == destType:
+                continue
+
+            # Check if the weight is non-zero
+            if adjMat[sourceI, self.indexMap[n]] > 0:
+                destNodes[n] = adjMat[sourceI, self.indexMap[n]]
+
+        return destNodes
+    
+'''
 
 
     def FindPaths(self, sources: list[Node], destinations: list[Node]):
@@ -467,10 +512,6 @@ class GranularityGraph(object):
         """
 
 
-
-
-
-'''
 
 
 
@@ -539,14 +580,12 @@ class GranularityGraph(object):
                 2.) Path is longer than one step, so break it down into Tract -> County and County -> State
                 3.) Call this function on each step individually and sequentially to calculate the final value
         """
-'''
+''' 
 
-# Dead simple tests
+# Dead simple test
 def main():
 
     graph = GranularityGraph('test', Path('./logs/test.log'))
-
-    emptyNode = Node()
 
 if __name__ == "__main__":
     main()

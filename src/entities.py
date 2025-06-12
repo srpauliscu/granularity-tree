@@ -32,6 +32,26 @@ class EdgeType(StrEnum):
     POPULATION = "Population"
 
 
+class AggMethod(StrEnum):
+
+    """
+    Enumeration that defines what aggregation operations are supported.
+    """
+
+    MEAN = "Mean"   # Weighted mean
+    MEDIAN = "Median"   # Weighted median
+    SUM = "Sum"
+
+class DeAggMethod(StrEnum):
+
+    """
+    Enumeration that defines what deaggregation operations are supported.
+    """
+
+    DISTRIBUTE = "Distribute"
+    COPY = "Copy"
+
+
 class GEID(StrEnum):
 
     """
