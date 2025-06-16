@@ -32,7 +32,7 @@ class Node(object):
     pass
 
     def __hash__(self):
-        return hash(self.id)
+        return hash(self.id + '_' + self.entityType)
 
     def __eq__(self, value) -> bool:
         """
@@ -124,23 +124,20 @@ class GranularityGraph(object):
 
     def NodeExists(self, node: Node) -> bool:
         return node in self.indexMap
+    
+    def GetNode(self, id: str, entityType: GEID | TID) -> Node | None:
+        # Get the node with that id
 
-    '''
-    def EdgeExists(self, edge: Edge):
-        # Get both nodes of the edge
-        n1 = edge.n1
-        n2 = edge.n2
+        # Form a dummy node
+        dummyNode = Node(id, None, entityType)
 
-        # Check that both nodes exist
-        if not self.NodeExists(n1) or not self.NodeExists(n2):
-            return False
+        # If it exists, return the populated node object
+        for k in self.indexMap:
+            if k == dummyNode:
+                return k
         
-        # Check that there is an edge object there
-        if 
-
-
-        pass
-    '''
+        # It doesn't exist
+        return None
 
     def EdgeExists(self, n1: Node, n2: Node, edgeType: EdgeType) -> bool:
 
@@ -205,7 +202,6 @@ class GranularityGraph(object):
 
                 # Pad the existing arrays with Nones, doubling the size
                 for k in self.graphs:
-                    print(self.graphs[k])
                     self.graphs[k] = np.pad(self.graphs[k], (0, self.maxSize), mode='constant', constant_values=0)
 
                 # Record the new max size
@@ -361,6 +357,7 @@ class GranularityGraph(object):
             # Need to instantiate node objects manually
             indexMap = mainDict['indexMap']
             self.indexMap = {}
+
             for matIndex in indexMap:
 
                 # Instantiate blank node object
@@ -369,10 +366,11 @@ class GranularityGraph(object):
                 # Load all member variables
                 for k in indexMap[matIndex]:
                     newNode.__dict__[k] = indexMap[matIndex][k]
-                
+
                 # Go through the values and instantiate EdgeType objects
                 newVals = {EdgeType(w): newNode.values[w] for w in newNode.values}
                 newNode.values = newVals
+
 
                 # Add it to the final indexMap
                 self.indexMap[newNode] = int(matIndex)

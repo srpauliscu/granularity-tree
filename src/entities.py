@@ -96,6 +96,7 @@ class GEID(StrEnum):
 
     # Misc
     AIANNHA = "AmericanIndianAlaksaNativeNativeHawaiianArea"
+    ZIP = "ZIP"
 
 class TID(StrEnum):
 
