@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import numpy as np
 
-from samples import ResetForTest, TEST_GRAPH_NAME, HashWeight
+from tests.util import ResetForTest, TEST_GRAPH_NAME, HashWeight
 
 # kGraph imports the entities, so we only need to import kGraph
 from src.kGraph import *

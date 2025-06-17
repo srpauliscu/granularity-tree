@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import numpy as np
 
-from samples import ResetForTest, TEST_GRAPH_NAME, HashWeight
+from tests.util import ResetForTest, TEST_GRAPH_NAME, HashWeight
 
 # Gator imports the entities, so we don't need to import them here
 from src.gator import * 
@@ -384,10 +384,6 @@ def testFindMatches():
             # Test for true negatives too
             output = graph.FindMatches(sNode, t, EdgeType.POPULATION)
             assert len(output) == 0
-
-
-
-
 
 
 

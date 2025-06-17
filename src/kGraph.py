@@ -50,26 +50,6 @@ class Node(object):
         return self.id == value.id and self.entityType == value.entityType
     
 
-class FusionPath(object):
-
-    """
-    Class that holds the instructions for how to get from one
-        set of nodes to another.  Handles both aggregation and
-        deaggregation.
-    
-    """
-
-    def __init__(self):
-
-        #: Node: The origin node.
-        self.source = None
-
-        #: Node: The destination node.
-        self.destination = None
-
-        #: list[Node]: 
-        pass
-
 class GranularityGraph(object):
 
     """
