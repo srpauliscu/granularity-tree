@@ -17,6 +17,7 @@ class Gator(object):
     # Class variables for column names
     FACTOR_COL = '_factor_'
     DEST_COL = '_destId_'
+    VALUE_FACTOR_COL = '_vf_'
     NEW_VALUE_COL = '_value_'
     DEBUG = True
 
@@ -31,8 +32,47 @@ class Gator(object):
                             format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
         self.logger = logger
 
-    def Aggregate(self, df: pd.DataFrame, idCol: str, dataCol: str, method: AggMethod,
-                  factors: dict[Node, dict[Node, float]]) -> pd.DataFrame:
+    def MakeSample(self, sampleSize: int, idCol: str, dataCol: str) \
+        -> tuple[pd.DataFrame, pd.DataFrame]:
+        
+        # Function to make a sample for testing that uses the correct
+        # column names
+
+        # Make the 'smaller' dataframe
+        rows = {}
+        rows[idCol] = [i for i in range(sampleSize)]
+        rows[dataCol] = [i*2 for i in range(sampleSize)]
+        rows[self.FACTOR_COL] = [{i: 1} for i in range(sampleSize)]
+        rows[self.DEST_COL] = [(int(i / 2.),) for i in range(sampleSize)]
+        rows[self.VALUE_FACTOR_COL] = [i*2*1 for i in range(sampleSize)]
+
+        smallDf = pd.DataFrame(rows)
+        smallDf = smallDf.set_index(idCol)
+
+        # Make the 'larger' dataframe
+        lss = int(sampleSize / 2.)
+        rows = {}
+        rows[idCol] = [i for i in range(lss)]
+        rows[dataCol] = [i*4 + (i*2+1)*2 for i in range(lss)]
+        rows[self.FACTOR_COL] = [{i*2: i*4/v, i*2+1: (i*2+1)*2/v} for i,v in enumerate(rows[dataCol])]
+        rows[self.DEST_COL] = [(i*2, i*2+1) for i in range(lss)]
+
+        temp = []
+        for rowi, dv in enumerate(rows[dataCol]):
+            tempd = {}
+            for k in rows[self.FACTOR_COL][rowi]:
+                tempd[k] = dv*rows[self.FACTOR_COL][rowi][k]
+            temp.append(tempd)
+
+        rows[self.VALUE_FACTOR_COL] = temp
+
+        largeDf = pd.DataFrame(rows)
+        largeDf = largeDf.set_index(idCol)
+
+        return smallDf, largeDf
+
+    def Aggregate(self, df: pd.DataFrame, idCol: str, 
+                  dataCol: str, method: AggMethod)-> pd.DataFrame:
         
         # Input validation
         if not type(method) == AggMethod:
@@ -40,51 +80,41 @@ class Gator(object):
             self.logger.error(msg)
             raise RuntimeError(msg)
         
+        # Setup the output
+        resDf = None
+        
         # Depending on the method, do the aggregation
-        retDf = None
         if method == AggMethod.MEAN:
             # Mean of the source data, weighted by factor
-            
-            # Calculate the value*factor as a new column
-            df['_vf_'] = df[dataCol] * df[self.FACTOR_COL]
-
-            # Group by destination node
-            groupedDf = df.groupby(self.DEST_COL)
-
-            # For each destination, the weighted avg is
-            # sum(value*factor) / sum(weight)
-            summedDf = groupedDf.sum()
-            summedDf[self.NEW_VALUE_COL] = summedDf['_vf_'] / summedDf[self.FACTOR_COL]
-
-            # Remove the temp column we created
-            retDf = summedDf.drop('_vf_')
+            raise NotImplementedError
 
         elif method == AggMethod.MEDIAN:
             # Median of the source data, weighted by factor
             raise NotImplementedError
         
         elif method == AggMethod.SUM:
-            # Simple total across all sources
-            # Factor not needed
+            '''
+            Group by destination and add.
 
-            # Group by destination node
+            Make sure to use the value*factor so that each source
+            contributes only its share to each destination.
+            '''
+
             groupedDf = df.groupby(self.DEST_COL)
-
-            # Just do a simple sum
-            retDf = groupedDf.sum()
+            resDf = groupedDf[[dataCol]].sum()
 
         # Check that something was actually added
-        if retDf is None or retDf.shape[0] == 0:
-            msg = f"retDf is empty in Gator.Aggregate."
+        if resDf is None or resDf.shape[0] == 0:
+            msg = f"resDf is empty in Gator.Aggregate."
             self.logger.error(msg)
             raise RuntimeError(msg)
         
         # Return it as a dataframe
-        return retDf
+        return resDf
 
 
-    def DeAggregate(self, df: pd.DataFrame, idCol: str, dataCol: str, method: DeAggMethod,
-                    factors: dict[Node, dict[Node, float]]) -> pd.DataFrame:
+    def DeAggregate(self, df: pd.DataFrame, idCol: str,
+                    dataCol: str, method: DeAggMethod) -> pd.DataFrame:
         
         raise NotImplementedError
         
@@ -180,38 +210,18 @@ class Gator(object):
             allMatches[sn] = matches
 
         # allMatches: {sourceNode: {destNode1: weight1, destNode2: weight2, ...}, ...}
-        
-        # 3.) Group operations by destination node
-    
-        # Reverse the dict to group by destination node
-        destMatches = {}
+
+
+        # 4.) Calculate mult factors
+        allFactors = {}
         for sn in allMatches:
-            
             for dn in allMatches[sn]:
                 
                 # Grab the weight
                 weight = allMatches[sn][dn]
 
-                # Make a new dict if needed
-                if not dn in destMatches:
-                    destMatches[dn] = {}
-                
-                # Add the source to the dict
-                destMatches[dn][sn] = weight
-        
-        # destMatches = {destNode: {sourceNode1: weight1, sourceNode2: weight2, ...}, ...}
-
-        # 4.) Calculate mult factors
-
-        factors = {} # Same form as destMatches, but factors instead of weights
-        for dn in destMatches:
-            for sn in destMatches[dn]:
-
-                # Grab the weight
-                weight = destMatches[dn][sn]
-
                 # Divide the weight by the value (e.g. area) of the source
-                factor = sn.values[edgeType] / weight
+                factor = weight / sn.values[edgeType]
 
                 # Sanity check
                 if factor > 1:
@@ -221,79 +231,85 @@ class Gator(object):
                             weight = {weight}"
                     self.logger.error(msg)
                     raise RuntimeError(msg)
-
+                
                 # Save it into a new dict
-                if not dn in factors:
-                    factors[dn] = {}
-                factors[dn][sn] = factor
+                if not sn in allFactors:
+                    allFactors[sn] = {}
+                allFactors[sn][dn] = factor
 
-        # 4.1) Append as columns for groupby operations
-        sourceDf[self.DEST_COL] = [None for i in range(sourceDf.shape[0])]
-        sourceDf[self.FACTOR_COL] = [None for i in range(sourceDf.shape[0])]
 
-        # We need to set the index to use .at
+        # Make a new dataframe that expands this dict
+        # Each sourceNode will have a row for each destNode it relates to
+        # This allows use to leverage Pandas functions
+        newDict = []
+
+        # Set the index so we can iterrate over it
         sourceDf = sourceDf.set_index(sourceIdCol)
 
-        # Have to do this one at a time
-        for dn in factors:
-            for sn in factors[dn]:
-                sourceDf.at[sn.id, self.DEST_COL] = dn.id
-                sourceDf.at[sn.id, self.FACTOR_COL] = factors[dn][sn]
+        # Iterrows is slow, but only needs to be done once here
+        for ind, row in sourceDf.iterrows():
+            factors = allFactors[ind]
+            
+            # Add a row for each destination
+            for did in factors:
+                newDict.append(
+                    {
+                        sourceIdCol: ind,
+                        sourceDataCol: row[sourceDataCol],
+                        self.DEST_COL: did,
+                        self.FACTOR_COL: factors[did]
+                    }
+                )
+        
+        # Make it a dataframe
+        expandedDf = pd.DataFrame(newDict)
+
+        # Calculate the value*factor as a new column for easy agg/deagg
+        expandedDf[self.VALUE_FACTOR_COL] = expandedDf[sourceDataCol] * expandedDf[self.FACTOR_COL]
+
 
         # If ignoreIncomplete is false, check that each destination is 100% covered
         # We are assuming the sources are mutually exclusive (since they are the same type)
         if not ignoreIncomplete:
 
             # Group by destination node
-            groupedDf = sourceDf.groupby(self.DEST_COL)
+            groupedDf = expandedDf.groupby(self.DEST_COL)
 
-            # Factor sum for each destination node
-            sums = groupedDf.sum()[self.FACTOR_COL]
+            # Sum the factors
+            factorSums = groupedDf[self.FACTOR_COL].sum()
 
-            for dn in factors:
+            # Check that they are all close to 1
+            factorSums['_valid_sum_'] = math.isclose(factorSums[self.FACTOR_COL], 1.0, abs_tol=0.1)
 
-                # Get the factor sum for that destination node
-                totalWeight = sums[dn.id].item()
-
-                # Should be really close to 100%
-                if not math.isclose(totalWeight, 1.0, abs_tol = 0.1):
-                    msg = f"Total weight of {totalWeight} for node {dn} is invalid."
-        
-        else:
-            # Included to make intellisense happy
-            groupedDf = None
+            if not factorSums['_valid_sum_'].all():
+                msg = f"Total weight is invalid.\nFactors: {factorSums}\n"
+                self.logger.error(msg)
+                raise RuntimeError(msg)
         
 
         # 5.) Do the calculation
         # We have everything we need: the destNodes, what nodes belong to each destNode, and
         # the factor to multiply the numerical data by
         # The actual operation depends on 'method'
+        if type(method) == AggMethod:
+            resDf = self.Aggregate(expandedDf, destIdCol, sourceDataCol, method)
+        elif type(method) == DeAggMethod:
+            resDf = self.DeAggregate(expandedDf, destIdCol, sourceDataCol, method)
+        else:
+            # Catch all
+            msg = f"Invalid method of type {type(method)} used."
+            self.logger.error(msg)
+            raise RuntimeError(msg)
 
 
 
         # 6.) Clean up before returning
         if not self.DEBUG:
-            # Drop extra columns
-            sourceDf = sourceDf.drop([self.FACTOR_COL])
+            # Reset the index column
+            sourceDf = sourceDf.reset_index()
+
+        return resDf
         
-
-
-        
-
-
-
-
-
-
-    
-                
-
-
-
-
-
-
-        pass
 
     def MakeNodes(self, ids1: pd.Series, ids2: pd.Series,
                   entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:

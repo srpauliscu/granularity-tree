@@ -3,15 +3,12 @@ from pathlib import Path
 import pytest
 import numpy as np
 
-from tests.util import ResetForTest, TEST_GRAPH_NAME, HashWeight
+from tests.util import *
 
 # Gator imports the entities, so we don't need to import them here
 from src.gator import * 
 
-ZIP_TEST_FILE = Path("./tests/zips.csv")
-COUNTY_TEST_FILE = Path("./tests/counties.csv")
-STATE_TEST_FILE = Path("./tests/states.csv")
-ADJ_TEST_FILE = Path("./tests/adjMat.csv")
+
 
 
 '''
@@ -36,132 +33,8 @@ meaning that the total number of EVs for the 4 states == EVs for the ZIP codes
 
 '''
 
-COUNTY_ASSIGNMENT = {'s0': [f'c{i}' for i in range(0,4)],
-                     's1': [f'c{i}' for i in range(4,6)],
-                     's2': [f'c{i}' for i in range(6,9)],
-                     's3': [f'c{i}' for i in range(9, 12)]
-}
-
-### Utility Functions ###
-
-def ValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
-                  states: pd.DataFrame, adjMat: np.typing.NDArray):
 
 
-    '''
-    Function to make sure our numbers add up correctly.
-    '''
-
-    # Columns: ID, Area, Population, Total EVs
-
-    # Make a dict for labels and looping
-    dfs = {'ZIPS':zips, 'Counties': counties, 'States': states}
-
-    for k0 in dfs:
-
-        # Grab the df
-        df0 = dfs[k0]
-
-        # Areas should add up to 4000
-        assert df0['Area'].sum() == 4000
-
-        # All three columns should have the same total across the dfs
-        for k1 in dfs:
-            
-            # No need to test the same df against itself
-            if k0 == k1:
-                continue
-
-            # Grab the df
-            df1 = dfs[k1]
-
-            # Test each column except ID
-            for c in df0:
-                
-                # Skip the IDs
-                if c == 'ID':
-                    continue
-
-
-                # In case the test fails, print the column and frames
-                #print(k0, k1, c)
-                assert df0[c].sum() == df1[c].sum()
-    
-    # Make sure the adjMat is symmetric
-    for i in range(adjMat.shape[0]):
-        for j in range(i, adjMat.shape[1]):
-
-            assert adjMat[i, j] == adjMat[j, i]
-
-def GetDfs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-
-    zips = pd.read_csv(ZIP_TEST_FILE)
-    counties = pd.read_csv(COUNTY_TEST_FILE)
-    states = pd.read_csv(STATE_TEST_FILE)
-
-    return zips, counties, states
-
-
-
-def GetAdjMat() -> tuple[np.typing.NDArray, pd.DataFrame]:
-
-    # Read in the dataframe
-    adjDf = pd.read_csv(ADJ_TEST_FILE)
-
-    # Return it as a numpy array, skipping the labels
-    return adjDf.iloc[:, 1:].to_numpy(), adjDf
-
-
-def GenerateGraph(zips: pd.DataFrame, counties: pd.DataFrame,
-                  states: pd.DataFrame, adjMat: np.typing.NDArray,
-                  adjDf: pd.DataFrame) -> tuple[dict[str, Node], GranularityGraph]:
-
-    # Make a blank graph
-    graph = GranularityGraph('fakeEntitiesTest', Path('./logs/fakeEntitiesTest.log'))
-
-    # Go through each dataframe and make nodes for each entity
-    dfs = {GEID.ZIP: zips, GEID.COUNTY: counties, GEID.STATE: states}
-    allNodes = {}
-    for k in dfs:
-
-        # Get the df
-        df = dfs[k]
-
-        for row in df.itertuples():
-            
-            # Make the node
-            newNode = Node(row.ID, {EdgeType.AREA: row.Area}, k)
-            allNodes[row.ID] = newNode
-
-    # Now, add the nodes and edges
-    # Use the column names to index the matrix
-    ids = adjDf.columns[1:]
-    
-    for i, id0 in enumerate(ids):
-
-        # Get the node
-        n0 = allNodes[id0]
-
-        for j, id1 in enumerate(ids):
-
-            # Skip the diagonal
-            if i == j:
-                continue
-
-            # Get the node
-            n1 = allNodes[id1]
-
-            # Get the weight
-            weight = adjMat[i, j]
-
-            # Try and add the edge
-            status = graph.AddNodes(n0, n1, EdgeType.AREA, weight)
-            assert status == Status.SUCCESS
-    
-    # Make sure everything was added
-    assert len(graph) == zips.shape[0] + counties.shape[0] + states.shape[0]
-
-    return allNodes, graph
 
 
 ### Test Functions ###
@@ -175,13 +48,13 @@ def testValidity():
     # Doesn't actually test any functionality
 
     # Get the nodes
-    zips, counties, states = GetDfs()
+    zips, counties, states = GetSampleDfs()
 
     # Form the adjMat from the CSV
-    adjMat, _ = GetAdjMat()
+    adjMat, _ = GetSampleAdjMat()
 
     # Just call the validity check function
-    ValidityCheck(zips, counties, states, adjMat)
+    SampleValidityCheck(zips, counties, states, adjMat)
 
 @pytest.mark.basic
 def testGraphInstantiation():
@@ -191,11 +64,11 @@ def testGraphInstantiation():
     # in correctly
 
     # Get the info from the files
-    zips, counties, states = GetDfs()
-    adjMat, adjDf = GetAdjMat()
+    zips, counties, states = GetSampleDfs()
+    adjMat, adjDf = GetSampleAdjMat()
 
     # Make the graph
-    allNodes, graph = GenerateGraph(zips, counties, states, adjMat, adjDf)
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
 
     # Separate ids by type for testing
     zipIds = zips['ID']
@@ -261,49 +134,19 @@ def testGraphInstantiation():
 
 # Test the match finding of the graph
 
-# Utility function
-def MakeMatchAnswerKey(allNodes: dict[str, Node], 
-                       adjMat: np.typing.NDArray,
-                       adjDf: pd.DataFrame) -> dict[Node, dict[Node, float]]:
-
-    # Use the column list to get the indices
-    allIds = adjDf.columns[1:]
-
-    # For each node, return exactly all nodes it has a match with
-    # Use the adjMat to form the answer key
-    answerKey = {}
-    for i, sourceId in enumerate(allIds):
-
-        sNode = allNodes[sourceId]
-        answerKey[sNode] = {}
-
-        # Go through and add all non-zero weights
-        for j, destId in enumerate(allIds):
-
-            # Skip the diag
-            if i == j:
-                continue
-
-            # Check if the weight is zero
-            weight = adjMat[i, j]
-            if not weight == 0:
-                answerKey[sNode][allNodes[destId]] = weight
-
-    return answerKey
-
 
 @pytest.mark.matching
 def testGetMatches():
 
     # Get the info from the files
-    zips, counties, states = GetDfs()
-    adjMat, adjDf = GetAdjMat()
+    zips, counties, states = GetSampleDfs()
+    adjMat, adjDf = GetSampleAdjMat()
 
     # Make the graph
-    allNodes, graph = GenerateGraph(zips, counties, states, adjMat, adjDf)
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
 
     # Make the answer key
-    answerKey = MakeMatchAnswerKey(allNodes, adjMat, adjDf)
+    answerKey = MakeSampleMatchAnswerKey(allNodes, adjMat, adjDf)
 
     # Now, use the graph to do the same
     # The outputs should match
@@ -332,14 +175,14 @@ def testGetMatches():
 def testFindMatches():
 
     # Get the info from the files
-    zips, counties, states = GetDfs()
-    adjMat, adjDf = GetAdjMat()
+    zips, counties, states = GetSampleDfs()
+    adjMat, adjDf = GetSampleAdjMat()
 
     # Make the graph
-    allNodes, graph = GenerateGraph(zips, counties, states, adjMat, adjDf)
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
 
     # Make the answer key
-    fullAnswerKey = MakeMatchAnswerKey(allNodes, adjMat, adjDf)
+    fullAnswerKey = MakeSampleMatchAnswerKey(allNodes, adjMat, adjDf)
 
     # Make a dict for type checking
     zipIds = zips['ID']
@@ -390,18 +233,18 @@ def testFindMatches():
 # Tests for each aggregation/deaggregation option
 
 @pytest.mark.aggregate
-def testMean():
+def testExampleMean():
     pass
 
 @pytest.mark.aggregate
-def testSum():
+def testExampleSum():
     pass
 
 @pytest.mark.deaggregate
-def testDistribute():
+def testExampleDistribute():
     pass
 
 @pytest.mark.deaggregate
-def testCopy():
+def testExampleCopy():
     pass
 

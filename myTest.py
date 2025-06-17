@@ -8,21 +8,17 @@ import pandas as pd
 
 from src.entities import *
 
+def TestApp(row, t: int):
+    t += row['a']
 
 rows = [{'id': 'ABC', 'a': 1, 'b': 2}, {'id': 'XYZ', 'a': 3, 'b': 4}, {'id': 'ANY', 'a': 1, 'b': 7}]
 
 df = pd.DataFrame(rows)
+t = 0
+df.apply(TestApp, axis=1, args=[t])
+print(t)
 
-df['c'] = [i*5 for i in range(df.shape[0])]
 
-df = df.set_index('id')
-
-g = df.groupby('a')
-sums = g.sum()
-
-print(sums)
-
-print(sums['b'] / sums['c'])
 
 
 

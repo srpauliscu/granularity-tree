@@ -5,7 +5,8 @@
 # Import block
 #from src.entities import *
 import pandas as pd
-from src.kGraph import *
+#from src.kGraph import *
+from src.gator import *
 from pathlib import Path
 import shutil
 from collections.abc import Callable
@@ -24,6 +25,7 @@ COUNTY_ASSIGNMENT = {'s0': [f'c{i}' for i in range(0,4)],
                      's2': [f'c{i}' for i in range(6,9)],
                      's3': [f'c{i}' for i in range(9, 12)]
 }
+
 
 def BasicWeight(i, j, wm):
     return min(i,j) * wm
@@ -77,7 +79,7 @@ def ResetForTest(sampleSize: int, weightModifier: float, testName: str, WeightCa
 
 ### Utility Functions for Test Case ###
 
-def ValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
+def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
                   states: pd.DataFrame, adjMat: np.typing.NDArray):
 
 
@@ -126,7 +128,7 @@ def ValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
 
             assert adjMat[i, j] == adjMat[j, i]
 
-def GetDfs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def GetSampleDfs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     zips = pd.read_csv(ZIP_TEST_FILE)
     counties = pd.read_csv(COUNTY_TEST_FILE)
@@ -136,7 +138,7 @@ def GetDfs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
 
 
-def GetAdjMat() -> tuple[np.typing.NDArray, pd.DataFrame]:
+def GetSampleAdjMat() -> tuple[np.typing.NDArray, pd.DataFrame]:
 
     # Read in the dataframe
     adjDf = pd.read_csv(ADJ_TEST_FILE)
@@ -145,7 +147,7 @@ def GetAdjMat() -> tuple[np.typing.NDArray, pd.DataFrame]:
     return adjDf.iloc[:, 1:].to_numpy(), adjDf
 
 
-def GenerateGraph(zips: pd.DataFrame, counties: pd.DataFrame,
+def GenerateSampleGraph(zips: pd.DataFrame, counties: pd.DataFrame,
                   states: pd.DataFrame, adjMat: np.typing.NDArray,
                   adjDf: pd.DataFrame) -> tuple[dict[str, Node], GranularityGraph]:
 
@@ -195,3 +197,92 @@ def GenerateGraph(zips: pd.DataFrame, counties: pd.DataFrame,
     assert len(graph) == zips.shape[0] + counties.shape[0] + states.shape[0]
 
     return allNodes, graph
+
+
+def MakeSampleMatchAnswerKey(allNodes: dict[str, Node], 
+                       adjMat: np.typing.NDArray,
+                       adjDf: pd.DataFrame) -> dict[Node, dict[Node, float]]:
+
+    # Use the column list to get the indices
+    allIds = adjDf.columns[1:]
+
+    # For each node, return exactly all nodes it has a match with
+    # Use the adjMat to form the answer key
+    answerKey = {}
+    for i, sourceId in enumerate(allIds):
+
+        sNode = allNodes[sourceId]
+        answerKey[sNode] = {}
+
+        # Go through and add all non-zero weights
+        for j, destId in enumerate(allIds):
+
+            # Skip the diag
+            if i == j:
+                continue
+
+            # Check if the weight is zero
+            weight = adjMat[i, j]
+            if not weight == 0:
+                answerKey[sNode][allNodes[destId]] = weight
+
+    return answerKey
+
+
+### Utility functions for gator testing ###
+
+def GetGatorSamples(gator: Gator, sampleSize: int, idCol: str, dataCol: str) \
+    -> tuple[pd.DataFrame, pd.DataFrame]:
+
+    # Use the gator to make the samples
+    smallDf, largeDf = gator.MakeSample(sampleSize, idCol, dataCol)
+
+    # We also 
+
+    # Validate it via sum
+    groupedDf = smallDf.groupby(gator.DEST_COL)
+    tot = groupedDf[[gator.VALUE_FACTOR_COL]].sum()
+
+    for ind, row in tot.iterrows():
+        destId = ind[0]
+
+        # Find the matching total in the largeDf
+        destTot = largeDf.at[destId, dataCol]
+
+        # Allow for float errors
+        assert math.isclose(destTot, row[gator.VALUE_FACTOR_COL], abs_tol=.0001)
+
+    # Check the lengths match
+    assert tot.shape[0] == largeDf.shape[0]
+
+    # Validate using distribute as well
+    newDict = []
+    for ind, row in largeDf.iterrows():
+
+        destDict = row[gator.DEST_COL]
+        vfDict = row[gator.VALUE_FACTOR_COL]
+
+        for id in destDict:
+            newDict.append(
+                {
+                    idCol: id,
+                    dataCol: vfDict[id]
+                }
+            )
+    
+    resDf = pd.DataFrame(newDict)
+
+    # Make sure the results match
+    for ind, row in resDf.iterrows():
+        
+        # Find the match in the original
+        destData = smallDf.at[ind, dataCol]
+
+        # Allow for float errors
+        assert math.isclose(destData, row[dataCol], abs_tol=.0001)
+
+    # Make sure lengths match
+    assert resDf.shape[0] == smallDf.shape[0]
+
+
+    return smallDf, largeDf
