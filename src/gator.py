@@ -88,7 +88,8 @@ class Gator(object):
                         idCol: ind,
                         dataCol: row[dataCol],
                         self.DEST_COL: did,
-                        self.FACTOR_COL: factors[did]
+                        self.FACTOR_COL: factors[did],
+                        self.VALUE_FACTOR_COL: row[dataCol] * factors[did]
                     }
                 )
         
@@ -129,13 +130,16 @@ class Gator(object):
             '''
 
             groupedDf = df.groupby(self.DEST_COL)
-            resDf = groupedDf[[dataCol]].sum()
+            resDf = groupedDf[[self.VALUE_FACTOR_COL]].sum()
 
         # Check that something was actually added
         if resDf is None or resDf.shape[0] == 0:
             msg = f"resDf is empty in Gator.Aggregate."
             self.logger.error(msg)
             raise RuntimeError(msg)
+        
+        # Rename the column to match the original
+        resDf = resDf.rename(columns={self.VALUE_FACTOR_COL: dataCol})
         
         # Return it as a dataframe
         return resDf

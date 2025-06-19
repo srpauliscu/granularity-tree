@@ -27,28 +27,55 @@ def testSum():
     # Flatten the dataframe
     smallDf = gator.FlattenDataframe(smallDf, smallDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
 
-    print(smallDf)
-
-    # Run our own sum on it first for our answer key
+    # Run our own sum on it first for our manual answer key
     groupedDf = smallDf.groupby(gator.DEST_COL)
     tot = groupedDf[[dataCol]].sum()
 
-    print(tot)
-
     # Now, get the gator to do it
     resDf = gator.Aggregate(smallDf, idCol, dataCol, AggMethod.SUM)
-    
+
     # Result df should look exactly like largeDf/totalDf, though in a real-world use case,
     # the data would be different.
 
-    print(resDf)
-
     # Go through one at a time to make sure it all matches
-    #for ind, row in 
-    print(largeDf)
-
     for ind, row in largeDf.iterrows():
 
         assert tot.at[ind, dataCol] == row[dataCol]
         assert resDf.at[ind, dataCol] == row[dataCol]
+
+@pytest.mark.aggregate
+def testMean():
+
+
+    # We need a graph for instantiation
+    _, _, kGraph = ResetForTest(1, 1, 'testSum', BasicWeight)
+
+    gator = Gator(kGraph, Path('./logs/testGator.log'))
+
+    # Get the sample data
+    idCol = 'sid'
+    dataCol = 'pop'
+    smallDf, largeDf = GetGatorSamples(gator, 8, idCol, dataCol)
+
+    # Flatten the dataframe
+    smallDf = gator.FlattenDataframe(smallDf, smallDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
+
+    # Calculate the mean manually based on the largedf's value*factor column
+    # This means we need to flatten the large dataframe too
+    largeDf = gator.FlattenDataframe(largeDf, largeDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
+
+    groupedDf = largeDf.groupby(idCol)[gator.VALUE_FACTOR_COL].mean()
+
+    print(smallDf)
+    print(largeDf)
+    print(groupedDf)
+    
+    # Get the gator to do it
+    resDf = gator.Aggregate(smallDf, idCol, dataCol, AggMethod.MEAN)
+
+    # Check that the results match
+    for ind, row in groupedDf.iterrows():
+        print(ind, row)
+        
+    assert False
 
