@@ -42,7 +42,7 @@ class Gator(object):
         rows = {}
         rows[idCol] = [i for i in range(sampleSize)]
         rows[dataCol] = [i*2 for i in range(sampleSize)]
-        rows[self.FACTOR_COL] = [{i: 1} for i in range(sampleSize)]
+        rows[self.FACTOR_COL] = [{int(i/2): 1} for i in range(sampleSize)]
         rows[self.DEST_COL] = [(int(i / 2.),) for i in range(sampleSize)]
         rows[self.VALUE_FACTOR_COL] = [i*2*1 for i in range(sampleSize)]
 
@@ -70,6 +70,34 @@ class Gator(object):
         largeDf = largeDf.set_index(idCol)
 
         return smallDf, largeDf
+
+    def FlattenDataframe(self, df: pd.DataFrame, allFactors: dict, 
+                         idCol: str, dataCol: str) -> pd.DataFrame:
+
+        # Unnest the dest and factor columns
+
+        # Iterrows is slow, but only needs to be done once here
+        newDicts = []
+        for ind, row in df.iterrows():
+            factors = allFactors[ind]
+            
+            # Add a row for each destination
+            for did in factors:
+                newDicts.append(
+                    {
+                        idCol: ind,
+                        dataCol: row[dataCol],
+                        self.DEST_COL: did,
+                        self.FACTOR_COL: factors[did]
+                    }
+                )
+        
+        # Make it a dataframe
+        expandedDf = pd.DataFrame(newDicts)
+
+        return expandedDf
+
+
 
     def Aggregate(self, df: pd.DataFrame, idCol: str, 
                   dataCol: str, method: AggMethod)-> pd.DataFrame:
@@ -238,35 +266,15 @@ class Gator(object):
                 allFactors[sn][dn] = factor
 
 
-        # Make a new dataframe that expands this dict
-        # Each sourceNode will have a row for each destNode it relates to
-        # This allows use to leverage Pandas functions
-        newDict = []
 
         # Set the index so we can iterrate over it
         sourceDf = sourceDf.set_index(sourceIdCol)
 
-        # Iterrows is slow, but only needs to be done once here
-        for ind, row in sourceDf.iterrows():
-            factors = allFactors[ind]
-            
-            # Add a row for each destination
-            for did in factors:
-                newDict.append(
-                    {
-                        sourceIdCol: ind,
-                        sourceDataCol: row[sourceDataCol],
-                        self.DEST_COL: did,
-                        self.FACTOR_COL: factors[did]
-                    }
-                )
-        
-        # Make it a dataframe
-        expandedDf = pd.DataFrame(newDict)
+        # Flatten the dataframe for easy groupby operations
+        expandedDf = self.FlattenDataframe(sourceDf, allFactors, sourceIdCol, sourceDataCol)
 
         # Calculate the value*factor as a new column for easy agg/deagg
-        expandedDf[self.VALUE_FACTOR_COL] = expandedDf[sourceDataCol] * expandedDf[self.FACTOR_COL]
-
+        expandedDf[self.VALUE_FACTOR_COL] = expandedDf[sourceIdCol] * expandedDf[self.FACTOR_COL]
 
         # If ignoreIncomplete is false, check that each destination is 100% covered
         # We are assuming the sources are mutually exclusive (since they are the same type)

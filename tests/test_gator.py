@@ -22,7 +22,12 @@ def testSum():
     # Get the sample data
     idCol = 'sid'
     dataCol = 'pop'
-    smallDf, largeDf = GetGatorSamples(gator, 12, idCol, dataCol)
+    smallDf, largeDf = GetGatorSamples(gator, 8, idCol, dataCol)
+
+    # Flatten the dataframe
+    smallDf = gator.FlattenDataframe(smallDf, smallDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
+
+    print(smallDf)
 
     # Run our own sum on it first for our answer key
     groupedDf = smallDf.groupby(gator.DEST_COL)
@@ -42,5 +47,8 @@ def testSum():
     #for ind, row in 
     print(largeDf)
 
+    for ind, row in largeDf.iterrows():
 
-    assert False
+        assert tot.at[ind, dataCol] == row[dataCol]
+        assert resDf.at[ind, dataCol] == row[dataCol]
+
