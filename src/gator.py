@@ -114,8 +114,14 @@ class Gator(object):
         
         # Depending on the method, do the aggregation
         if method == AggMethod.MEAN:
-            # Mean of the source data, weighted by factor
-            raise NotImplementedError
+            # Weighted mean of the source data, via the factor
+            groupedDf = df.groupby(self.DEST_COL).sum()
+            groupedDf[self.VALUE_FACTOR_COL] = \
+                pd.DataFrame(groupedDf[self.VALUE_FACTOR_COL] / groupedDf[self.FACTOR_COL])
+            
+            # We only want the index and the result column
+            resDf = groupedDf[[self.VALUE_FACTOR_COL]]
+            
 
         elif method == AggMethod.MEDIAN:
             # Median of the source data, weighted by factor

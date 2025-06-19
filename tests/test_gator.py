@@ -64,10 +64,11 @@ def testMean():
     # This means we need to flatten the large dataframe too
     largeDf = gator.FlattenDataframe(largeDf, largeDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
 
-    groupedDf = largeDf.groupby(idCol)[gator.VALUE_FACTOR_COL].mean()
+    groupedDf = largeDf.groupby(idCol)[[gator.VALUE_FACTOR_COL]].mean()
+    groupedDf = groupedDf.rename(columns={gator.VALUE_FACTOR_COL: dataCol})
 
-    print(smallDf)
-    print(largeDf)
+    #print(smallDf)
+    #print(largeDf)
     print(groupedDf)
     
     # Get the gator to do it
@@ -75,7 +76,6 @@ def testMean():
 
     # Check that the results match
     for ind, row in groupedDf.iterrows():
-        print(ind, row)
-        
-    assert False
+        assert resDf.at[ind, dataCol] == row[dataCol]
+
 
