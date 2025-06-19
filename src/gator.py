@@ -137,6 +137,8 @@ class Gator(object):
 
             groupedDf = df.groupby(self.DEST_COL)
             resDf = groupedDf[[self.VALUE_FACTOR_COL]].sum()
+            print(resDf)
+            #assert False
 
         # Check that something was actually added
         if resDf is None or resDf.shape[0] == 0:
@@ -154,47 +156,49 @@ class Gator(object):
     def DeAggregate(self, df: pd.DataFrame, idCol: str,
                     dataCol: str, method: DeAggMethod) -> pd.DataFrame:
         
-        raise NotImplementedError
-        
+
         # Input validation
         if not type(method) == DeAggMethod:
             msg = f"Incorrect method type of {type(method)} for Gator.DeAggregate."
             self.logger.error(msg)
             raise RuntimeError(msg)
-        
-        # Grab the data
-        data = df[dataCol]
-
-
-
-        # Store the resulting rows as dicts
-        allRows = []
-
     
+ 
         # Depending on the method, do the deaggregation
         if method == DeAggMethod.COPY:
             # Simply copy the value to all sub-entities
-            # Good for stats like averages
+            # Good for aggregate summary stats, e.g. averages
 
-            for dn in factors:
+            # We can ignore the factor and vf columns for this
+            print(df)
+
+            # Just take the original data and make the destId the index
+            resDf = df[[self.DEST_COL, dataCol]].set_index(self.DEST_COL)
 
 
-
-
-                # Form the new row
-                newRow = {'result': 1}
-
-            
-
-            pass
         elif method == DeAggMethod.DISTRIBUTE:
             # Distribute the total to all sub-entities by factor
-            # Good for numerical stats, e.g. population
+            # Good for quantities, e.g. population
 
-            pass
+            # This was essentially already calculated, in the value*factor column
+            resDf = df[[self.VALUE_FACTOR_COL]]
+
+
+        # Check that something was actually added
+        if resDf is None or resDf.shape[0] == 0:
+            msg = f"resDf is empty in Gator.DeAggregate."
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+        
+        # Rename the column to match the original
+        resDf = resDf.rename(columns={self.VALUE_FACTOR_COL: dataCol})
+
+        # Return it
+        return resDf
 
 
     def Equalize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
+                sourceType: GEID | TID, destType: GEID | TID,
                 sourceIdCol: str, destIdCol: str,
                 sourceDataCol: str,
                 method: AggMethod | DeAggMethod,
@@ -224,31 +228,63 @@ class Gator(object):
 
 
         # 1.) Make the nodes
-        sourceNodes, destNodes = self.MakeNodes(sourceDf[sourceIdCol], destDf[destIdCol], GEID.AIANNHA, GEID.BLOCK)
-
-        # 2.) For each source node, find all matching destNodes
-        allMatches = {}
+        sourceNodes, destNodes = self.MakeNodeObjects(sourceDf[sourceIdCol],
+                                                      destDf[destIdCol],
+                                                      sourceType, destType)
+        
+        # Get the populated version of each node from the graph
+        newSourceNodes = []
+        newDestNodes = []
         for sn in sourceNodes:
-
-            # Check if the node exists
             if not self.kGraph.NodeExists(sn):
-                msg = f"Node {sn} does not exist in the graph."
+                msg = f"Source node {sn.id} does not exist in the graph."
 
                 # Throw an error if specified
                 if not ignoreMissing:
                     self.logger.error(msg)
                     raise RuntimeError(msg)
                 
-                # Otherwise just log the miss
+                # Otherwise just log the miss and skip it
                 else:
                     self.logger.warning(msg)
+                    continue
+            
+            # Get the real node from the graph
+            newSn = self.kGraph.GetNode(sn.id, sourceType)
+            newSourceNodes.append(newSn)
+        
+        for dn in destNodes:
+            if not self.kGraph.NodeExists(dn):
+                msg = f"Source node {dn.id} does not exist in the graph."
 
-                    
+                # Throw an error if specified
+                if not ignoreMissing:
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
+                
+                # Otherwise just log the miss and skip it
+                else:
+                    self.logger.warning(msg)
+                    continue
+            
+            # Get the real node from the graph
+            newDn = self.kGraph.GetNode(dn.id, destType)
+            newDestNodes.append(newDn)
+
+        # Override the old lists
+        sourceNodes = newSourceNodes
+        destNodes = newDestNodes
+
+
+        # 2.) For each source node, find all matching destNodes
+        allMatches = {}
+        for sn in sourceNodes:
+
+            # Get the matching dest nodes
             matches = self.kGraph.GetMatches(sn, destNodes, edgeType)
             allMatches[sn] = matches
 
         # allMatches: {sourceNode: {destNode1: weight1, destNode2: weight2, ...}, ...}
-
 
         # 4.) Calculate mult factors
         allFactors = {}
@@ -271,44 +307,63 @@ class Gator(object):
                     raise RuntimeError(msg)
                 
                 # Save it into a new dict
-                if not sn in allFactors:
-                    allFactors[sn] = {}
-                allFactors[sn][dn] = factor
+                if not sn.id in allFactors:
+                    allFactors[sn.id] = {}
+                allFactors[sn.id][dn.id] = factor
 
-
+        
+        # Sanity check to make sure the ids were indeed unique
+        if not len(allMatches) == len(allFactors):
+            msg = f"allMatches and allFactors did not match up in length."
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+        for sn in allMatches:
+            if not len(allMatches[sn]) == len(allFactors[sn.id]):
+                msg = f"allMatches and allFactors did not match up in length for source node {sn.id}."
+                self.logger.error(msg)
+                raise RuntimeError(msg)
 
         # Set the index so we can iterrate over it
         sourceDf = sourceDf.set_index(sourceIdCol)
 
         # Flatten the dataframe for easy groupby operations
+
         expandedDf = self.FlattenDataframe(sourceDf, allFactors, sourceIdCol, sourceDataCol)
 
         # Calculate the value*factor as a new column for easy agg/deagg
-        expandedDf[self.VALUE_FACTOR_COL] = expandedDf[sourceIdCol] * expandedDf[self.FACTOR_COL]
+        expandedDf[self.VALUE_FACTOR_COL] = expandedDf[sourceDataCol] * expandedDf[self.FACTOR_COL]
 
         # If ignoreIncomplete is false, check that each destination is 100% covered
         # We are assuming the sources are mutually exclusive (since they are the same type)
         if not ignoreIncomplete:
 
-            # Group by destination node
-            groupedDf = expandedDf.groupby(self.DEST_COL)
+            # Just need to add the weights up for each edge for each dest Node
+            allTots = {}
+            for sn in allMatches:
+                for dn in allMatches[sn]:
 
-            # Sum the factors
-            factorSums = groupedDf[self.FACTOR_COL].sum()
+                    # Make a new entry as needed
+                    if not dn in allTots:
+                        allTots[dn] = 0
+                    
+                    allTots[dn] += allMatches[sn][dn]
 
-            # Check that they are all close to 1
-            factorSums['_valid_sum_'] = math.isclose(factorSums[self.FACTOR_COL], 1.0, abs_tol=0.1)
-
-            if not factorSums['_valid_sum_'].all():
-                msg = f"Total weight is invalid.\nFactors: {factorSums}\n"
-                self.logger.error(msg)
-                raise RuntimeError(msg)
+            # Check that they are all close to the value recorded in the graph
+            for dn in allTots:
+                if not math.isclose(allTots[dn], dn.values[edgeType], rel_tol=0.1):
+                    msg = f"Total weight {allTots[dn]} for {dn.id} is invalid.\nFactors: {allTots}\n"
+                    #self.logger.error()
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
         
 
         # 5.) Do the calculation
         # We have everything we need: the destNodes, what nodes belong to each destNode, and
         # the factor to multiply the numerical data by
         # The actual operation depends on 'method'
+
+        print(expandedDf)
+
         if type(method) == AggMethod:
             resDf = self.Aggregate(expandedDf, destIdCol, sourceDataCol, method)
         elif type(method) == DeAggMethod:
@@ -329,7 +384,7 @@ class Gator(object):
         return resDf
         
 
-    def MakeNodes(self, ids1: pd.Series, ids2: pd.Series,
+    def MakeNodeObjects(self, ids1: pd.Series, ids2: pd.Series,
                   entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:
         
         """

@@ -79,3 +79,56 @@ def testMean():
         assert resDf.at[ind, dataCol] == row[dataCol]
 
 
+@pytest.mark.deaggregate
+def testDistribute():
+
+    # We need a graph for instantiation
+    _, _, kGraph = ResetForTest(1, 1, 'testSum', BasicWeight)
+
+    gator = Gator(kGraph, Path('./logs/testGator.log'))
+
+    # Get the sample data
+    idCol = 'sid'
+    dataCol = 'pop'
+    smallDf, largeDf = GetGatorSamples(gator, 8, idCol, dataCol)
+
+    # Flatten the dataframe
+    largeDf = gator.FlattenDataframe(largeDf, largeDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
+
+    # Get the gator to to the distribution
+    resDf = gator.DeAggregate(largeDf, idCol, dataCol, DeAggMethod.DISTRIBUTE)
+
+    # Check that the results match
+    for ind, row in smallDf.iterrows():
+        assert resDf.at[ind, dataCol] == row[dataCol]
+
+
+
+@pytest.mark.deaggregate
+def testCopy():
+
+    # We need a graph for instantiation
+    _, _, kGraph = ResetForTest(1, 1, 'testSum', BasicWeight)
+
+    gator = Gator(kGraph, Path('./logs/testGator.log'))
+
+    # Get the sample data
+    idCol = 'sid'
+    dataCol = 'pop'
+    smallDf, largeDf = GetGatorSamples(gator, 8, idCol, dataCol)
+
+    # Flatten the dataframe
+    largeDf = gator.FlattenDataframe(largeDf, largeDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
+
+    # Get the gator to to the copying
+    resDf = gator.DeAggregate(largeDf, idCol, dataCol, DeAggMethod.COPY)
+
+    print(smallDf)
+    print(largeDf)
+    print(resDf)
+
+    # Check that each id in the smallDf was correctly assigned
+    # the value of its owner id
+    for ind, row in smallDf.iterrows():
+        for did in row[gator.DEST_COL]:
+            assert resDf.at[did, dataCol] == largeDf.at[did, dataCol]

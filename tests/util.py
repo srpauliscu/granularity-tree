@@ -120,6 +120,7 @@ def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
 
                 # In case the test fails, print the column and frames
                 #print(k0, k1, c)
+                #print(df0[c].sum(), df1[c].sum())
                 assert df0[c].sum() == df1[c].sum()
     
     # Make sure the adjMat is symmetric
@@ -162,11 +163,11 @@ def GenerateSampleGraph(zips: pd.DataFrame, counties: pd.DataFrame,
         # Get the df
         df = dfs[k]
 
-        for row in df.itertuples():
+        for ind, row in df.iterrows():
             
             # Make the node
-            newNode = Node(row.ID, {EdgeType.AREA: row.Area}, k)
-            allNodes[row.ID] = newNode
+            newNode = Node(row['ID'], {EdgeType.AREA: row['Area']}, k)
+            allNodes[row['ID']] = newNode
 
     # Now, add the nodes and edges
     # Use the column names to index the matrix

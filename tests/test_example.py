@@ -230,21 +230,83 @@ def testFindMatches():
 
 
 
-# Tests for each aggregation/deaggregation option
+### Tests for the full equalize pipeline ###
 
-@pytest.mark.aggregate
-def testExampleMean():
-    pass
+@pytest.mark.equalize
+def testEqualizeSumBasic():
 
-@pytest.mark.aggregate
-def testExampleSum():
-    pass
+    # Get the info from the files
+    zips, counties, states = GetSampleDfs()
+    adjMat, adjDf = GetSampleAdjMat()
 
-@pytest.mark.deaggregate
-def testExampleDistribute():
-    pass
+    # Make sure the sample is valid
+    SampleValidityCheck(zips, counties, states, adjMat)
 
-@pytest.mark.deaggregate
-def testExampleCopy():
-    pass
+    # Make the graph
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
+
+    # Make the gator
+    gator = Gator(graph, Path('./logs/testSampleGator.log'))
+
+    # Using the gator, try converting from granularity to granularity
+
+    # Easiest one first- counties to states
+    idCol = 'ID'
+    dataCol = 'TotalEVs'
+    resDf = gator.Equalize(counties, states, GEID.COUNTY, GEID.STATE,
+                           idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
+    
+    # Make sure the values match
+    statesTemp = states.set_index('ID')
+    for ind, row in statesTemp.iterrows():
+        assert resDf.at[ind, dataCol] == row[dataCol]
+    
+    # Do the same with population, just for testing
+    dataCol = 'Population'
+    resDf = gator.Equalize(counties, states, GEID.COUNTY, GEID.STATE,
+                           idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
+    
+    for ind, row in statesTemp.iterrows():
+        assert resDf.at[ind, dataCol] == row[dataCol]
+
+@pytest.mark.equalize
+def testEqualizeSumHard():
+
+    # Get the info from the files
+    zips, counties, states = GetSampleDfs()
+    adjMat, adjDf = GetSampleAdjMat()
+
+    # Make sure the sample is valid
+    SampleValidityCheck(zips, counties, states, adjMat)
+
+    # Make the graph
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
+
+    # Make the gator
+    gator = Gator(graph, Path('./logs/testSampleGator.log'))
+
+    # Using the gator, try converting from granularity to granularity
+
+    # ZIP to states is more obtuse
+    idCol = 'ID'
+    dataCol = 'TotalEVs'
+    resDf = gator.Equalize(zips, states, GEID.ZIP, GEID.STATE,
+                           idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
+
+    
+    # Make sure the values match
+    statesTemp = states.set_index('ID')
+    for ind, row in statesTemp.iterrows():
+        print(resDf)
+        assert resDf.at[ind, dataCol] == row[dataCol]
+
+    return
+    
+    # Do the same with population, just for testing
+    dataCol = 'Population'
+    resDf = gator.Equalize(zips, states, GEID.ZIP, GEID.STATE,
+                           idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
+    
+    for ind, row in statesTemp.iterrows():
+        assert resDf.at[ind, dataCol] == row[dataCol]
 
