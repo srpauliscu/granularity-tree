@@ -12,6 +12,24 @@ import math
 from kGraph import *
 
 
+# Function for pd.apply to calculate error bound
+def CalculateError(row: pd.Series, origDataCol: str, newDataCol: str):
+
+    # If the factor is 1, there is no error
+    if math.isclose(row[Gator.FACTOR_COL], 1.0, abs_tol=.01):
+        return (0,0)
+    
+    # Calculate min and max estimates
+    lower = row[newDataCol] - row[Gator.VALUE_FACTOR_COL]
+    upper = lower + row[origDataCol]
+
+    actual = row[newDataCol]
+    lowerError = abs((lower - actual) / actual) * 100
+    upperError = abs((upper - actual) / actual) * 100
+
+    return (round(lowerError, 2), round(upperError,2))
+    
+
 class Gator(object):
 
     # Class variables for column names
@@ -19,6 +37,9 @@ class Gator(object):
     DEST_COL = '_destId_'
     VALUE_FACTOR_COL = '_vf_'
     NEW_VALUE_COL = '_value_'
+    ERROR_COL = '_error_'
+
+    # Flag for doing additional cleanup
     DEBUG = True
 
 
@@ -362,8 +383,6 @@ class Gator(object):
         # the factor to multiply the numerical data by
         # The actual operation depends on 'method'
 
-        print(expandedDf)
-
         if type(method) == AggMethod:
             resDf = self.Aggregate(expandedDf, destIdCol, sourceDataCol, method)
         elif type(method) == DeAggMethod:
@@ -373,6 +392,52 @@ class Gator(object):
             msg = f"Invalid method of type {type(method)} used."
             self.logger.error(msg)
             raise RuntimeError(msg)
+        
+        # 6.) Error calculation
+
+        # Do a one-sided join to inform each source-dest node pair of the result
+        print(expandedDf)
+        print(resDf)
+
+        rsuffix = '_r'
+        lsuffix = '_l'
+        joinedDf = expandedDf.join(resDf, on=self.DEST_COL, how='left', rsuffix='_r', lsuffix='_l')
+
+        # Rename the columns for clarity
+        origDataCol = f'source_{sourceDataCol}'
+        newDataCol = f'dest_{sourceDataCol}'
+        joinedDf = joinedDf.rename(columns={sourceDataCol + lsuffix: origDataCol,
+                                            sourceDataCol + rsuffix: newDataCol})
+
+        ''' Error calculation
+        For sources with a factor of 1, there can be no error
+        since it is not split with another destination.
+
+        For sources with a factor < 1, the possibilities range from complete to no overlap,
+        which gives a range of new totals.
+
+        To properly calculate error, calculate what the new total would be with
+        a factor of 1 and a factor of 0 to get the error bound for each s-d pair.
+
+        Then, do the same for all sources of a given destination at the same time.
+        This gives an overall error bound.
+
+        
+        '''
+
+        # Use apply for the special case of factor == 1
+        joinedDf[self.ERROR_COL] = joinedDf.apply(CalculateError, axis=1,
+                                                  args=[origDataCol, newDataCol])
+        
+        print('\n\n')
+        pd.set_option("display.max_columns", 50)
+        with pd.option_context("display.precision", 2):
+            print(joinedDf)
+
+
+
+        assert False
+        
 
 
 

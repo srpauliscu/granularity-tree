@@ -292,12 +292,14 @@ def testEqualizeSumHard():
     dataCol = 'TotalEVs'
     resDf = gator.Equalize(zips, states, GEID.ZIP, GEID.STATE,
                            idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
+    
+
+    assert False
 
     
     # Make sure the values match
     statesTemp = states.set_index('ID')
     for ind, row in statesTemp.iterrows():
-        print(resDf)
         assert resDf.at[ind, dataCol] == row[dataCol]
 
     return
