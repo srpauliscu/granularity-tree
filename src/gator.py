@@ -436,7 +436,7 @@ class Gator(object):
 
 
 
-        assert False
+        #assert False
         
 
 
