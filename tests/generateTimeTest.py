@@ -67,7 +67,7 @@ def main():
 
     # Start by generating the timestamps
     startTime = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTime = pd.Timestamp(year=2020, month=1, day=2, hour=5, minute=10, second=0)
+    endTime = pd.Timestamp(year=2020, month=1, day=4, hour=10, minute=16, second=0)
     totMins = int((endTime - startTime).total_seconds() / 60.)
 
     #print((endTime - startTime).total_seconds())
@@ -108,6 +108,7 @@ def main():
     assert GenericValidityCheck(adjMat)
 
     for i in range(adjMat.shape[0]):
+        
 
         # Each minute row/column should have a single 1, since each
         # minute overlaps 1 minute with a single hour
@@ -117,6 +118,7 @@ def main():
         # Each hour row/column should have 60 1s in it at this point
         if i >= hStart and i < hEnd:
             assert adjMat[i].sum() == 60 or adjMat[i].sum() == totMins % 60
+
 
     ### Minutes - days ###
     dStart = hEnd
@@ -201,26 +203,31 @@ def main():
 
     ### Hours - days ###
     print('\nHours - days...')
-    adjMat = FillMat(adjMat, allTimes['days'], allTimes['hours'], dStart, hStart, 'h', 60)
+    adjMat = FillMat(adjMat, allTimes['days'], allTimes['hours'], dStart, hStart, 'd', 60)
 
     # Sanity checks
     assert GenericValidityCheck(adjMat)
 
+    np.set_printoptions(threshold=np.inf)
+
+
     for i in range(adjMat.shape[0]):
 
         # Each hour column should have 60 + leftovers,
-        # if not matched with a full day
+        # if not matched with a full 60 minutes
         if i >= hStart and i < hEnd:
-            print(adjMat[i].sum())
-            print(totMins % 60)
-            assert (adjMat[i].sum() == 60 + (totMins % 60) or
-                    adjMat[i].sum() == 60 + 60)
+            assert (adjMat[i].sum() == 60 + 60 or
+                    adjMat[i].sum() == 60 + totMins % 60)
                 
         
         if i >= dStart and i < dEnd:
-            # Each day column should have 60 + (60*24 or leftovers) mins
-            assert (adjMat[i].sum() == 60 + (totMins % (60*24)) or
-                    adjMat[i].sum() == 60 + 60*24)
+
+            # Each day column should have 24 hours and 24*60 minutes or
+            # a number of full hours + leftovers
+            print(adjMat[i].sum())
+            print(60*((totMins / 60) % 24) + (totMins % (60*24)))
+            assert (adjMat[i].sum() == 60*24*2 or
+                    adjMat[i].sum() == 60*((totMins / 60) % 24) + (totMins % (60*24)))
 
 
 
