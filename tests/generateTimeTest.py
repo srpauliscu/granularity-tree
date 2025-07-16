@@ -4,6 +4,7 @@
 import datetime
 import pandas as pd
 import numpy as np
+import math
 
 # Timestamp matcher
 def TimestampMatch(ts1: pd.Timestamp, ts2: pd.Timestamp, freq: str) -> bool:
@@ -25,6 +26,22 @@ def TimestampMatch(ts1: pd.Timestamp, ts2: pd.Timestamp, freq: str) -> bool:
 
 
     return False
+
+# Calculate the number of minutes of overlap
+# between two timestamps
+def CalcTimestampOverlap(ts1: pd.Timestamp, ts2: pd.Timestamp, maxWeight: int) -> int:
+
+    # We assume that the timestamps have already been checked
+    # to match
+
+
+    # Check which one is "bigger"
+    if ts1 > ts2:
+        return int((ts1 - ts2).total_seconds() / 60.) + maxWeight
+    else:
+        return int((ts2 - ts1).total_seconds() / 60.) + maxWeight
+
+
 
 # Function to test basic invariants
 def GenericValidityCheck(adjMat: np.typing.NDArray) -> bool:
@@ -52,6 +69,7 @@ def FillMat(adjMat: np.typing.NDArray,
                 # We shouldn't be overriding anything
                 assert adjMat[v2i + start2, v1i + start1] == 0
                 assert adjMat[v1i + start1, v2i + start2] == 0
+
 
                 # Assign the weight
                 adjMat[v2i + start2, v1i + start1] = weight
@@ -223,12 +241,14 @@ def main():
         if i >= dStart and i < dEnd:
 
             # Each day column should have 24 hours and 24*60 minutes or
-            # a number of full hours + leftovers
+            # a number of full hours + leftover minutes
+            # For ease, all unites above minutes are full (i.e. there are no half-hours)
             print(adjMat[i].sum())
-            print(60*((totMins / 60) % 24) + (totMins % (60*24)))
-            assert (adjMat[i].sum() == 60*24*2 or
-                    adjMat[i].sum() == 60*((totMins / 60) % 24) + (totMins % (60*24)))
+            
+            print((totMins % (24*60))*2 + totMins % 60)
 
+            assert (adjMat[i].sum() == 24*60 + 24*60 or
+                    adjMat[i].sum() == ((totMins % (24*60))*2 + totMins % 60))
 
 
 
