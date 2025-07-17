@@ -6,42 +6,6 @@ import pandas as pd
 import numpy as np
 import math
 
-# Timestamp matcher
-def TimestampMatch(ts1: pd.Timestamp, ts2: pd.Timestamp, freq: str) -> bool:
-
-    # Most straightforward option
-    if freq == 'm' or freq == 'h' or freq == 'd':
-        return ts1.floor(freq) == ts2.floor(freq)
-    
-    elif freq == 'mo':
-
-        # floor() doesn't work for months
-        return pd.Timestamp(year=ts1.year, month=ts1.month, day=1) == \
-            pd.Timestamp(year=ts2.year, month=ts2.month, day=1)
-    
-    elif freq == 'y':
-        # floor() doesn't work for years
-        return pd.Timestamp(year=ts1.year, month=1, day=1) == \
-            pd.Timestamp(year=ts2.year, month=1, day=1)
-
-
-    return False
-
-# Calculate the number of minutes of overlap
-# between two timestamps
-def CalcTimestampOverlap(ts1: pd.Timestamp, ts2: pd.Timestamp, maxWeight: int) -> int:
-
-    # We assume that the timestamps have already been checked
-    # to match
-
-
-    # Check which one is "bigger"
-    if ts1 > ts2:
-        return int((ts1 - ts2).total_seconds() / 60.) + maxWeight
-    else:
-        return int((ts2 - ts1).total_seconds() / 60.) + maxWeight
-
-
 
 # Function to test basic invariants
 def GenericValidityCheck(adjMat: np.typing.NDArray) -> bool:
@@ -59,21 +23,21 @@ def GenericValidityCheck(adjMat: np.typing.NDArray) -> bool:
 
 # Functions to fill in the specified block
 def FillMat(adjMat: np.typing.NDArray,
-            tsl1: list[pd.Timestamp], tsl2: list[pd.Timestamp],
+            tsl1: pd.IntervalIndex, tsl2: pd.IntervalIndex,
             start1: int, start2: int, freq: str, weight: int):
     
     for v1i, v1 in enumerate(tsl1):
         for v2i, v2 in enumerate(tsl2):
 
-            if TimestampMatch(v1, v2, freq):
+            if v1.overlaps(v2):
                 # We shouldn't be overriding anything
                 assert adjMat[v2i + start2, v1i + start1] == 0
                 assert adjMat[v1i + start1, v2i + start2] == 0
 
-
                 # Assign the weight
                 adjMat[v2i + start2, v1i + start1] = weight
                 adjMat[v1i + start1, v2i + start2] = weight
+
     
     return adjMat
 
@@ -85,31 +49,31 @@ def main():
 
     # Start by generating the timestamps
     startTime = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTime = pd.Timestamp(year=2020, month=1, day=4, hour=10, minute=16, second=0)
+    endTime = pd.Timestamp(year=2020, month=1, day=5, hour=0, minute=0, second=0)
     totMins = int((endTime - startTime).total_seconds() / 60.)
 
-    #print((endTime - startTime).total_seconds())
-    #return
-    timestamps = [startTime + datetime.timedelta(minutes=m) for m in range(totMins)]
 
+    # Generate intervals for each frequency
+    mins = pd.interval_range(startTime, endTime, freq='min', closed='left')
+    hours = pd.interval_range(startTime, endTime, freq='h', closed='left')
+    days = pd.interval_range(startTime, endTime, freq='D', closed='left')
+    months = pd.interval_range(startTime, endTime, freq='MS', closed='left')
+    years = pd.interval_range(startTime, endTime, freq='YS', closed='left')
 
-    # Split them into their components, using a dict
-    # to keep them ordered
+    # Put them in a dict for organization
     allTimes = {
-        'minutes': timestamps,
-        'hours': list({ts.floor('h'): None for ts in timestamps}.keys()),
-        'days': list({ts.floor('d'): None for ts in timestamps}.keys()),
-        'months': list({pd.Timestamp(year=ts.year, month=ts.month, day=1): None for ts in timestamps}.keys()),
-        'years': list({pd.Timestamp(year=ts.year, month=1, day=1): None for ts in timestamps}.keys())
+        'minutes': mins,
+        'hours': hours,
+        'days': days,
+        'months': months,
+        'years': years
     }
 
-    # Now, we need the adj matrix, which can
-    # be formed systematically
+
 
     # Make a blank matrix of the proper size
     totalLen = sum([len(allTimes[k]) for k in allTimes])
     adjMat = np.zeros((totalLen, totalLen))
-
 
 
     ### Minutes - hours ###
@@ -180,7 +144,7 @@ def main():
         # for that month
         if i >= moStart and i < moEnd:
             # Get a copy of that month's timestamp
-            moTs = allTimes['months'][i - moStart]
+            moTs = allTimes['months'][i - moStart].left
 
             # Calculate the appropriate number of minutes for that month
             if moTs.month == 12:
@@ -210,7 +174,7 @@ def main():
         # for that year
         if i >= yStart and i < yEnd:
             # Get a copy of that year's timestamp
-            yTs = allTimes['years'][i - yStart]
+            yTs = allTimes['years'][i - yStart].left
 
             # Calculate the appropriate number of minutes for that month
             # This accounts for leap years
@@ -228,27 +192,38 @@ def main():
 
     np.set_printoptions(threshold=np.inf)
 
-
     for i in range(adjMat.shape[0]):
 
         # Each hour column should have 60 + leftovers,
         # if not matched with a full 60 minutes
         if i >= hStart and i < hEnd:
             assert (adjMat[i].sum() == 60 + 60 or
-                    adjMat[i].sum() == 60 + totMins % 60)
+                    adjMat[i].sum() == 60)
                 
         
         if i >= dStart and i < dEnd:
 
-            # Each day column should have 24 hours and 24*60 minutes or
-            # a number of full hours + leftover minutes
-            # For ease, all units above minutes are full (i.e. there are no half-hours)
-            print(adjMat[i].sum())
-            
-            print((totMins % (24*60))*2 + totMins % 60)
+            # Each day column should have 24 hours and 24*60 minutes
+            assert (adjMat[i].sum() == 24*60 + 24*60)
+    
+    ### Hours - months ###
+    print('\nHours - months...')
+    adjMat = FillMat(adjMat, allTimes['months'], allTimes['hours'], moStart, hStart, 'mo', 60)
 
-            assert (adjMat[i].sum() == 24*60 + 24*60 or
-                    adjMat[i].sum() == ((totMins % (24*60))*2 + totMins % 60))
+    # Sanity checks
+    assert GenericValidityCheck(adjMat)
+
+    for i in range(adjMat.shape[0]):
+        
+        # Each hour column should have another 60 minutes in it
+        # or just what it already had if it wasn't matched with a full month
+        if i >= hStart and i < hEnd:
+            if adjMat[i].sum() != 60*3:
+                print(adjMat[i].sum())
+            assert (adjMat[i].sum() == 60*3)
+        
+
+        
 
 
 
@@ -261,6 +236,8 @@ def main():
 
 
 if __name__ == "__main__":
+
+
     main()
 
 
