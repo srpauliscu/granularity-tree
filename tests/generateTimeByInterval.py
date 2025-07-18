@@ -49,7 +49,7 @@ def main():
 
     # Start by generating the timestamps
     startTime = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTime = pd.Timestamp(year=2020, month=1, day=5, hour=0, minute=0, second=0)
+    endTime = pd.Timestamp(year=2020, month=2, day=1, hour=0, minute=0, second=0)
     totMins = int((endTime - startTime).total_seconds() / 60.)
 
 
@@ -194,11 +194,9 @@ def main():
 
     for i in range(adjMat.shape[0]):
 
-        # Each hour column should have 60 + leftovers,
-        # if not matched with a full 60 minutes
+        # Each hour column should have 60 + 60 minutes
         if i >= hStart and i < hEnd:
-            assert (adjMat[i].sum() == 60 + 60 or
-                    adjMat[i].sum() == 60)
+            assert (adjMat[i].sum() == 60 + 60)
                 
         
         if i >= dStart and i < dEnd:
@@ -216,12 +214,29 @@ def main():
     for i in range(adjMat.shape[0]):
         
         # Each hour column should have another 60 minutes in it
-        # or just what it already had if it wasn't matched with a full month
         if i >= hStart and i < hEnd:
-            if adjMat[i].sum() != 60*3:
+            assert adjMat[i].sum() == 60*3
+
+        # Each month column should have twice its number of minutes
+        if i >= moStart and i < moEnd:
+            # Get a copy of that month's timestamp
+            moTs = allTimes['months'][i - moStart].left
+
+            # Calculate the number of minutes it should have based on days,
+            # then double to account for min and hour matching
+            if moTs.month == 12:
+                moMins = 60*24*31
+            else:
+                moMins = int((pd.Timestamp(year=moTs.year, month=moTs.month + 1, day=1) - moTs).total_seconds() / 60.)
+            moMins *= 2
+
+            if adjMat[i].sum() != moMins:
                 print(adjMat[i].sum())
-            assert (adjMat[i].sum() == 60*3)
-        
+                print(moMins)
+            assert adjMat[i].sum() == moMins
+
+
+            
 
         
 
