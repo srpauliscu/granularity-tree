@@ -180,7 +180,7 @@ class GranularityGraph(object):
             # Add the new node to the array, resizing as needed
             if self.size == self.maxSize:
 
-                # Pad the existing arrays with Nones, doubling the size
+                # Pad the existing arrays with 0s, doubling the size
                 for k in self.graphs:
                     self.graphs[k] = np.pad(self.graphs[k], (0, self.maxSize), mode='constant', constant_values=0)
 
@@ -329,7 +329,7 @@ class GranularityGraph(object):
             # Grab the main file first
             with open(saveDir / Path('main.json'), 'r') as f:
                 mainDict = json.load(f)
-
+            
             # Get the main parameters
             self.maxSize = mainDict['maxSize']
             self.size = mainDict['size']
@@ -365,6 +365,9 @@ class GranularityGraph(object):
 
                 # Put it in the main graphs dict
                 self.graphs[EdgeType(k)] = graph
+            
+            for k in self.graphs:
+                print(self.graphs[k].shape)
                  
 
         

@@ -4,6 +4,7 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
+import math
 
 from entities import *
 from kGraph import Node, GranularityGraph
@@ -123,6 +124,7 @@ def main(load: bool = True, overwrite: bool = True):
         # This will run even if we don't have a save file
         graph.LoadGraph(graphsDir)
 
+
     # Only load a few files at once to limit memory usage
     regionGdf = LoadShapefile(parentDir, 'region')
     stateGdf = LoadShapefile(parentDir, 'state')
@@ -146,19 +148,57 @@ def main(load: bool = True, overwrite: bool = True):
     # For testing, just look at alabama
     countyGdf = countyGdf[countyGdf['STATEFP'] == '01']
 
-    #stateGdf = stateGdf[stateGdf['GISJOIN'] == "G120"]
-    print(regionGdf)
-    print(stateGdf)
     print(countyGdf)
+    print(stateGdf)
+    #print(stateGdf[stateGdf['GISJOIN'] == "G010"])
+
+    #print(len(graph))
+
+    graph = AddLevel(graph, stateGdf, countyGdf)
+
+    # Validation: the weights for each county in a state should
+    # add up to the state total area
+
+    # Group by state FIPS code
+    groupedDf = countyGdf.groupby('STATEFP')
+    for group in groupedDf:
+        # Check a node for that state exists
+        stateId = f"G{group[0]}0"
+        stateNode = graph.GetNode(stateId, GEID.TEST)
+
+        # If it does, sum the weight of every edge between
+        # each county and that state
+        curSum = 0
+        if stateNode:
+            for countyId in group[1]['GISJOIN']:
+                countyNode = graph.GetNode(countyId, GEID.TEST)
+                curSum += graph.GetWeight(stateNode, countyNode, EdgeType.AREA)
+
+            # Get the original area from the stateDf
+            actualArea = stateGdf[stateGdf['GISJOIN'] == stateId]['Shape_Area'].item()
+
+            # Make sure they match closely
+            assert math.isclose(curSum, actualArea, rel_tol=.0001)
+                
+
+                
+
+    if overwrite:
+        graph.SaveGraph(graphsDir)
+
+
+
+    return
+
+    #stateGdf = stateGdf[stateGdf['GISJOIN'] == "G120"]
+
 
     tractGdf = LoadShapefile(parentDir, 'tract')
     #print(tractGdf)
 
     cityGdf = LoadShapefile(parentDir, 'city')
-    print(cityGdf)
 
     schoolGdf = LoadShapefile(parentDir, 'school')
-    print(schoolGdf)
 
     return
 

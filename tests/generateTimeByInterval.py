@@ -42,9 +42,6 @@ def FillMat(adjMat: np.typing.NDArray,
     return adjMat
 
 
-
-
-
 def main():
 
     # Start by generating the timestamps
