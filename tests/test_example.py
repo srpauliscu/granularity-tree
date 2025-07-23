@@ -294,8 +294,6 @@ def testEqualizeSumHard():
                            idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
     
 
-    assert False
-
     
     # Make sure the values match
     statesTemp = states.set_index('ID')
