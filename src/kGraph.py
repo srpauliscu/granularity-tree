@@ -366,11 +366,7 @@ class GranularityGraph(object):
                 # Put it in the main graphs dict
                 self.graphs[EdgeType(k)] = graph
             
-            for k in self.graphs:
-                print(self.graphs[k].shape)
                  
-
-        
         except Exception as e:
             self.logger.error(e)
             return Status.ERROR

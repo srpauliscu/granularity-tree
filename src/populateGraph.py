@@ -54,7 +54,8 @@ def AddLevel(curGraph: GranularityGraph,
     ### Step 1: Calculate the overlap area
 
     # Only grab needed columns
-    neededColumns = ['GISJOIN', 'GEOIDFQ', 'Shape_Area', 'geometry']
+    #neededColumns = ['GISJOIN', 'GEOIDFQ', 'Shape_Area', 'geometry']
+    neededColumns = ['GISJOIN', 'Shape_Area', 'geometry']
     
     gdf1 = gdf1[neededColumns]
     gdf2 = gdf2[neededColumns]
@@ -112,7 +113,7 @@ def LoadShapefile(parentDir: Path, name: str) -> gpd.GeoDataFrame:
     
     raise RuntimeError(f"Files not found in {str(shapeFileFolder)}")
 
-def main(load: bool = True, overwrite: bool = True):
+def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
     # Folder information
     parentDir = Path("./data/tiger")
@@ -148,13 +149,7 @@ def main(load: bool = True, overwrite: bool = True):
     # For testing, just look at alabama
     countyGdf = countyGdf[countyGdf['STATEFP'] == '01']
 
-    print(countyGdf)
-    print(stateGdf)
-    #print(stateGdf[stateGdf['GISJOIN'] == "G010"])
-
-    #print(len(graph))
-
-    graph = AddLevel(graph, stateGdf, countyGdf)
+    #graph = AddLevel(graph, stateGdf, countyGdf)
 
     # Validation: the weights for each county in a state should
     # add up to the state total area
@@ -178,10 +173,148 @@ def main(load: bool = True, overwrite: bool = True):
             actualArea = stateGdf[stateGdf['GISJOIN'] == stateId]['Shape_Area'].item()
 
             # Make sure they match closely
-            assert math.isclose(curSum, actualArea, rel_tol=.0001)
+            assert math.isclose(curSum, actualArea, rel_tol=relTol)
                 
 
-                
+    ### State - ZCTA ###
+    zctaGdf = LoadShapefile(parentDir, 'zcta')
+    msg = "Starting State-ZCTA overlay..."
+    print(msg)
+    populateLogger.info(msg)
+
+    # Just use a subset for testing
+    origLen = zctaGdf.shape[0]
+    zctaGdf = zctaGdf.head(n=10)
+
+
+    graph = AddLevel(graph, stateGdf, zctaGdf)
+
+    # Validation: each state should be fully
+    # covered by ZCTAs
+
+    # We can't just groupBy because ZCTAs can cover multiple states
+    # so we have to go through all of them
+
+    # Get node objects for all ZCTAs
+    zctaGdf['NODE_OBJ'] = zctaGdf.apply(lambda x: graph.GetNode(x['GISJOIN'], GEID.TEST), axis=1)
+
+    # Check that we aren't testing
+    if origLen == zctaGdf.shape[0]:
+        for i, row in stateGdf.iterrows():
+
+            stateId = row['GISJOIN']
+
+            # Get the node for that state
+            stateNode = graph.GetNode(stateId, GEID.TEST)
+
+            # Iterate through all ZCTAs and add up the weights of those
+            # that overlap with the given state
+            curSum = 0
+            for zctaNode in zctaGdf['NODE_OBJ']:
+                weight = graph.GetWeight(stateNode, zctaNode, EdgeType.AREA)
+                if weight:
+                    curSum += weight
+
+            # The sum should match, at least when we have all the ZCTAs
+            actualArea = stateGdf[stateGdf['GISJOIN'] == stateId]['Shape_Area'].item()
+            assert math.isclose(curSum, actualArea, rel_tol=relTol)
+
+    
+
+    ### County - Tract ###
+    tractGdf = LoadShapefile(parentDir, 'tract')
+    msg = "Starting County-Tract overlay..."
+    print(msg)
+    populateLogger.info(msg)
+
+    # Just use Alabama tracts for testing
+    tractGdf = tractGdf[tractGdf['STATEFP'] == '01']
+
+    graph = AddLevel(graph, countyGdf, tractGdf)
+
+    # Validation: the weights for each tract in a county
+    # should add up to the county total area
+
+    # Calculate the state + county FIPS
+    tractGdf['STATECOUNTYGISJOIN'] = \
+        tractGdf.apply(lambda x: f"G{x['STATEFP']}0{x['COUNTYFP']}0", axis=1)
+
+    # Group by county FIPS code
+    groupedDf = tractGdf.groupby('STATECOUNTYGISJOIN')
+    for group in groupedDf:
+        # Check that a node for that county exists
+        countyId = group[0]
+        countyNode = graph.GetNode(countyId, GEID.TEST)
+
+        # If it does, sum the weight of every edge between
+        # each tract and that county
+        curSum = 0
+        if countyNode:
+            for tractId in group[1]['GISJOIN']:
+                tractNode = graph.GetNode(tractId, GEID.TEST)
+                curSum += graph.GetWeight(countyNode, tractNode, EdgeType.AREA)
+            
+            # Get the original area from the countyDf
+            actualArea = countyGdf[countyGdf['GISJOIN'] == countyId]['Shape_Area'].item()
+
+            # Make sure they match closely
+            assert math.isclose(curSum, actualArea, rel_tol=relTol)
+
+
+
+    ### Tract - Block Group ###
+    blockGroupGdf = LoadShapefile(parentDir, 'blockGroup')
+    msg = "Starting Tract-Block group overlay..."
+    print(msg)
+    populateLogger.info(msg)
+
+    # For testing, just look at alabama
+    blockGroupGdf = blockGroupGdf[blockGroupGdf['STATEFP'] == '01']
+
+    #graph = AddLevel(graph, tractGdf, blockGroupGdf)
+
+
+
+    # Validation
+
+    # Calculate the state + county + tract FIPS
+    blockGroupGdf['SCTGISJOIN'] = \
+        blockGroupGdf.apply(lambda x: f"G{x['STATEFP']}0{x['COUNTYFP']}0{x['TRACTCE']}", axis=1)
+    
+
+    # Group by full tract GISJOIN
+    groupedDf = blockGroupGdf.groupby('SCTGISJOIN')
+    for group in groupedDf:
+        # Check that a node for that tract exists
+        tractId = group[0]
+        tractNode = graph.GetNode(tractId, GEID.TEST)
+
+        # If it does, sum the weight of every edge
+        # between each block group and that tract
+        curSum = 0
+        if tractNode:
+            for bgId in group[1]['GISJOIN']:
+                bgNode = graph.GetNode(bgId, GEID.TEST)
+                curSum += graph.GetWeight(tractNode, bgNode, EdgeType.AREA)
+            
+            # Get the original area
+            actualArea = tractGdf[tractGdf['GISJOIN'] == tractId]['Shape_Area'].item()
+
+            # Make sure they match closely
+            assert math.isclose(curSum, actualArea, rel_tol=relTol)
+    
+
+
+    ### Block Group - Block ###
+    blockGdf = LoadShapefile(parentDir, 'block')
+    msg = "Starting Tract-Block group overlay..."
+    print(msg)
+    populateLogger.info(msg)
+
+    # For testing, just look at Alabama
+    print(blockGdf.head())
+    return
+    blockGdf = blockGdf[blockGdf['STATEFP'] == '01']
 
     if overwrite:
         graph.SaveGraph(graphsDir)
