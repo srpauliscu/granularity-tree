@@ -306,6 +306,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
 
     ### Block Group - Block ###
+    
     blockGdf = LoadShapefile(parentDir, 'block')
     msg = "Starting Tract-Block group overlay..."
     print(msg)
@@ -321,13 +322,6 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
 
 
-    return
-
-    #stateGdf = stateGdf[stateGdf['GISJOIN'] == "G120"]
-
-
-    tractGdf = LoadShapefile(parentDir, 'tract')
-    #print(tractGdf)
 
     cityGdf = LoadShapefile(parentDir, 'city')
 
