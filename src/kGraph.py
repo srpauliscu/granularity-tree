@@ -82,7 +82,7 @@ class GranularityGraph(object):
         self.size = 0
 
         #: dict[EdgeWeight: np.array]: The adjacency matrices
-        self.graphs = {w: np.zeros((self.maxSize, self.maxSize)) for w in EdgeType}
+        self.graphs = {w: np.zeros((self.maxSize, self.maxSize), dtype=np.int32) for w in EdgeType}
 
         # Initialize them with None to identify invalid accesses
         #for k in self.graphs:
@@ -182,7 +182,8 @@ class GranularityGraph(object):
 
                 # Pad the existing arrays with 0s, doubling the size
                 for k in self.graphs:
-                    self.graphs[k] = np.pad(self.graphs[k], (0, self.maxSize), mode='constant', constant_values=0)
+                    self.graphs[k] = np.pad(self.graphs[k], (0, self.maxSize),
+                                            mode='constant', constant_values=0)
 
                 # Record the new max size
                 self.maxSize *= 2

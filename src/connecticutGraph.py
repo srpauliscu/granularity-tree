@@ -1,110 +1,26 @@
 
 
+import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
 import math
 
-from entities import *
+from gator import *
 from kGraph import Node, GranularityGraph
+from populateGraph import AddLevel, AddNodes, LoadShapefile, OVERLAY_AREA_COLUMN
 
-# Global constants
-OVERLAY_AREA_COLUMN = 'Overlay_Area'
+CT_FIPS = '09'
 
 # Load a logger
 if __name__ == "__main__":
-    populateLogger = logging.getLogger(__name__)
-    logging.basicConfig(filename="./logs/populateGraph.log", encoding='utf-8', level=logging.DEBUG,
+    connecticutLogger = logging.getLogger(__name__)
+    logging.basicConfig(filename="./logs/connecticutGraph.log", encoding='utf-8', level=logging.DEBUG,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-    populateLogger.info("\n\n")
+    connecticutLogger.info("\n\n")
 else:
-    populateLogger = None
-
-def AddNodes(row, curGraph: GranularityGraph, edgeType: EdgeType,
-             n1Type: GEID|TID = GEID.TEST, n2Type: GEID|TID = GEID.TEST):
-
-    # Form the full values dict
-    v1 = {w: None for w in EdgeType}
-    v2 = {w: None for w in EdgeType}
-
-    # We're populating area this time
-    v1[edgeType] = row['Shape_Area_1']
-    v2[edgeType] = row['Shape_Area_2']
-
-    # Use the GISJOIN as the id
-    node1 = Node(row['GISJOIN_1'], v1, n1Type)
-    node2 = Node(row['GISJOIN_2'], v2, n2Type)
-
-    # Add them to the graph
-    status = curGraph.AddNodes(node1, node2, edgeType, row[OVERLAY_AREA_COLUMN])
-
-    # Check that we didn't fail
-    if status != Status.SUCCESS:
-        msg = f"Failed to add {node1.id}, {node2.id}."
-        if populateLogger:
-            populateLogger.error(msg)
-        raise RuntimeError(msg)
-    
-    return None
-
-def AddLevel(curGraph: GranularityGraph, 
-                     gdf1: gpd.GeoDataFrame,
-                     gdf2: gpd.GeoDataFrame,
-                     n1Type: GEID|TID = GEID.TEST,
-                     n2Type: GEID|TID = GEID.TEST) -> GranularityGraph:
-    
-    ### Step 1: Calculate the overlap area
-
-    # Only grab needed columns
-    #neededColumns = ['GISJOIN', 'GEOIDFQ', 'Shape_Area', 'geometry']
-    neededColumns = ['GISJOIN', 'Shape_Area', 'geometry']
-    
-    gdf1 = gdf1[neededColumns]
-    gdf2 = gdf2[neededColumns]
-
-    # Do the overlay calculation
-    ov = gpd.overlay(gdf1, gdf2, how="intersection", keep_geom_type=False)
-
-    # Add the area as an extra column
-    ov[OVERLAY_AREA_COLUMN] = ov.geometry.area
-
-    # Remove false positives
-    ov = ov[ov[OVERLAY_AREA_COLUMN] > 0]
-
-    # Step 2: Add a node for each entity, using the area as the edge weight
-    ov.apply(AddNodes, axis=1, args=(curGraph, EdgeType.AREA, n1Type, n2Type))
-
-    return curGraph
-
-
-
-def NationRegion(nationGdf: gpd.GeoDataFrame | None, regionGdf: gpd.GeoDataFrame):
-    pass
-
-def RegionState(regionGdf: gpd.GeoDataFrame, stateGdf: gpd.GeoDataFrame):
-    pass
-
-def StateCounty():
-    pass
-
-def CountyCity():
-    pass
-
-def CountyZip():
-    pass
-
-def CountyZCTA():
-    pass
-
-def CountyBlockGroup():
-    pass
-
-def BlockGroupBlock():
-    pass
-
-def BlockTract():
-    pass
+    connecticutLogger = None
 
 def LoadShapefile(parentDir: Path, name: str) -> gpd.GeoDataFrame:
 
@@ -116,17 +32,132 @@ def LoadShapefile(parentDir: Path, name: str) -> gpd.GeoDataFrame:
     
     raise RuntimeError(f"Files not found in {str(shapeFileFolder)}")
 
-def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
+def CityIdConverter(row, cityDict: dict):
+
+    cityName = row['Primary Customer City'].lower()
+    if cityName in cityDict:
+        return cityDict[cityName]
+    else:
+        return ""
+    
+def ZctaIdConverter(row, zctaDict: dict):
+
+    zcta = row['ZCTA']
+    if zcta in zctaDict:
+        return zctaDict[zcta]
+    else:
+        return ""
+
+def ZipZctaConverter(row, ztzDict: dict):
+    
+    z = row['zip']
+    if z in ztzDict:
+        return ztzDict[z]
+    else:
+        # Assume the zip == zcta
+        return z
+
+def cMain(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
     # Folder information
     parentDir = Path("./data/tiger")
     graphsDir = Path("./graphs")
 
     # Load up the graph
-    graph = GranularityGraph('firstGraph', Path('./logs/firstGraph.log'))
+    graph = GranularityGraph('connecticutGraph', Path('./logs/connecticutGraph.log'))
     if load:
         # This will run even if we don't have a save file
         graph.LoadGraph(graphsDir)
+
+    # We only need city - zcta and zcta - county layers
+    # We also need to map zip to zcta
+    countyGdf = LoadShapefile(parentDir, 'county')
+    countyGdf = countyGdf[countyGdf['STATEFP'] == CT_FIPS]
+
+    cityGdf = LoadShapefile(parentDir, 'city')
+    cityGdf = cityGdf[cityGdf['STATEFP'] == CT_FIPS]
+
+    zctaGdf = LoadShapefile(parentDir, 'zcta')
+
+    # Get the mapping from zip to zcta
+    ztzGdf = gpd.read_file("./data/zipToZcta.csv")
+    ztzGdf = ztzGdf[ztzGdf['STATE'] == 'CT']
+
+    # Make a dictionary out of the two columns
+    ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
+
+    # Load the data
+    evRegsGdf = gpd.read_file('./data/spatial/Electric_Vehicle_Registration_Data.csv')
+    ratesGdf = gpd.read_file('./data/spatial/iou_zipcodes_2023.csv')
+    ratesGdf = ratesGdf[ratesGdf['state'] == 'CT']
+
+    # Do the conversion from zip to zcta
+    ratesGdf['ZCTA'] = ratesGdf.apply(ZipZctaConverter, args=(ztzDict,), axis=1)
+
+
+    # Make a city name: GISJOIN dict
+    cityDict = pd.Series(cityGdf['GISJOIN'].values, index=cityGdf['NAME']).to_dict()
+    # Make all the keys lowercase for consistency
+    cityDictLower = {}
+    for k in cityDict:
+        cityDictLower[k.lower()] = cityDict[k]
+
+
+    # Make a zcta: GISJOIN dict
+    zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
+
+    # Add columns to each data gdf for the GISJOIN ids
+
+    # Convert ZCTA to GISJOIN ID
+    ratesGdf['GISJOIN'] = ratesGdf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
+
+    # Remove ZIPs we didn't have
+    ratesGdf = ratesGdf[ratesGdf['GISJOIN'] != ""]
+
+    # Converty city name to GISJOIN ID
+    evRegsGdf['GISJOIN'] = evRegsGdf.apply(CityIdConverter, args=(cityDictLower,), axis=1)
+
+    # Remove cities that we didn't have
+    evRegsGdf = evRegsGdf[evRegsGdf['GISJOIN'] != ""]
+
+
+
+
+    # Now, construct the graph
+    msg = "Adding County-ZCTA layer..."
+    print(msg)
+    connecticutLogger.info(msg)
+    graph = AddLevel(graph, countyGdf, zctaGdf,
+                     n1Type=GEID.COUNTY, n2Type=GEID.ZCTA)
+
+    msg = "Adding City-ZCTA layer..."
+    print(msg)
+    connecticutLogger.info(msg)
+    graph = AddLevel(graph, cityGdf, zctaGdf,
+                     n1Type=GEID.CITY, n2Type=GEID.ZCTA)
+
+    msg = "Adding County-City layer..."
+    print(msg)
+    connecticutLogger.info(msg)
+    graph = AddLevel(graph, countyGdf, cityGdf,
+                     n1Type=GEID.COUNTY, n2Type=GEID.CITY)
+
+    # Get a gator object
+    gator = Gator(graph, Path('./logs/connecticutGator.log'))
+
+    resDf = gator.Equalize()
+
+
+
+
+
+
+
+
+
+
+    return
+
 
 
     # Only load a few files at once to limit memory usage
@@ -136,7 +167,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     ### Region - State ###
     msg = "Starting Region-State overlay..."
     print(msg)
-    populateLogger.info(msg)
+    connecticutLogger.info(msg)
 
     graph = AddLevel(graph, regionGdf, stateGdf)
 
@@ -147,7 +178,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     countyGdf = LoadShapefile(parentDir, 'county')
     msg = "Starting State-County overlay..."
     print(msg)
-    populateLogger.info(msg)
+    connecticutLogger.info(msg)
 
     # For testing, just look at alabama
     #countyGdf = countyGdf[countyGdf['STATEFP'] == '01']
@@ -183,7 +214,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     zctaGdf = LoadShapefile(parentDir, 'zcta')
     msg = "Starting State-ZCTA overlay..."
     print(msg)
-    populateLogger.info(msg)
+    connecticutLogger.info(msg)
 
     # Just use a subset for testing
     origLen = zctaGdf.shape[0]
@@ -228,7 +259,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     tractGdf = LoadShapefile(parentDir, 'tract')
     msg = "Starting County-Tract overlay..."
     print(msg)
-    populateLogger.info(msg)
+    connecticutLogger.info(msg)
 
     # Just use Alabama tracts for testing
     #tractGdf = tractGdf[tractGdf['STATEFP'] == '01']
@@ -269,7 +300,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     blockGroupGdf = LoadShapefile(parentDir, 'blockGroup')
     msg = "Starting Tract-Block group overlay..."
     print(msg)
-    populateLogger.info(msg)
+    connecticutLogger.info(msg)
 
     # For testing, just look at alabama
     #blockGroupGdf = blockGroupGdf[blockGroupGdf['STATEFP'] == '01']
@@ -314,7 +345,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
     msg = "Starting Tract-Block group overlay..."
     print(msg)
-    populateLogger.info(msg)
+    connecticutLogger.info(msg)
 
     # For testing, just look at Alabama
     print(blockGdf.head())
@@ -371,4 +402,4 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
 
 if __name__ == "__main__":
-    main()
+    cMain()

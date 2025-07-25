@@ -85,6 +85,7 @@ class GEID(StrEnum):
     SLD = 'StateLegislativeDistrict'
     PUMA = 'PublicUseMicrodataArea'
     PLACE = 'Place'
+    CITY = 'City'
 
     # Children of County
     VD = 'VotingDistrict'
