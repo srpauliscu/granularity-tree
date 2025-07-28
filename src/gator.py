@@ -134,7 +134,15 @@ class Gator(object):
         resDf = None
         
         # Depending on the method, do the aggregation
-        if method == AggMethod.MEAN:
+        if method == AggMethod.COUNT:
+
+            # Ignore the data column, simply sum up the factors
+            # Equivalent to adding a column of 1s for count and
+            # multiplying by the factor
+            groupedDf = df.groupby(self.DEST_COL)
+            resDf = groupedDf[[self.FACTOR_COL]].sum()
+
+        elif method == AggMethod.MEAN:
             # Weighted mean of the source data, via the factor
             groupedDf = df.groupby(self.DEST_COL).sum()
             groupedDf[self.VALUE_FACTOR_COL] = \
@@ -158,8 +166,6 @@ class Gator(object):
 
             groupedDf = df.groupby(self.DEST_COL)
             resDf = groupedDf[[self.VALUE_FACTOR_COL]].sum()
-            print(resDf)
-            #assert False
 
         # Check that something was actually added
         if resDf is None or resDf.shape[0] == 0:
@@ -168,7 +174,12 @@ class Gator(object):
             raise RuntimeError(msg)
         
         # Rename the column to match the original
-        resDf = resDf.rename(columns={self.VALUE_FACTOR_COL: dataCol})
+        if method == AggMethod.COUNT:
+            # Need to keep the dataCol name for error calc
+            resDf = resDf.rename(columns={self.FACTOR_COL: dataCol})
+        else:
+            resDf = resDf.rename(columns={self.VALUE_FACTOR_COL: dataCol})
+
         
         # Return it as a dataframe
         return resDf
@@ -191,7 +202,7 @@ class Gator(object):
             # Good for aggregate summary stats, e.g. averages
 
             # We can ignore the factor and vf columns for this
-            print(df)
+            #print(df)
 
             # Just take the original data and make the destId the index
             resDf = df[[self.DEST_COL, dataCol]].set_index(self.DEST_COL)
@@ -348,7 +359,6 @@ class Gator(object):
         sourceDf = sourceDf.set_index(sourceIdCol)
 
         # Flatten the dataframe for easy groupby operations
-
         expandedDf = self.FlattenDataframe(sourceDf, allFactors, sourceIdCol, sourceDataCol)
 
         # Calculate the value*factor as a new column for easy agg/deagg
@@ -396,8 +406,8 @@ class Gator(object):
         # 6.) Error calculation
 
         # Do a one-sided join to inform each source-dest node pair of the result
-        print(expandedDf)
-        print(resDf)
+        #print(expandedDf)
+        #print(resDf)
 
         rsuffix = '_r'
         lsuffix = '_l'
@@ -428,13 +438,6 @@ class Gator(object):
         # Use apply for the special case of factor == 1
         joinedDf[self.ERROR_COL] = joinedDf.apply(CalculateError, axis=1,
                                                   args=[origDataCol, newDataCol])
-        
-        print('\n\n')
-        pd.set_option("display.max_columns", 50)
-        with pd.option_context("display.precision", 2):
-            print(joinedDf)
-
-
 
         #assert False
         

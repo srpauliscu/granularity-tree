@@ -38,6 +38,7 @@ class AggMethod(StrEnum):
     Enumeration that defines what aggregation operations are supported.
     """
 
+    COUNT = "Count"
     MEAN = "Mean"   # Weighted mean
     MEDIAN = "Median"   # Weighted median
     SUM = "Sum"

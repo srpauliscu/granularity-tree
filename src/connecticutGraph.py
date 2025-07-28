@@ -119,33 +119,74 @@ def cMain(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
     # Remove cities that we didn't have
     evRegsGdf = evRegsGdf[evRegsGdf['GISJOIN'] != ""]
+    
 
+    # Now, construct the graph if needed
+    if not load:
+        msg = "Adding County-ZCTA layer..."
+        print(msg)
+        connecticutLogger.info(msg)
+        graph = AddLevel(graph, countyGdf, zctaGdf,
+                        n1Type=GEID.COUNTY, n2Type=GEID.ZCTA)
 
+        msg = "Adding City-ZCTA layer..."
+        print(msg)
+        connecticutLogger.info(msg)
+        graph = AddLevel(graph, cityGdf, zctaGdf,
+                        n1Type=GEID.CITY, n2Type=GEID.ZCTA)
 
+        msg = "Adding County-City layer..."
+        print(msg)
+        connecticutLogger.info(msg)
+        graph = AddLevel(graph, countyGdf, cityGdf,
+                        n1Type=GEID.COUNTY, n2Type=GEID.CITY)
+        
 
-    # Now, construct the graph
-    msg = "Adding County-ZCTA layer..."
-    print(msg)
-    connecticutLogger.info(msg)
-    graph = AddLevel(graph, countyGdf, zctaGdf,
-                     n1Type=GEID.COUNTY, n2Type=GEID.ZCTA)
-
-    msg = "Adding City-ZCTA layer..."
-    print(msg)
-    connecticutLogger.info(msg)
-    graph = AddLevel(graph, cityGdf, zctaGdf,
-                     n1Type=GEID.CITY, n2Type=GEID.ZCTA)
-
-    msg = "Adding County-City layer..."
-    print(msg)
-    connecticutLogger.info(msg)
-    graph = AddLevel(graph, countyGdf, cityGdf,
-                     n1Type=GEID.COUNTY, n2Type=GEID.CITY)
+        # Save the graph
+        if overwrite:
+            graph.SaveGraph(graphsDir)
 
     # Get a gator object
     gator = Gator(graph, Path('./logs/connecticutGator.log'))
 
-    resDf = gator.Equalize()
+    # Make the data column a float for mathmatical operations
+    evRegsGdf['Vehicle Year'] = evRegsGdf['Vehicle Year'].astype(np.float64)
+
+    resDf = gator.Equalize(evRegsGdf, ratesGdf, GEID.CITY, GEID.ZCTA,
+                           'GISJOIN', 'GISJOIN', 'Vehicle Year', AggMethod.COUNT,
+                           EdgeType.AREA, ignoreIncomplete=True, ignoreMissing=True)
+    
+    print(resDf['Vehicle Year'].sum())
+    print(evRegsGdf.shape)
+
+    # Now, I have the approx. number of EVs registered
+    # in each ZCTA.  Rename for clarity
+    resDf = resDf.rename(columns={'Vehicle Year': 'Number of EVs'})
+
+    # We can just plot them now: rate vs. # vehicles
+
+    # Join the rates df with the registration df
+    joinedGdf = pd.merge(ratesGdf, resDf, left_on='GISJOIN', right_index=True)
+
+    print(joinedGdf.head())
+
+    # Sort by number of EVs
+    joinedGdf = joinedGdf.sort_values(by=['Number of EVs'], ascending=True)
+
+    # We also need to convert the price columns to floats
+    joinedGdf['comm_rate'] = joinedGdf['comm_rate'].astype(dtype='float64')
+    joinedGdf['ind_rate'] = joinedGdf['ind_rate'].astype(dtype='float64')
+    joinedGdf['res_rate'] = joinedGdf['res_rate'].astype(dtype='float64')
+
+    
+
+
+
+    joinedGdf.plot(x='Number of EVs', y='res_rate', kind='scatter')
+    joinedGdf.plot(x='Number of EVs', y='comm_rate', kind='scatter')
+    plt.show()
+
+
 
 
 
@@ -159,245 +200,6 @@ def cMain(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     return
 
 
-
-    # Only load a few files at once to limit memory usage
-    regionGdf = LoadShapefile(parentDir, 'region')
-    stateGdf = LoadShapefile(parentDir, 'state')
-
-    ### Region - State ###
-    msg = "Starting Region-State overlay..."
-    print(msg)
-    connecticutLogger.info(msg)
-
-    graph = AddLevel(graph, regionGdf, stateGdf)
-
-
-
-
-    ### State - County ###
-    countyGdf = LoadShapefile(parentDir, 'county')
-    msg = "Starting State-County overlay..."
-    print(msg)
-    connecticutLogger.info(msg)
-
-    # For testing, just look at alabama
-    #countyGdf = countyGdf[countyGdf['STATEFP'] == '01']
-
-    graph = AddLevel(graph, stateGdf, countyGdf)
-
-    # Validation: the weights for each county in a state should
-    # add up to the state total area
-
-    # Group by state FIPS code
-    groupedDf = countyGdf.groupby('STATEFP')
-    for group in groupedDf:
-        # Check a node for that state exists
-        stateId = f"G{group[0]}0"
-        stateNode = graph.GetNode(stateId, GEID.TEST)
-
-        # If it does, sum the weight of every edge between
-        # each county and that state
-        curSum = 0
-        if stateNode:
-            for countyId in group[1]['GISJOIN']:
-                countyNode = graph.GetNode(countyId, GEID.TEST)
-                curSum += graph.GetWeight(stateNode, countyNode, EdgeType.AREA)
-
-            # Get the original area from the stateDf
-            actualArea = stateGdf[stateGdf['GISJOIN'] == stateId]['Shape_Area'].item()
-
-            # Make sure they match closely
-            assert math.isclose(curSum, actualArea, rel_tol=relTol)
-                
-
-    ### State - ZCTA ###
-    zctaGdf = LoadShapefile(parentDir, 'zcta')
-    msg = "Starting State-ZCTA overlay..."
-    print(msg)
-    connecticutLogger.info(msg)
-
-    # Just use a subset for testing
-    origLen = zctaGdf.shape[0]
-    #zctaGdf = zctaGdf.head(n=10)
-
-
-    graph = AddLevel(graph, stateGdf, zctaGdf)
-
-    # Validation: each state should be fully
-    # covered by ZCTAs
-
-    # We can't just groupBy because ZCTAs can cover multiple states
-    # so we have to go through all of them
-
-    # Get node objects for all ZCTAs
-    zctaGdf['NODE_OBJ'] = zctaGdf.apply(lambda x: graph.GetNode(x['GISJOIN'], GEID.TEST), axis=1)
-
-    # Check that we aren't testing
-    if origLen == zctaGdf.shape[0]:
-        for i, row in stateGdf.iterrows():
-
-            stateId = row['GISJOIN']
-
-            # Get the node for that state
-            stateNode = graph.GetNode(stateId, GEID.TEST)
-
-            # Iterate through all ZCTAs and add up the weights of those
-            # that overlap with the given state
-            curSum = 0
-            for zctaNode in zctaGdf['NODE_OBJ']:
-                weight = graph.GetWeight(stateNode, zctaNode, EdgeType.AREA)
-                if weight:
-                    curSum += weight
-
-            # The sum should match, at least when we have all the ZCTAs
-            actualArea = stateGdf[stateGdf['GISJOIN'] == stateId]['Shape_Area'].item()
-            assert math.isclose(curSum, actualArea, rel_tol=relTol)
-
-    
-
-    ### County - Tract ###
-    tractGdf = LoadShapefile(parentDir, 'tract')
-    msg = "Starting County-Tract overlay..."
-    print(msg)
-    connecticutLogger.info(msg)
-
-    # Just use Alabama tracts for testing
-    #tractGdf = tractGdf[tractGdf['STATEFP'] == '01']
-
-    graph = AddLevel(graph, countyGdf, tractGdf)
-
-    # Validation: the weights for each tract in a county
-    # should add up to the county total area
-
-    # Calculate the state + county FIPS
-    tractGdf['STATECOUNTYGISJOIN'] = \
-        tractGdf.apply(lambda x: f"G{x['STATEFP']}0{x['COUNTYFP']}0", axis=1)
-
-    # Group by county FIPS code
-    groupedDf = tractGdf.groupby('STATECOUNTYGISJOIN')
-    for group in groupedDf:
-        # Check that a node for that county exists
-        countyId = group[0]
-        countyNode = graph.GetNode(countyId, GEID.TEST)
-
-        # If it does, sum the weight of every edge between
-        # each tract and that county
-        curSum = 0
-        if countyNode:
-            for tractId in group[1]['GISJOIN']:
-                tractNode = graph.GetNode(tractId, GEID.TEST)
-                curSum += graph.GetWeight(countyNode, tractNode, EdgeType.AREA)
-            
-            # Get the original area from the countyDf
-            actualArea = countyGdf[countyGdf['GISJOIN'] == countyId]['Shape_Area'].item()
-
-            # Make sure they match closely
-            assert math.isclose(curSum, actualArea, rel_tol=relTol)
-
-
-
-    ### Tract - Block Group ###
-    blockGroupGdf = LoadShapefile(parentDir, 'blockGroup')
-    msg = "Starting Tract-Block group overlay..."
-    print(msg)
-    connecticutLogger.info(msg)
-
-    # For testing, just look at alabama
-    #blockGroupGdf = blockGroupGdf[blockGroupGdf['STATEFP'] == '01']
-
-    graph = AddLevel(graph, tractGdf, blockGroupGdf)
-
-
-
-    # Validation
-
-    # Calculate the state + county + tract FIPS
-    blockGroupGdf['SCTGISJOIN'] = \
-        blockGroupGdf.apply(lambda x: f"G{x['STATEFP']}0{x['COUNTYFP']}0{x['TRACTCE']}", axis=1)
-    
-
-    # Group by full tract GISJOIN
-    groupedDf = blockGroupGdf.groupby('SCTGISJOIN')
-    for group in groupedDf:
-        # Check that a node for that tract exists
-        tractId = group[0]
-        tractNode = graph.GetNode(tractId, GEID.TEST)
-
-        # If it does, sum the weight of every edge
-        # between each block group and that tract
-        curSum = 0
-        if tractNode:
-            for bgId in group[1]['GISJOIN']:
-                bgNode = graph.GetNode(bgId, GEID.TEST)
-                curSum += graph.GetWeight(tractNode, bgNode, EdgeType.AREA)
-            
-            # Get the original area
-            actualArea = tractGdf[tractGdf['GISJOIN'] == tractId]['Shape_Area'].item()
-
-            # Make sure they match closely
-            assert math.isclose(curSum, actualArea, rel_tol=relTol)
-    
-
-    if overwrite:
-        graph.SaveGraph(graphsDir)
-
-    ### Block Group - Block ###
-
-    msg = "Starting Tract-Block group overlay..."
-    print(msg)
-    connecticutLogger.info(msg)
-
-    # For testing, just look at Alabama
-    print(blockGdf.head())
-    return
-    blockGdf = blockGdf[blockGdf['STATEFP'] == '01']
-
-
-
-
-
-
-    cityGdf = LoadShapefile(parentDir, 'city')
-
-    schoolGdf = LoadShapefile(parentDir, 'school')
-
-    return
-
-    graph = AddLevel(graph, stateGdf, countyGdf)
-
-    if overwrite:
-        graph.SaveGraph(graphsDir)
-
-
-    return
-
-
-    #RegionState(regionGdf, stateGdf)
-
-
-
-    countyGdf = gpd.read_file(parentDir / Path("./county/US_county_2023.shp"))
-    print(countyGdf.head(n=5))
-    #countyGdf.plot()
-
-
-
-    zctaGdf = gpd.read_file(parentDir / Path("./zcta/US_zcta_2023.shp"))
-    # Rename the GEOIDFQ column to match the others
-    zctaGdf = zctaGdf.rename({"GEOIDFQ20": "GEOIDFQ"})
-
-    print(zctaGdf.head(n=5))
-
-    tractGdf = gpd.read_file(parentDir / Path("./tract/US_tract_2023.shp"))
-    print(tractGdf.head(n=5))
-
-    
-
-    #ov = gpd.overlay(nationGdf, countyGdf.head(n=1), how="intersection")
-    #ov = gpd.overlay(stateGdf.head(n=1), countyGdf.head(n=70), how="intersection")
-    
-
-    #print(ov.head())
     #print(ov.geometry.area)
 
 
