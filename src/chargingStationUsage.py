@@ -7,11 +7,18 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
 import math
+from tqdm import tqdm
 
 from gator import *
 from kGraph import Node, GranularityGraph
 from populateGraph import AddLevel, AddNodes, LoadShapefile, OVERLAY_AREA_COLUMN
 
+
+# Global vars
+HOURCOL = '_hour_ts_'
+OVERLAPCOL = '_overlap_'
+VALFACTORCOL = '_value_factor_'
+ADJUSTEDENERGY = '_adjusted_energy_'
 
 
 # Function to test basic invariants
@@ -54,6 +61,17 @@ def ConvertEndDate(row, fmt: str):
     # an offset from the start date
     try:
         ts = pd.to_datetime(row['End Date'], format=fmt)
+
+        # Check if the end date was erroneously recorded
+        duration = pd.to_timedelta(row['Total Duration (hh:mm:ss)'])
+        if ts == row['Start Date'] and duration != pd.to_timedelta(0, unit='min'):
+            # Use the duration to calculate the end date
+            raise ValueError
+        
+        # End date recorded as earlier than start date
+        if ts < row['Start Date']:
+            raise ValueError
+        
         return ts
     
     except ValueError as e:
@@ -79,7 +97,15 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
         graph.LoadGraph(graphsDir)
 
     # Load in the charging station data
-    csuDf = pd.read_csv(Path('./data/temporal/EVChargingStationUsage.csv'))
+    cols = ['Station Name', 'MAC Address', 'Start Date',
+            'Start Time Zone', 'End Date', 'End Time Zone',
+            'Total Duration (hh:mm:ss)', 'Energy (kWh)', 'City', 'State/Province',
+            'Postal Code', 'Country', 'Latitude', 'Longitude',
+            'Driver Postal Code', 'User ID', 'County']
+    
+    # Use a smaller sample for testing
+    csuDf = pd.read_csv(Path('./data/temporal/EVChargingStationUsage.csv'), 
+                        usecols=cols, low_memory=False, nrows=1000)
 
     # Make sure we have the right data types
     fmt = "%m/%d/%Y %H:%M"
@@ -92,12 +118,99 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
     totMins = int((endTime - startTime).total_seconds() / 60.)
 
-    print(startTime)
-    print(endTime)
-    print(totMins / 60.)
+
+    '''
+    Want: Calculate total cost per hour for charging station usage to see
+        if TOU hours have an impact.
+
+    Input: charging station usage (start/end time, total energy used)
+    Output: power usage per hour
+
+    Steps:
+    1.) For each charging interval, break it into hourly data and
+        calculate the overlap amount for each hour it covers.
+        Ex: 11:45 - 14:20: hours 11, 12, 13, 14 with weights
+        (in minutes) 15, 60, 60, 20.
+    2.) Calculate the value factor for multiplying with the total energy
+        used during that session for each hour it covers.
+    3.) Group by hour and sum the value_factor * total energy
+
+    
+    '''
+
+    # 1.) Find the timestamps representing the hours each session covers
+    newRows = []
+    for i, row in tqdm(csuDf.iterrows()):
+
+        # Start and end timestamps
+        startHour = row['Start Date'].floor(freq='h')
+        endHour = row['End Date'].ceil(freq='h')
+
+        # Generate timestamps for each hour between the two endpoints
+        tempNewRows = []
+        shTemp = startHour
+        while shTemp < endHour:
+            newRow = {}
+
+            # Copy over relevant data
+            for c in cols:
+                newRow[c] = row[c]
+            
+            # Add in the hour timestamp
+            newRow[HOURCOL] = shTemp
+
+            # If it's the first or last timestamp in the interval,
+            # the actual overlap needs to be calculated
+            overlap = None
+            if shTemp + pd.Timedelta(1, unit='h') >= endHour:
+                overlap = (pd.Timedelta(60, unit='min') - (endHour - row['End Date'])).total_seconds() / 60.
+            elif shTemp == startHour:
+                overlap = (pd.Timedelta(60, unit='min') - (row['Start Date'] - shTemp)).total_seconds() / 60.
+
+            else:
+                # Any hours in between are fully covered
+                overlap = 60
+
+            # Add the overlap to the row
+            newRow[OVERLAPCOL] = overlap
+
+            # Calculate the value factor too (all "destinations" are one hour in size)
+            newRow[VALFACTORCOL] = overlap / ((row['End Date'] - row['Start Date']).total_seconds() / 60.)
+
+            # Calculate the energy used in that hour
+            newRow[ADJUSTEDENERGY] = newRow[VALFACTORCOL] * newRow['Energy (kWh)']
+
+            # Special case: the session was entirely contained in one hour
+            if endHour == (startHour + pd.Timedelta(1, unit='h')):
+                newRow[ADJUSTEDENERGY] = newRow['Energy (kWh)']
+
+            # Add the new row to the list
+            tempNewRows.append(newRow)
 
 
+            # Increment the hour
+            shTemp += pd.Timedelta(1, unit='h')
 
+        # Sanity check: the total wattage used should match the original
+        valueFactors = [r[ADJUSTEDENERGY] for r in tempNewRows]
+        if not math.isclose(sum(valueFactors), row['Energy (kWh)']):
+            print(sum(valueFactors))
+            print(row['Energy (kWh)'])
+            print(f"Index {i}")
+        assert math.isclose(sum(valueFactors), row['Energy (kWh)'])
+
+        # Add them to the new dataframe
+        newRows.extend(tempNewRows)
+
+
+   
+    # Make a dataframe out of the new rows
+    hourlyCsuDf = pd.DataFrame(data=newRows)
+    print(hourlyCsuDf)
+
+    # Sanity check: the total energy usage should match
+    assert math.isclose(hourlyCsuDf[ADJUSTEDENERGY].sum(), csuDf['Energy (kWh)'].sum())
+    
     return
 
 
