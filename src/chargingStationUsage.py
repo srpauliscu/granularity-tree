@@ -105,7 +105,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     
     # Use a smaller sample for testing
     csuDf = pd.read_csv(Path('./data/temporal/EVChargingStationUsage.csv'), 
-                        usecols=cols, low_memory=False, nrows=1000)
+                        usecols=cols, low_memory=False)#, nrows=1000)
 
     # Make sure we have the right data types
     fmt = "%m/%d/%Y %H:%M"
@@ -131,7 +131,7 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
         calculate the overlap amount for each hour it covers.
         Ex: 11:45 - 14:20: hours 11, 12, 13, 14 with weights
         (in minutes) 15, 60, 60, 20.
-    2.) Calculate the value factor for multiplying with the total energy
+    2.) Calculate the factor for multiplying with the total energy
         used during that session for each hour it covers.
     3.) Group by hour and sum the value_factor * total energy
 
@@ -159,12 +159,18 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
             # Add in the hour timestamp
             newRow[HOURCOL] = shTemp
 
-            # If it's the first or last timestamp in the interval,
-            # the actual overlap needs to be calculated
+            # Special cases for overlap
             overlap = None
-            if shTemp + pd.Timedelta(1, unit='h') >= endHour:
+            if endHour == (startHour + pd.Timedelta(1, unit='h')):
+                # Special case: the session was entirely contained in one hour
+                overlap = (row['End Date'] - row['Start Date']).total_seconds() / 60.
+
+            elif shTemp + pd.Timedelta(1, unit='h') >= endHour:
+                # We're in the last hour
                 overlap = (pd.Timedelta(60, unit='min') - (endHour - row['End Date'])).total_seconds() / 60.
+
             elif shTemp == startHour:
+                # We're in the first hour
                 overlap = (pd.Timedelta(60, unit='min') - (row['Start Date'] - shTemp)).total_seconds() / 60.
 
             else:
@@ -179,10 +185,6 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
             # Calculate the energy used in that hour
             newRow[ADJUSTEDENERGY] = newRow[VALFACTORCOL] * newRow['Energy (kWh)']
-
-            # Special case: the session was entirely contained in one hour
-            if endHour == (startHour + pd.Timedelta(1, unit='h')):
-                newRow[ADJUSTEDENERGY] = newRow['Energy (kWh)']
 
             # Add the new row to the list
             tempNewRows.append(newRow)

@@ -103,18 +103,20 @@ class GEID(StrEnum):
 class TID(StrEnum):
 
     """
-    Enumeration to define the various temporal units.
+    Enumeration to define the various temporal units. Use Pandas time frequency
+    strings for compability.
+    
+    See https://pandas.pydata.org/docs/user_guide/timeseries.html#offset-aliases
     """
 
     # Primary time units
-    DECADE = "Decade"
-    YEAR = "Year"
-    MONTH = "Month"
-    WEEK = "Week"
-    DAY = "Day"
-    HOUR = "Hour"
-    MINUTE = "Minute"
-    SECOND = "Second"
+    YEAR = "YS"
+    MONTH = "MS"
+    WEEK = "W"
+    DAY = "D"
+    HOUR = "h"
+    MINUTE = "min"
+    SECOND = "s"
 
     # Secondary time units
     WORKWEEK = "Workweek" # Monday-Friday, inclusive

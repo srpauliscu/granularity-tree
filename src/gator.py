@@ -10,6 +10,7 @@ from pathlib import Path
 import math
 
 from kGraph import *
+#from src.kGraph import GEID, TID, AggMethod, DeAggMethod, EdgeType
 
 
 # Function for pd.apply to calculate error bound
@@ -474,9 +475,87 @@ class Gator(object):
         return nodes1, nodes2
 
 
+class TimeGator(object):
+
+    # Class variables for column names
+    TS_ID_COL = "_ts_id_"
+    WEIGHT_COL = "_overlap_value_"
+    FACTOR_COL = Gator.FACTOR_COL
+    VALUE_FACTOR_COL = Gator.VALUE_FACTOR_COL
+    NEW_VALUE_COL = Gator.NEW_VALUE_COL
+
+    def Equalize(self, sourceDf: pd.DataFrame, sourceType: TID,
+                 destType: TID, intervalCol: str, dataCol: str,
+                 method: AggMethod | DeAggMethod) -> pd.DataFrame:
+        
+        """
+        Steps:
+        1.) For each interval, get bounding timestamps of the given destType
+        2.) For each unit in that period, calculate the overlap with the entire period
+            Ex: 11:45 - 14:20: hours 11, 12, 13, 14 with weights
+            (in minutes) 15, 60, 60, 20.
+        3.) Calculate the factor for multiplying with the dataCol
+        4.) Multiply the dataCol by the factor for each unit
+        5.) Group by destType and agg/deagg
+
+        Same method as the tree structure, but the graph is calculated dynamically    
+        """
+
+        newRows = []
+        for i, row in sourceDf.iterrows():
+
+            # Get the two endpoints of the interval
+            startTs = row[intervalCol].left()
+            endTs = row[intervalCol].right()
+
+            # Calculate the value of the origin "node"
+            origSize = (endTs - startTs).total_seconds()
+
+            # Grab the full interval in the right units
+            intervalStartTs = startTs.floor(freq=destType.value)
+            intervalEndTs = endTs.right().ceil(freq=destType.value)
+
+            # Generate timestamps for each unit between the two endpoints
+            tempNewRows = []
+            curTimeCounter = intervalStartTs
+            
+            while curTimeCounter < intervalEndTs:
+                newRow = {}
+
+                # Copy over the data column
+                newRow[dataCol] = row[dataCol]
+
+                # Add in the current timestamp
+                newRow[self.TS_ID_COL] = curTimeCounter
+
+                # If it's the first or last timestamp in the interval,
+                # the actual overlap needs to be calculated
+                overlap = None
+                if curTimeCounter + pd.Timedelta(1, unit=destType.value) >= intervalEndTs:
+                    overlap = 1 #TODO
+                elif curTimeCounter == intervalStartTs:
+                    overlap = 1 #TODO
+                else:
+                    # Any units inbetween are fully covered
+                    overlap = pd.Timedelta(1, unit=destType.value).total_seconds()
+
+                # Add the overlap to the row -
+                # this is essentially the edge weight
+                newRow[self.WEIGHT_COL] = overlap
+
+                # Calculate the factor
+                # TODO: Is this correct for both agg/deagg?
+                newRow[self.FACTOR_COL] = overlap / origSize
+
+                # Special case: the entire interval was entirely contained
+                
 
 
 
 
 
-    
+
+
+        return None
+
+
