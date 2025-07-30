@@ -17,8 +17,9 @@ from populateGraph import AddLevel, AddNodes, LoadShapefile, OVERLAY_AREA_COLUMN
 # Global vars
 HOURCOL = '_hour_ts_'
 OVERLAPCOL = '_overlap_'
-VALFACTORCOL = '_value_factor_'
+FACTORCOL = '_value_factor_'
 ADJUSTEDENERGY = '_adjusted_energy_'
+INTERVALCOL = '_time_interval_'
 
 
 # Function to test basic invariants
@@ -85,7 +86,59 @@ def ConvertEndDate(row, fmt: str):
         raise e
 
 
+def LoadCSUData(filepath: Path, nrows: int = 1000) -> tuple[pd.DataFrame, list]:
+
+    # We don't need all of the columns
+    cols = ['Station Name', 'MAC Address', 'Start Date',
+            'Start Time Zone', 'End Date', 'End Time Zone',
+            'Total Duration (hh:mm:ss)', 'Energy (kWh)', 'City', 'State/Province',
+            'Postal Code', 'Country', 'Latitude', 'Longitude',
+            'Driver Postal Code', 'User ID', 'County']
+    
+    # Allow for a smaller sample for testing
+    csuDf = pd.read_csv(filepath, usecols=cols, low_memory=False, nrows=nrows)
+
+    # Make sure we have the right data types
+    fmt = "%m/%d/%Y %H:%M"
+    csuDf['Start Date'] = pd.to_datetime(csuDf['Start Date'], format=fmt)
+    csuDf['End Date'] = csuDf.apply(ConvertEndDate, args=(fmt,), axis=1)
+
+    return csuDf, cols
+
+
 def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
+
+    # We don't actually need a graph object since the edges
+    # are calculated dynamically
+
+    # Load in the charging station data
+    csuDf, cols = LoadCSUData(Path('./data/temporal/EVChargingStationUsage.csv'), 1000)
+
+    # Setup a column of intervals
+    csuDf[INTERVALCOL] = csuDf.apply(lambda x: pd.Interval(left=x['Start Date'], right=x['End Date']), axis=1)
+
+    # Initialize the gator
+    gator = TimeGator()
+
+    # Use the gator to get hourly data
+    resDf = gator.Equalize(csuDf, TID.MINUTE, INTERVALCOL, 'Energy (kWh)', AggMethod.SUM)
+
+    print(csuDf['Energy (kWh)'].sum())
+    print(resDf[gator.VALUE_FACTOR_COL].sum())
+
+    # Sanity check: the sum of the data columns should be the same
+    assert math.isclose(csuDf['Energy (kWh)'].sum(), resDf[gator.VALUE_FACTOR_COL].sum())
+
+    print('Yay!')
+
+
+
+
+
+
+
+
+def manualMain(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
     # Folder information
     graphsDir = Path("./graphs")
@@ -96,27 +149,9 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
         # This will run even if we don't have a save file
         graph.LoadGraph(graphsDir)
 
-    # Load in the charging station data
-    cols = ['Station Name', 'MAC Address', 'Start Date',
-            'Start Time Zone', 'End Date', 'End Time Zone',
-            'Total Duration (hh:mm:ss)', 'Energy (kWh)', 'City', 'State/Province',
-            'Postal Code', 'Country', 'Latitude', 'Longitude',
-            'Driver Postal Code', 'User ID', 'County']
-    
-    # Use a smaller sample for testing
-    csuDf = pd.read_csv(Path('./data/temporal/EVChargingStationUsage.csv'), 
-                        usecols=cols, low_memory=False)#, nrows=1000)
 
-    # Make sure we have the right data types
-    fmt = "%m/%d/%Y %H:%M"
-    csuDf['Start Date'] = pd.to_datetime(csuDf['Start Date'], format=fmt)
-    csuDf['End Date'] = csuDf.apply(ConvertEndDate, args=(fmt,), axis=1)
-
-    # Use the bounds of the data to seed the graph
-    startTime = csuDf['Start Date'].min()
-    endTime = csuDf['End Date'].max()
-
-    totMins = int((endTime - startTime).total_seconds() / 60.)
+    # Load the data
+    csuDf, cols = LoadCSUData(Path('./data/temporal/EVChargingStationUsage.csv'), 1000)
 
 
     '''
@@ -181,10 +216,10 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
             newRow[OVERLAPCOL] = overlap
 
             # Calculate the value factor too (all "destinations" are one hour in size)
-            newRow[VALFACTORCOL] = overlap / ((row['End Date'] - row['Start Date']).total_seconds() / 60.)
+            newRow[FACTORCOL] = overlap / ((row['End Date'] - row['Start Date']).total_seconds() / 60.)
 
             # Calculate the energy used in that hour
-            newRow[ADJUSTEDENERGY] = newRow[VALFACTORCOL] * newRow['Energy (kWh)']
+            newRow[ADJUSTEDENERGY] = newRow[FACTORCOL] * newRow['Energy (kWh)']
 
             # Add the new row to the list
             tempNewRows.append(newRow)
@@ -216,208 +251,11 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     return
 
 
-    # Start by generating the timestamps
-    startTime = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTime = pd.Timestamp(year=2020, month=2, day=1, hour=0, minute=0, second=0)
-    totMins = int((endTime - startTime).total_seconds() / 60.)
-
-
-    # Generate intervals for each frequency
-    mins = pd.interval_range(startTime, endTime, freq='min', closed='left')
-    hours = pd.interval_range(startTime, endTime, freq='h', closed='left')
-    days = pd.interval_range(startTime, endTime, freq='D', closed='left')
-    months = pd.interval_range(startTime, endTime, freq='MS', closed='left')
-    years = pd.interval_range(startTime, endTime, freq='YS', closed='left')
-
-    # Put them in a dict for organization
-    allTimes = {
-        'hours': hours,
-    }
-
-
-
-    # Make a blank matrix of the proper size
-    totalLen = sum([len(allTimes[k]) for k in allTimes])
-    adjMat = np.zeros((totalLen, totalLen))
-
-
-    ### Minutes - hours ###
-
-    mStart = 0
-    mEnd = mStart + len(allTimes['minutes'])
-    hStart = mEnd
-    hEnd = hStart + len(allTimes['hours'])
-
-    print('Minutes - hours...')
-    adjMat = FillMat(adjMat, allTimes['hours'], allTimes['minutes'], hStart, mStart, 'h', 1)
-
-    # Sanity checks
-    assert GenericValidityCheck(adjMat)
-
-    for i in range(adjMat.shape[0]):
-        
-
-        # Each minute row/column should have a single 1, since each
-        # minute overlaps 1 minute with a single hour
-        if i < mStart:
-            assert adjMat[i].sum() == 1
-
-        # Each hour row/column should have 60 1s in it at this point
-        if i >= hStart and i < hEnd:
-            assert adjMat[i].sum() == 60 or adjMat[i].sum() == totMins % 60
-
-
-    ### Minutes - days ###
-    dStart = hEnd
-    dEnd = dStart + len(allTimes['days'])
-
-    print('Minutes - days...')
-    adjMat = FillMat(adjMat, allTimes['days'], allTimes['minutes'], dStart, mStart, 'd', 1)
-
-    # Sanity checks
-    assert GenericValidityCheck(adjMat)
-
-    for i in range(adjMat.shape[0]):
-
-        # Each minute row/column should have two 1s
-        if i < mStart:
-            assert adjMat[i].sum() == 2
-        
-        # Each day row/column should have 60*24 1s in it, or the entirety
-        # of the mins we have (for when we're testing)
-        if i >= dStart and i < dEnd:
-            assert adjMat[i].sum() == 60*24 or adjMat[i].sum() == totMins % (60*24)
-
-
-    ### Minutes - months ###
-    moStart = dEnd
-    moEnd = moStart + len(allTimes['months'])
-
-    print('Minutes - months...')
-    adjMat = FillMat(adjMat, allTimes['months'], allTimes['minutes'], moStart, mStart, 'mo', 1)
-
-    # Sanity checks
-    assert GenericValidityCheck(adjMat)
-
-    for i in range(adjMat.shape[0]):
-
-        # Each minute row/column should have three 1s
-        if i < mStart:
-            assert adjMat[i].sum() == 3
-        
-        # Each month row/column should have the total number of minutes
-        # for that month
-        if i >= moStart and i < moEnd:
-            # Get a copy of that month's timestamp
-            moTs = allTimes['months'][i - moStart].left
-
-            # Calculate the appropriate number of minutes for that month
-            if moTs.month == 12:
-                moMins = 60*24*31
-            else:
-                moMins = int((pd.Timestamp(year=moTs.year, month=moTs.month + 1, day=1) - moTs).total_seconds() / 60.)
-
-            assert adjMat[i].sum() == moMins or adjMat[i].sum() == totMins % moMins
-
-    ### Minutes - years ###
-    yStart = moEnd
-    yEnd = yStart + len(allTimes['years'])
-
-    print('Minutes - years...')
-    adjMat = FillMat(adjMat, allTimes['years'], allTimes['minutes'], yStart, mStart, 'y', 1)
-
-    # Sanity checks
-    assert GenericValidityCheck(adjMat)
-
-    for i in range(adjMat.shape[0]):
-
-        # Each minute row/column should have four 1s
-        if i < mStart:
-            assert adjMat[i].sum() == 4
-        
-        # Each month row/column should have the total number of minutes
-        # for that year
-        if i >= yStart and i < yEnd:
-            # Get a copy of that year's timestamp
-            yTs = allTimes['years'][i - yStart].left
-
-            # Calculate the appropriate number of minutes for that month
-            # This accounts for leap years
-            yMins = int((pd.Timestamp(year=yTs.year + 1, month=1, day=1) - yTs).total_seconds() / 60.)
-
-            assert adjMat[i].sum() == yMins or adjMat[i].sum() == totMins % yMins
-
-
-    ### Hours - days ###
-    print('\nHours - days...')
-    adjMat = FillMat(adjMat, allTimes['days'], allTimes['hours'], dStart, hStart, 'd', 60)
-
-    # Sanity checks
-    assert GenericValidityCheck(adjMat)
-
-    np.set_printoptions(threshold=np.inf)
-
-    for i in range(adjMat.shape[0]):
-
-        # Each hour column should have 60 + 60 minutes
-        if i >= hStart and i < hEnd:
-            assert (adjMat[i].sum() == 60 + 60)
-                
-        
-        if i >= dStart and i < dEnd:
-
-            # Each day column should have 24 hours and 24*60 minutes
-            assert (adjMat[i].sum() == 24*60 + 24*60)
-    
-    ### Hours - months ###
-    print('\nHours - months...')
-    adjMat = FillMat(adjMat, allTimes['months'], allTimes['hours'], moStart, hStart, 'mo', 60)
-
-    # Sanity checks
-    assert GenericValidityCheck(adjMat)
-
-    for i in range(adjMat.shape[0]):
-        
-        # Each hour column should have another 60 minutes in it
-        if i >= hStart and i < hEnd:
-            assert adjMat[i].sum() == 60*3
-
-        # Each month column should have twice its number of minutes
-        if i >= moStart and i < moEnd:
-            # Get a copy of that month's timestamp
-            moTs = allTimes['months'][i - moStart].left
-
-            # Calculate the number of minutes it should have based on days,
-            # then double to account for min and hour matching
-            if moTs.month == 12:
-                moMins = 60*24*31
-            else:
-                moMins = int((pd.Timestamp(year=moTs.year, month=moTs.month + 1, day=1) - moTs).total_seconds() / 60.)
-            moMins *= 2
-
-            if adjMat[i].sum() != moMins:
-                print(adjMat[i].sum())
-                print(moMins)
-            assert adjMat[i].sum() == moMins
-
-
-            
-
-        
-
-
-
-        
-
-
-
-
-
 
 
 if __name__ == "__main__":
 
-
+    #manualMain()
     main()
 
 

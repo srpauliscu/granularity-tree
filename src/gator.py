@@ -478,14 +478,67 @@ class Gator(object):
 class TimeGator(object):
 
     # Class variables for column names
-    TS_ID_COL = "_ts_id_"
+    DEST_COL = "_dest_timestamp_"
     WEIGHT_COL = "_overlap_value_"
     FACTOR_COL = Gator.FACTOR_COL
     VALUE_FACTOR_COL = Gator.VALUE_FACTOR_COL
     NEW_VALUE_COL = Gator.NEW_VALUE_COL
 
-    def Equalize(self, sourceDf: pd.DataFrame, sourceType: TID,
-                 destType: TID, intervalCol: str, dataCol: str,
+    def __init__(self, logFile: Path):
+
+        # We only need to initialize a logger object
+        logger = logging.getLogger(__name__)
+        logging.basicConfig(filename=str(logFile), encoding='utf-8', level=logging.DEBUG,
+                            format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+        self.logger = logger
+
+    def Aggregate(self, df: pd.DataFrame, dataCol: str, method: AggMethod) -> pd.DataFrame:
+
+        # Input validation
+        if not type(method) == AggMethod:
+            msg = f"Incorrect method type of {type(method)} for TimeGator.Aggregate."
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+        
+        # Setup the ouput
+        resDf = None
+
+        # Depending on the method, do the aggregation
+        if method == AggMethod.COUNT:
+            
+            # Ignore the data column, simply sum
+            # up the factors.  Equivalent to adding a column
+            # of 1s for count and multiplying by the factor.
+
+            groupedDf = df.groupby(self.DEST_COL)
+            resDf = groupedDf[[self.FACTOR_COL]].sum()
+
+        elif method == AggMethod.MEAN:
+            # Weighted mean of the source data, via the factor
+            groupedDf = df.groupby(self.DEST_COL).sum()
+            groupedDf[self.VALUE_FACTOR_COL] = \
+                pd.DataFrame(groupedDf[self.VALUE_FACTOR_COL] / groupedDf[self.FACTOR_COL])
+
+            # We only want the index and the result column
+            resDf = groupedDf[[self.VALUE_FACTOR_COL]]
+
+        elif method == AggMethod.MEDIAN:
+            # Weighted median of the source data, by factor
+            raise NotImplementedError
+        
+        elif method == AggMethod.SUM:
+            # Get the total for each unit
+            groupedDf = df.groupby(self.DEST_COL)
+            resDf = groupedDf[[self.VALUE_FACTOR_COL]].sum()
+
+        # Check that something was actually added
+        if resDf is None or resDf.shape[0] == 0:
+            msg = f"resDf is empty in TimeGator.Aggregate"
+
+        return resDf
+
+    def Equalize(self, sourceDf: pd.DataFrame, destType: TID,
+                 intervalCol: str, dataCol: str,
                  method: AggMethod | DeAggMethod) -> pd.DataFrame:
         
         """
@@ -502,18 +555,19 @@ class TimeGator(object):
         """
 
         newRows = []
+        ONE_UNIT = pd.Timedelta(1, unit=destType.value)
         for i, row in sourceDf.iterrows():
 
             # Get the two endpoints of the interval
-            startTs = row[intervalCol].left()
-            endTs = row[intervalCol].right()
+            startTs = row[intervalCol].left
+            endTs = row[intervalCol].right
 
             # Calculate the value of the origin "node"
             origSize = (endTs - startTs).total_seconds()
 
             # Grab the full interval in the right units
             intervalStartTs = startTs.floor(freq=destType.value)
-            intervalEndTs = endTs.right().ceil(freq=destType.value)
+            intervalEndTs = endTs.ceil(freq=destType.value)
 
             # Generate timestamps for each unit between the two endpoints
             tempNewRows = []
@@ -526,18 +580,25 @@ class TimeGator(object):
                 newRow[dataCol] = row[dataCol]
 
                 # Add in the current timestamp
-                newRow[self.TS_ID_COL] = curTimeCounter
+                newRow[self.DEST_COL] = curTimeCounter
 
-                # If it's the first or last timestamp in the interval,
-                # the actual overlap needs to be calculated
+                # Calculate the overlap, in seconds
                 overlap = None
-                if curTimeCounter + pd.Timedelta(1, unit=destType.value) >= intervalEndTs:
-                    overlap = 1 #TODO
+                if intervalEndTs == (intervalStartTs + ONE_UNIT):
+                    # Special case: the interval is entirely within one unit
+                    overlap = origSize
+
+                elif curTimeCounter + ONE_UNIT >= intervalEndTs:
+                    # We're in the last unit
+                    overlap = (ONE_UNIT - (intervalEndTs - endTs)).total_seconds()
+
                 elif curTimeCounter == intervalStartTs:
-                    overlap = 1 #TODO
+                    # We're in the first unit
+                    overlap = (ONE_UNIT - (startTs - curTimeCounter)).total_seconds()
+
                 else:
                     # Any units inbetween are fully covered
-                    overlap = pd.Timedelta(1, unit=destType.value).total_seconds()
+                    overlap = ONE_UNIT.total_seconds()
 
                 # Add the overlap to the row -
                 # this is essentially the edge weight
@@ -547,15 +608,50 @@ class TimeGator(object):
                 # TODO: Is this correct for both agg/deagg?
                 newRow[self.FACTOR_COL] = overlap / origSize
 
-                # Special case: the entire interval was entirely contained
+                # Calculate the value-factor
+                newRow[self.VALUE_FACTOR_COL] = newRow[self.FACTOR_COL] * row[dataCol]
+
+                # Add the new row to the list
+                tempNewRows.append(newRow)
+
+                # Increment the hour
+                curTimeCounter += ONE_UNIT
+
+            # Sanity check: the data column sum should match the original
+            valueFactors = [r[self.VALUE_FACTOR_COL] for r in tempNewRows]
+            assert math.isclose(sum(valueFactors), row[dataCol])
+
+            # Add the new rows to the new dataframe
+            newRows.extend(tempNewRows)
                 
 
 
+        '''
+        What we have now is each row of the original dataframe
+        has been split into multiple rows, one for each unit of time
+        it covers, with a timestamp starting at that time being
+        the "destination ID".
+
+        We can now groupBy the destination ID and perform the operation.
+
+        '''
+
+        if type(method) == AggMethod:
+            resDf = None
+        elif type(method) == DeAggMethod:
+            resDf = None
+        else:
+            # Catch all
+            msg = f"Invalid method of type {type(method)} used."
+            self.logger.error(msg)
+            raise RuntimeError(msg)
 
 
 
+        # TODO: Agg/deagg goes here
 
+        # Make a dataframe out of the new rows
+        retDf = pd.DataFrame(data=newRows)
 
-        return None
-
+        return retDf
 
