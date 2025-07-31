@@ -139,5 +139,11 @@ def testTemporalGeneration():
 
     sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
 
+@pytest.mark.equalize
+def testTemporalSumBasic():
+
+    # Generate the test data
+    #sampleDf, answerKeyDf = 
+
 if __name__ == "__main__":
     main()
