@@ -253,7 +253,7 @@ def testEqualizeSumBasic():
     # Easiest one first- counties to states
     idCol = 'ID'
     dataCol = 'TotalEVs'
-    resDf = gator.Equalize(counties, states, GEID.COUNTY, GEID.STATE,
+    resDf = gator.SpatialEqualize(counties, states, GEID.COUNTY, GEID.STATE,
                            idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
     
     # Make sure the values match
@@ -263,7 +263,7 @@ def testEqualizeSumBasic():
     
     # Do the same with population, just for testing
     dataCol = 'Population'
-    resDf = gator.Equalize(counties, states, GEID.COUNTY, GEID.STATE,
+    resDf = gator.SpatialEqualize(counties, states, GEID.COUNTY, GEID.STATE,
                            idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
     
     for ind, row in statesTemp.iterrows():
@@ -290,7 +290,7 @@ def testEqualizeSumHard():
     # ZIP to states is more obtuse
     idCol = 'ID'
     dataCol = 'TotalEVs'
-    resDf = gator.Equalize(zips, states, GEID.ZIP, GEID.STATE,
+    resDf = gator.SpatialEqualize(zips, states, GEID.ZIP, GEID.STATE,
                            idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
     
 

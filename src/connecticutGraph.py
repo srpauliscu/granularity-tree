@@ -152,7 +152,7 @@ def cMain(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     # Make the data column a float for mathmatical operations
     evRegsGdf['Vehicle Year'] = evRegsGdf['Vehicle Year'].astype(np.float64)
 
-    resDf = gator.Equalize(evRegsGdf, ratesGdf, GEID.CITY, GEID.ZCTA,
+    resDf = gator.SpatialEqualize(evRegsGdf, ratesGdf, GEID.CITY, GEID.ZCTA,
                            'GISJOIN', 'GISJOIN', 'Vehicle Year', AggMethod.COUNT,
                            EdgeType.AREA, ignoreIncomplete=True, ignoreMissing=True)
     

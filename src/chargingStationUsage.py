@@ -118,10 +118,10 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     csuDf[INTERVALCOL] = csuDf.apply(lambda x: pd.Interval(left=x['Start Date'], right=x['End Date']), axis=1)
 
     # Initialize the gator
-    gator = TimeGator()
+    gator = Gator(None, Path('./logs/csuGator.log'))
 
     # Use the gator to get hourly data
-    resDf = gator.Equalize(csuDf, TID.MINUTE, INTERVALCOL, 'Energy (kWh)', AggMethod.SUM)
+    resDf = gator.TemporalEqualize(csuDf, TID.MINUTE, INTERVALCOL, 'Energy (kWh)', AggMethod.SUM)
 
     print(csuDf['Energy (kWh)'].sum())
     print(resDf[gator.VALUE_FACTOR_COL].sum())

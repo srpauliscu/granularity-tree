@@ -44,7 +44,7 @@ class Gator(object):
     DEBUG = True
 
 
-    def __init__(self, _kGraph: GranularityGraph, logFile: Path):
+    def __init__(self, _kGraph: GranularityGraph | None, logFile: Path):
 
         self.kGraph = _kGraph
 
@@ -230,7 +230,7 @@ class Gator(object):
         return resDf
 
 
-    def Equalize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
+    def SpatialEqualize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
                 sourceType: GEID | TID, destType: GEID | TID,
                 sourceIdCol: str, destIdCol: str,
                 sourceDataCol: str,
@@ -255,9 +255,15 @@ class Gator(object):
 
         # 0.) Input validation
         if not (type(method) == AggMethod or type(method) == DeAggMethod):
-            msg = f"Equalize method was invalid type {type(method)}."
+            msg = f"SpatialEqualize method was invalid type {type(method)}."
             self.logger.error(msg)
             raise TypeError(msg)
+        
+        # We need a graph for spatial scaling
+        if self.kGraph is None:
+            msg = f"SpatialEqualize requires a kGraph for scaling."
+            self.logger.error(msg)
+            raise RuntimeError(msg)
 
 
         # 1.) Make the nodes
@@ -451,95 +457,10 @@ class Gator(object):
             sourceDf = sourceDf.reset_index()
 
         return resDf
-        
-
-    def MakeNodeObjects(self, ids1: pd.Series, ids2: pd.Series,
-                  entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:
-        
-        """
-        Make actual node objects from the given data
-
-        """
-
-        # Go through each id and instantiate the matching dummy node
-        # TODO: Should have a way to check the validity of the ids
-
-        nodes1 = []
-        for id in ids1:
-            nodes1.append(Node(id, None, entityType1))
-
-        nodes2 = []
-        for id in ids2:
-            nodes2.append(Node(id, None, entityType2))
-
-        return nodes1, nodes2
-
-
-class TimeGator(object):
-
-    # Class variables for column names
-    DEST_COL = "_dest_timestamp_"
-    WEIGHT_COL = "_overlap_value_"
-    FACTOR_COL = Gator.FACTOR_COL
-    VALUE_FACTOR_COL = Gator.VALUE_FACTOR_COL
-    NEW_VALUE_COL = Gator.NEW_VALUE_COL
-
-    def __init__(self, logFile: Path):
-
-        # We only need to initialize a logger object
-        logger = logging.getLogger(__name__)
-        logging.basicConfig(filename=str(logFile), encoding='utf-8', level=logging.DEBUG,
-                            format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-        self.logger = logger
-
-    def Aggregate(self, df: pd.DataFrame, dataCol: str, method: AggMethod) -> pd.DataFrame:
-
-        # Input validation
-        if not type(method) == AggMethod:
-            msg = f"Incorrect method type of {type(method)} for TimeGator.Aggregate."
-            self.logger.error(msg)
-            raise RuntimeError(msg)
-        
-        # Setup the ouput
-        resDf = None
-
-        # Depending on the method, do the aggregation
-        if method == AggMethod.COUNT:
-            
-            # Ignore the data column, simply sum
-            # up the factors.  Equivalent to adding a column
-            # of 1s for count and multiplying by the factor.
-
-            groupedDf = df.groupby(self.DEST_COL)
-            resDf = groupedDf[[self.FACTOR_COL]].sum()
-
-        elif method == AggMethod.MEAN:
-            # Weighted mean of the source data, via the factor
-            groupedDf = df.groupby(self.DEST_COL).sum()
-            groupedDf[self.VALUE_FACTOR_COL] = \
-                pd.DataFrame(groupedDf[self.VALUE_FACTOR_COL] / groupedDf[self.FACTOR_COL])
-
-            # We only want the index and the result column
-            resDf = groupedDf[[self.VALUE_FACTOR_COL]]
-
-        elif method == AggMethod.MEDIAN:
-            # Weighted median of the source data, by factor
-            raise NotImplementedError
-        
-        elif method == AggMethod.SUM:
-            # Get the total for each unit
-            groupedDf = df.groupby(self.DEST_COL)
-            resDf = groupedDf[[self.VALUE_FACTOR_COL]].sum()
-
-        # Check that something was actually added
-        if resDf is None or resDf.shape[0] == 0:
-            msg = f"resDf is empty in TimeGator.Aggregate"
-
-        return resDf
-
-    def Equalize(self, sourceDf: pd.DataFrame, destType: TID,
-                 intervalCol: str, dataCol: str,
-                 method: AggMethod | DeAggMethod) -> pd.DataFrame:
+    
+    def TemporalEqualize(self, sourceDf: pd.DataFrame, destType: TID,
+                         intervalCol: str, dataCol: str,
+                         method: AggMethod | DeAggMethod) -> pd.DataFrame:
         
         """
         Steps:
@@ -553,6 +474,9 @@ class TimeGator(object):
 
         Same method as the tree structure, but the graph is calculated dynamically    
         """
+
+        # Note that we don't need a stored kGraph for this,
+        # as the "graph" is generated dyanmically
 
         newRows = []
         ONE_UNIT = pd.Timedelta(1, unit=destType.value)
@@ -600,9 +524,6 @@ class TimeGator(object):
                     # Any units inbetween are fully covered
                     overlap = ONE_UNIT.total_seconds()
 
-                # Add the overlap to the row -
-                # this is essentially the edge weight
-                newRow[self.WEIGHT_COL] = overlap
 
                 # Calculate the factor
                 # TODO: Is this correct for both agg/deagg?
@@ -654,4 +575,27 @@ class TimeGator(object):
         retDf = pd.DataFrame(data=newRows)
 
         return retDf
+
+        
+
+    def MakeNodeObjects(self, ids1: pd.Series, ids2: pd.Series,
+                  entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:
+        
+        """
+        Make actual node objects from the given data
+
+        """
+
+        # Go through each id and instantiate the matching dummy node
+        # TODO: Should have a way to check the validity of the ids
+
+        nodes1 = []
+        for id in ids1:
+            nodes1.append(Node(id, None, entityType1))
+
+        nodes2 = []
+        for id in ids2:
+            nodes2.append(Node(id, None, entityType2))
+
+        return nodes1, nodes2
 
