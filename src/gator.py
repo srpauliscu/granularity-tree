@@ -122,8 +122,8 @@ class Gator(object):
 
 
 
-    def Aggregate(self, df: pd.DataFrame, idCol: str, 
-                  dataCol: str, method: AggMethod)-> pd.DataFrame:
+    def Aggregate(self, df: pd.DataFrame, dataCol: str,
+                  method: AggMethod)-> pd.DataFrame:
         
         # Input validation
         if not type(method) == AggMethod:
@@ -186,8 +186,8 @@ class Gator(object):
         return resDf
 
 
-    def DeAggregate(self, df: pd.DataFrame, idCol: str,
-                    dataCol: str, method: DeAggMethod) -> pd.DataFrame:
+    def DeAggregate(self, df: pd.DataFrame, dataCol: str,
+                    method: DeAggMethod) -> pd.DataFrame:
         
 
         # Input validation
@@ -401,9 +401,9 @@ class Gator(object):
         # The actual operation depends on 'method'
 
         if type(method) == AggMethod:
-            resDf = self.Aggregate(expandedDf, destIdCol, sourceDataCol, method)
+            resDf = self.Aggregate(expandedDf, sourceDataCol, method)
         elif type(method) == DeAggMethod:
-            resDf = self.DeAggregate(expandedDf, destIdCol, sourceDataCol, method)
+            resDf = self.DeAggregate(expandedDf, sourceDataCol, method)
         else:
             # Catch all
             msg = f"Invalid method of type {type(method)} used."
@@ -535,7 +535,7 @@ class Gator(object):
                 # Add the new row to the list
                 tempNewRows.append(newRow)
 
-                # Increment the hour
+                # Increment the time
                 curTimeCounter += ONE_UNIT
 
             # Sanity check: the data column sum should match the original
@@ -556,25 +556,19 @@ class Gator(object):
         We can now groupBy the destination ID and perform the operation.
 
         '''
+        expandedDf = pd.DataFrame(data=newRows)
 
         if type(method) == AggMethod:
-            resDf = None
+            resDf = self.Aggregate(expandedDf, dataCol, method)
         elif type(method) == DeAggMethod:
-            resDf = None
+            resDf = self.DeAggregate(expandedDf, dataCol, method)
         else:
             # Catch all
             msg = f"Invalid method of type {type(method)} used."
             self.logger.error(msg)
             raise RuntimeError(msg)
 
-
-
-        # TODO: Agg/deagg goes here
-
-        # Make a dataframe out of the new rows
-        retDf = pd.DataFrame(data=newRows)
-
-        return retDf
+        return resDf
 
         
 
