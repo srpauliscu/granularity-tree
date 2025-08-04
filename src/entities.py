@@ -111,7 +111,7 @@ class TID(StrEnum):
 
     # Primary time units
     YEAR = "YS"
-    MONTH = "MS"
+    MONTH = "M"
     WEEK = "W"
     DAY = "D"
     HOUR = "h"
@@ -125,3 +125,14 @@ class TID(StrEnum):
 
     # Could include peak power hours, but those can change in a given location,
     # so might be difficult
+
+# Sometimes we need the full name of the time unit
+TID_TO_STRING = {
+
+    TID.YEAR: 'years',
+    TID.MONTH: 'months',
+    TID.DAY: 'days',
+    TID.HOUR: 'hours',
+    TID.MINUTE: 'minutes',
+    TID.SECOND: 'seconds'
+}

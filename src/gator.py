@@ -479,7 +479,20 @@ class Gator(object):
         # as the "graph" is generated dyanmically
 
         newRows = []
-        ONE_UNIT = pd.Timedelta(1, unit=destType.value)
+
+        '''
+        # Months and years aren't static length
+        if destType == TID.MONTH:
+            ONE_UNIT = pd.DateOffset(months=1)
+        elif destType == TID.YEAR:
+            ONE_UNIT = pd.DateOffset(years=1)
+        else:
+            ONE_UNIT = pd.Timedelta(1, unit=destType.value)
+
+        '''
+        argDict = {TID_TO_STRING[destType]: 1}
+        ONE_UNIT = pd.DateOffset(**argDict)
+
         for i, row in sourceDf.iterrows():
 
             # Get the two endpoints of the interval
@@ -490,8 +503,16 @@ class Gator(object):
             origSize = (endTs - startTs).total_seconds()
 
             # Grab the full interval in the right units
-            intervalStartTs = startTs.floor(freq=destType.value)
-            intervalEndTs = endTs.ceil(freq=destType.value)
+            # Months and years can't use floor
+            if destType == TID.MONTH or destType == TID.YEAR:
+                intervalStartTs = startTs.to_period(destType.value).to_timestamp()
+                intervalEndTs = endTs.to_period(destType.value).to_timestamp() + pd.tseries.offsets.MonthBegin(1)#endTs.month)
+            elif destType == TID.YEAR:
+                intervalStartTs = startTs.to_period(destType.value).to_timestamp()
+                intervalEndTs = endTs.to_period(destType.value).to_timestamp() + pd.tseries.offsets.YearBegin(1)#endTs.year)
+            else:
+                intervalStartTs = startTs.floor(freq=destType.value)
+                intervalEndTs = endTs.ceil(freq=destType.value)
 
             # Generate timestamps for each unit between the two endpoints
             tempNewRows = []
@@ -514,16 +535,27 @@ class Gator(object):
 
                 elif curTimeCounter + ONE_UNIT >= intervalEndTs:
                     # We're in the last unit
-                    overlap = (ONE_UNIT - (intervalEndTs - endTs)).total_seconds()
+                    #overlap = (ONE_UNIT - (intervalEndTs - endTs)).total_seconds()
+                    #overlap = (endTs - (intervalEndTs - ONE_UNIT)).total_seconds()
+                    overlap = (endTs - endTs.to_period(destType.value).to_timestamp()).total_seconds()
 
                 elif curTimeCounter == intervalStartTs:
                     # We're in the first unit
-                    overlap = (ONE_UNIT - (startTs - curTimeCounter)).total_seconds()
-
+                    #overlap = (ONE_UNIT - (startTs - curTimeCounter)).total_seconds()
+                    overlap = ((intervalStartTs + ONE_UNIT) - startTs).total_seconds()
                 else:
                     # Any units inbetween are fully covered
-                    overlap = ONE_UNIT.total_seconds()
+                    #overlap = ONE_UNIT.total_seconds()
+                    overlap = ((intervalStartTs + ONE_UNIT) - intervalStartTs).total_seconds()
 
+                print('\n')
+                print(overlap)
+                print(origSize)
+                print((endTs - (intervalEndTs - ONE_UNIT)).total_seconds())
+
+                # Sanity check: the overlap should never be bigger than
+                # the original size
+                assert math.isclose(overlap, origSize)
 
                 # Calculate the factor
                 # TODO: Is this correct for both agg/deagg?

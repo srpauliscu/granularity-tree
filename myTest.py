@@ -8,6 +8,33 @@ import pandas as pd
 
 from src.entities import *
 
+
+
+
+
+
+def foo(a1=1, a2=2, a3=3):
+
+
+    print(a1, a2, a3)
+
+
+d = {1: 'a1',
+     2: 'a2',
+     3: 'a3'
+}
+
+d2 = {'a1': 102}
+
+foo(**d2)
+
+
+
+quit()
+
+
+
+
 def TestApp(row, t: int):
     t += row['a']
 

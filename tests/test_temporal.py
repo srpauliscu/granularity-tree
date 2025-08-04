@@ -9,6 +9,10 @@ from tests.util import *
 from src.gator import *
 
 
+# Global vars for column names
+T_ID_COL = "_hour_start_"
+T_DATA_COL = "_value_"
+T_INTERVAL_COL = "_interval_"
 
 # Use simple dataframes to test agg/deagg
 
@@ -31,7 +35,7 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp) \
         numHours = random.randint(1,16)
 
         # Get the end point
-        nextTs = min(curTs + pd.Timedelta(numHours, unit=TID.HOUR.value), endTs)
+        nextTs = min(curTs + (ONE_HOUR * numHours), endTs)
         numHours = (nextTs - curTs).total_seconds() / (60*60)
 
         # Initialize new rows
@@ -44,16 +48,16 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp) \
         # Each hour in the interval will evenly split the value
         tempTs = curTs
         curKeyRows = []
-        while tempTs < curTs + (ONE_HOUR * numHours):
+        while tempTs < nextTs:
 
             # Initialize a new row
             newKeyRow = {}
 
             # Use the temp timestamp as the "id"
-            newKeyRow['Hour Start'] = tempTs
+            newKeyRow[T_ID_COL] = tempTs
 
             # Add in its share of the value
-            newKeyRow['Value'] = value / numHours
+            newKeyRow[T_DATA_COL] = value / numHours
 
             # Add the row in
             curKeyRows.append(newKeyRow)
@@ -64,13 +68,12 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp) \
 
         # Generate a bunch of intervals of random lengths
         # and use their size to determine their value
-        curEndHour = min(curTs + (ONE_HOUR*numHours), endTs)
 
         lastIntervalTs = curTs
         nextIntervalTs = None
         curSampleRows = []
         minIntervals = 4
-        while lastIntervalTs < curEndHour:
+        while lastIntervalTs < nextTs:
 
             # Initialize a new row
             newSampleRow = {}
@@ -80,15 +83,15 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp) \
             numMins = random.randint(1, int(60. * numHours / minIntervals))
 
             # Cut off the last interval so as to not mess with future intervals
-            nextIntervalTs = min(lastIntervalTs + pd.Timedelta(numMins, unit=TID.MINUTE.value), curEndHour)
+            nextIntervalTs = min(lastIntervalTs + pd.Timedelta(numMins, unit=TID.MINUTE.value), nextTs)
             numMins = (nextIntervalTs - lastIntervalTs).total_seconds() / 60.
 
             # Form the interval
             curInterval = pd.Interval(left=lastIntervalTs, right=nextIntervalTs)
-            newSampleRow['Interval'] = curInterval
+            newSampleRow[T_INTERVAL_COL] = curInterval
 
             # Calculate the value as a fraction of the total time
-            newSampleRow['Value'] = value * (numMins / (numHours * 60))
+            newSampleRow[T_DATA_COL] = value * (numMins / (numHours * 60))
 
             # Add the row
             curSampleRows.append(newSampleRow)
@@ -99,15 +102,15 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp) \
         # Sanity checks:
 
         # The total value should match the original
-        assert math.isclose(value, sum([row['Value'] for row in curKeyRows]))
-        assert math.isclose(value, sum([row['Value'] for row in curSampleRows]))
+        assert math.isclose(value, sum([row[T_DATA_COL] for row in curKeyRows]))
+        assert math.isclose(value, sum([row[T_DATA_COL] for row in curSampleRows]))
 
         # Make sure each interval value is realistic
         for row in curSampleRows:
-            assert row['Value'] <= (value * (1./minIntervals))
+            assert row[T_DATA_COL] <= (value * (1./minIntervals))
 
         
-        # Add the rows to their respoective lists
+        # Add the rows to their respective lists
         answerKeyRows.extend(curKeyRows)
         sampleRows.extend(curSampleRows)
 
@@ -119,9 +122,29 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp) \
     sampleDf = pd.DataFrame(data=sampleRows)
 
     # Final sanity check: the totals should match
-    assert math.isclose(answerKeyDf['Value'].sum(), sampleDf['Value'].sum())
+    assert math.isclose(answerKeyDf[T_DATA_COL].sum(), sampleDf[T_DATA_COL].sum())
 
     return sampleDf, answerKeyDf
+
+
+# Reduce code duplication for comparing against answer keys
+def CompareWithAnswer(resDf: pd.DataFrame, answerKeyDf: pd.DataFrame) -> None:
+
+    # Check that the lengths are the same 
+    assert resDf.shape[0] == answerKeyDf.shape[0]
+
+    # Join them on their timestamps
+    joinedDf = pd.merge(answerKeyDf, resDf, left_index=True,
+                        right_index=True)
+    
+    # They should also be the same length
+    assert joinedDf.shape[0] == answerKeyDf.shape[0]
+
+    # Check that all of them match
+    joinedDf['Matching'] = joinedDf.apply(lambda x: math.isclose(
+        x[T_DATA_COL + '_x'], x[T_DATA_COL + '_y']), axis=1)
+    
+    assert all(joinedDf['Matching'])
 
 
 @pytest.mark.basic
@@ -143,7 +166,86 @@ def testTemporalGeneration():
 def testTemporalSumBasic():
 
     # Generate the test data
-    #sampleDf, answerKeyDf = 
+    startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2020, month=10, day=1, hour=0, minute=0, second=0)
+    sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
+
+    # Get a gator for aggregating
+    gator = Gator(None, Path('./logs/testTemporalSumBasic.log'))
+
+    # Have the gator aggregate to the hour level
+    gatorResDf = gator.TemporalEqualize(sampleDf, TID.HOUR, T_INTERVAL_COL,
+                                        T_DATA_COL, AggMethod.SUM)
+    
+    # Manually aggregate to the hour level in the answer key
+    aggAnswerDf = answerKeyDf.groupby(pd.Grouper(key=T_ID_COL,freq=TID.HOUR.value)).sum()
+
+    # Compare the result with the answer
+    CompareWithAnswer(gatorResDf, aggAnswerDf)
+
+
+@pytest.mark.equalize
+def testTemporalSumHard():
+
+    # Generate the test data
+    random.seed(42)
+    startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
+    #endTs = pd.Timestamp(year=2021, month=2, day=3, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2020, month=2, day=1, hour=0, minute=0, second=0)
+    sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
+
+    # Get a gator for aggregating
+    gator = Gator(None, Path('./logs/testTemporalSumHard.log'))
+
+    # Seed for debugging
+    random.seed(42)
+
+    # Get the gator to aggregate to different levels
+    levels = [TID.MONTH]#[TID.HOUR, TID.DAY, TID.MONTH]
+
+    resDfDict = {}
+    for unit in levels:
+        resDfDict[unit] = gator.TemporalEqualize(sampleDf, unit, T_INTERVAL_COL,
+                                                 T_DATA_COL, AggMethod.SUM)
+        
+    # Manually aggregate the answer key to the same levels
+    answerDfDict = {}
+    for unit in levels:
+        answerDfDict[unit] = answerKeyDf.groupby(pd.Grouper(key=T_ID_COL, freq=unit.value)).sum()
+    
+    # Check that each result matches the corresponding answer
+    for unit in levels:
+        CompareWithAnswer(resDfDict[unit], answerDfDict[unit])
+
+
+@pytest.mark.equalize
+def testTemporalCount():
+
+    # Generate the test data
+    startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2021, month=2, day=3, hour=0, minute=0, second=0)
+    sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
+
+    # Get a gator for aggregating
+    gator = Gator(None, Path('./logs/testTemporalCount.log'))
+
+    # Have the gator aggregate to different levels
+    levels = [TID.HOUR, TID.DAY, TID.MONTH]
+
+    resDfDict = {}
+    for unit in levels:
+        resDfDict[unit] = gator.TemporalEqualize(sampleDf, unit, T_INTERVAL_COL,
+                                                 T_DATA_COL, AggMethod.COUNT)
+        
+    # Manually aggregate the answer key to the same levels
+    answerDfDict = {}
+    for unit in levels:
+        answerDfDict[unit] = answerKeyDf.groupby(pd.Grouper(key=T_ID_COL, freq=unit.value)).count()
+    
+    # Check that each result matches the corresponding answer
+    for unit in levels:
+        CompareWithAnswer(resDfDict[unit], answerDfDict[unit])
+
 
 if __name__ == "__main__":
     main()
