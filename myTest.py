@@ -11,7 +11,12 @@ from src.entities import *
 
 
 
+l = [1,2,3,4]
+print(l[:-1])
 
+
+
+quit()
 
 def foo(a1=1, a2=2, a3=3):
 

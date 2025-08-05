@@ -533,29 +533,25 @@ class Gator(object):
                     # Special case: the interval is entirely within one unit
                     overlap = origSize
 
+
                 elif curTimeCounter + ONE_UNIT >= intervalEndTs:
                     # We're in the last unit
-                    #overlap = (ONE_UNIT - (intervalEndTs - endTs)).total_seconds()
-                    #overlap = (endTs - (intervalEndTs - ONE_UNIT)).total_seconds()
-                    overlap = (endTs - endTs.to_period(destType.value).to_timestamp()).total_seconds()
+
+                    if intervalEndTs == endTs:
+                        # Special case: endTs is exactly on an interval
+                        overlap = min(origSize, ((intervalStartTs + ONE_UNIT) - intervalStartTs).total_seconds())
+                    else:
+                        overlap = min(origSize, (endTs - endTs.to_period(destType.value).to_timestamp()).total_seconds())
 
                 elif curTimeCounter == intervalStartTs:
                     # We're in the first unit
-                    #overlap = (ONE_UNIT - (startTs - curTimeCounter)).total_seconds()
                     overlap = ((intervalStartTs + ONE_UNIT) - startTs).total_seconds()
                 else:
                     # Any units inbetween are fully covered
-                    #overlap = ONE_UNIT.total_seconds()
                     overlap = ((intervalStartTs + ONE_UNIT) - intervalStartTs).total_seconds()
 
-                print('\n')
-                print(overlap)
-                print(origSize)
-                print((endTs - (intervalEndTs - ONE_UNIT)).total_seconds())
-
                 # Sanity check: the overlap should never be bigger than
-                # the original size
-                assert math.isclose(overlap, origSize)
+                assert overlap <= origSize
 
                 # Calculate the factor
                 # TODO: Is this correct for both agg/deagg?
@@ -572,7 +568,13 @@ class Gator(object):
 
             # Sanity check: the data column sum should match the original
             valueFactors = [r[self.VALUE_FACTOR_COL] for r in tempNewRows]
+
             assert math.isclose(sum(valueFactors), row[dataCol])
+
+            # Cutoff the last entry if the overlap is 0
+            # This is just an inclusive/exclusive interval problem
+            if math.isclose(tempNewRows[-1][self.FACTOR_COL], 0):
+                tempNewRows = tempNewRows[:-1]
 
             # Add the new rows to the new dataframe
             newRows.extend(tempNewRows)

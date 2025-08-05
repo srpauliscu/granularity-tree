@@ -110,7 +110,7 @@ class TID(StrEnum):
     """
 
     # Primary time units
-    YEAR = "YS"
+    YEAR = "Y"
     MONTH = "M"
     WEEK = "W"
     DAY = "D"
@@ -135,4 +135,16 @@ TID_TO_STRING = {
     TID.HOUR: 'hours',
     TID.MINUTE: 'minutes',
     TID.SECOND: 'seconds'
+}
+
+# The Grouper sometimes reqiures different strings that the other functions
+TID_TO_PERIOD = {
+
+    TID.YEAR: 'YS',
+    TID.MONTH: 'MS',
+    TID.WEEK: 'W',
+    TID.DAY: 'D',
+    TID.HOUR: 'h',
+    TID.MINUTE: 'min',
+    TID.SECOND: 's'
 }

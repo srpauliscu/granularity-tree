@@ -130,7 +130,9 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp) \
 # Reduce code duplication for comparing against answer keys
 def CompareWithAnswer(resDf: pd.DataFrame, answerKeyDf: pd.DataFrame) -> None:
 
-    # Check that the lengths are the same 
+    # Check that the lengths are the same
+    print(resDf)
+    print(answerKeyDf)
     assert resDf.shape[0] == answerKeyDf.shape[0]
 
     # Join them on their timestamps
@@ -188,20 +190,18 @@ def testTemporalSumBasic():
 def testTemporalSumHard():
 
     # Generate the test data
-    random.seed(42)
+    #random.seed(42)
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    #endTs = pd.Timestamp(year=2021, month=2, day=3, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2020, month=2, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2024, month=2, day=1, hour=0, minute=0, second=0)
+    #endTs = pd.Timestamp(year=2020, month=2, day=1, hour=1, minute=0, second=0)
     sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
 
     # Get a gator for aggregating
     gator = Gator(None, Path('./logs/testTemporalSumHard.log'))
 
-    # Seed for debugging
-    random.seed(42)
 
     # Get the gator to aggregate to different levels
-    levels = [TID.MONTH]#[TID.HOUR, TID.DAY, TID.MONTH]
+    levels = [TID.HOUR, TID.DAY, TID.MONTH, TID.YEAR]
 
     resDfDict = {}
     for unit in levels:
@@ -211,7 +211,7 @@ def testTemporalSumHard():
     # Manually aggregate the answer key to the same levels
     answerDfDict = {}
     for unit in levels:
-        answerDfDict[unit] = answerKeyDf.groupby(pd.Grouper(key=T_ID_COL, freq=unit.value)).sum()
+        answerDfDict[unit] = answerKeyDf.groupby(pd.Grouper(key=T_ID_COL, freq=TID_TO_PERIOD[unit])).sum()
     
     # Check that each result matches the corresponding answer
     for unit in levels:
