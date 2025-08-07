@@ -142,6 +142,7 @@ class Gator(object):
             # multiplying by the factor
             groupedDf = df.groupby(self.DEST_COL)
             resDf = groupedDf[[self.FACTOR_COL]].sum()
+            #resDf = groupedDf[[self.FACTOR_COL]].count()
 
         elif method == AggMethod.MEAN:
             # Weighted mean of the source data, via the factor
@@ -480,16 +481,6 @@ class Gator(object):
 
         newRows = []
 
-        '''
-        # Months and years aren't static length
-        if destType == TID.MONTH:
-            ONE_UNIT = pd.DateOffset(months=1)
-        elif destType == TID.YEAR:
-            ONE_UNIT = pd.DateOffset(years=1)
-        else:
-            ONE_UNIT = pd.Timedelta(1, unit=destType.value)
-
-        '''
         argDict = {TID_TO_STRING[destType]: 1}
         ONE_UNIT = pd.DateOffset(**argDict)
 

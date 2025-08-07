@@ -192,7 +192,7 @@ def testTemporalSumHard():
     # Generate the test data
     #random.seed(42)
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2024, month=2, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2023, month=2, day=1, hour=0, minute=0, second=0)
     #endTs = pd.Timestamp(year=2020, month=2, day=1, hour=1, minute=0, second=0)
     sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
 
@@ -219,32 +219,87 @@ def testTemporalSumHard():
 
 
 @pytest.mark.equalize
-def testTemporalCount():
+def testTemporalCountBasic():
 
     # Generate the test data
+    #random.seed(42)
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2021, month=2, day=3, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2023, month=2, day=4, hour=0, minute=0, second=0)
     sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
 
     # Get a gator for aggregating
     gator = Gator(None, Path('./logs/testTemporalCount.log'))
 
     # Have the gator aggregate to different levels
-    levels = [TID.HOUR, TID.DAY, TID.MONTH]
+    levels = [TID.HOUR, TID.DAY, TID.MONTH, TID.YEAR]
 
     resDfDict = {}
     for unit in levels:
         resDfDict[unit] = gator.TemporalEqualize(sampleDf, unit, T_INTERVAL_COL,
                                                  T_DATA_COL, AggMethod.COUNT)
-        
-    # Manually aggregate the answer key to the same levels
-    answerDfDict = {}
+
+    """    
+    We can't just compare to the "answerKey" in this case, as they, by their
+    construction, will have different numbers of entries.  Best we can do
+    is make sure the totals before and after counting are the same.
+    """
+
     for unit in levels:
-        answerDfDict[unit] = answerKeyDf.groupby(pd.Grouper(key=T_ID_COL, freq=unit.value)).count()
+        assert math.isclose(resDfDict[unit][T_DATA_COL].sum(), sampleDf.shape[0])
+
+
+@pytest.mark.equalize
+def testTemporalMeanAndCount():
+
+    # Generate the test data
+    #random.seed(42)
+    startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
+    #endTs = pd.Timestamp(year=2021, month=2, day=4, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2023, month=2, day=4, hour=0, minute=0, second=0)
+    sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
+
+    # Get a gator for aggregating
+    gator = Gator(None, Path('./logs/testTemporalMean.log'))
+
+    # Have the gator aggregate to different levels
+    levels = [TID.HOUR, TID.DAY, TID.MONTH, TID.YEAR]
+
+    resDfDictMean = {}
+    resDfDictCount = {}
+    for unit in levels:
+        resDfDictMean[unit] = gator.TemporalEqualize(sampleDf, unit, T_INTERVAL_COL,
+                                                 T_DATA_COL, AggMethod.MEAN)
+        resDfDictCount[unit] = gator.TemporalEqualize(sampleDf, unit, T_INTERVAL_COL,
+                                                      T_DATA_COL, AggMethod.COUNT)
     
-    # Check that each result matches the corresponding answer
+    # Manually aggregate the answer key to the same levels
+    answerDfDictMean = {}
+    answerDfDictCount = {}
     for unit in levels:
-        CompareWithAnswer(resDfDict[unit], answerDfDict[unit])
+        answerDfDictMean[unit] = answerKeyDf.groupby(pd.Grouper(key=T_ID_COL, freq=TID_TO_PERIOD[unit])).mean()
+        answerDfDictCount[unit] = answerKeyDf.groupby(pd.Grouper(key=T_ID_COL, freq=TID_TO_PERIOD[unit])).count()
+    
+    # The means and counts won't match, but the mean*count should
+
+    # Join the respective dataframes and calculate the mean*count
+    for unit in levels:
+        curResDf = pd.merge(resDfDictMean[unit], resDfDictCount[unit],
+                            left_index=True, right_index=True)
+        curAnswerDf = pd.merge(answerDfDictMean[unit], answerDfDictCount[unit],
+                               left_index=True, right_index=True)
+
+
+        # Form the final column
+        curResDf[T_DATA_COL] = curResDf[T_DATA_COL + '_x']*curResDf[T_DATA_COL + '_y']
+        curAnswerDf[T_DATA_COL] = curAnswerDf[T_DATA_COL + '_x']*curAnswerDf[T_DATA_COL + '_y']
+
+        # Drop the other rows
+        curResDf = curResDf.drop(labels=[T_DATA_COL + '_x', T_DATA_COL + '_y'], axis=1)
+        curAnswerDf = curAnswerDf.drop(labels=[T_DATA_COL + '_x', T_DATA_COL + '_y'], axis=1)
+
+        # Now, they should match
+        CompareWithAnswer(curResDf, curAnswerDf)
+
 
 
 if __name__ == "__main__":
