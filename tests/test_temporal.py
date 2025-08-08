@@ -25,6 +25,129 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
     answerKeyRows = []
     sampleRows = []
     curTs = startTs
+    argDict = {TID_TO_STRING[unit]: 1}
+    ONE_UNIT = pd.DateOffset(**argDict)
+    UNIT_TO_SEC_FACTOR = ((curTs + ONE_UNIT) - curTs).total_seconds()
+
+    # Generate the test data in blocks of hours that are subdivided
+    # into intervals randomly
+
+    while curTs < endTs:
+
+        # Generate a random length
+        numUnits = random.randint(1,16)
+
+        # Get the end point
+        nextTs = min(curTs + (ONE_UNIT * numUnits), endTs)
+        numUnits = (nextTs - curTs).total_seconds() / UNIT_TO_SEC_FACTOR
+
+        # Initialize new rows
+        curKeyRows = []
+        curSampleRows = []
+
+        # Generate some random data for it
+        value = random.randint(1, 100)*numUnits
+
+        # Each hour in the interval will evenly split the value
+        tempTs = curTs
+        curKeyRows = []
+        while tempTs < nextTs:
+
+            # Initialize a new row
+            newKeyRow = {}
+
+            # Use the temp timestamp as the "id"
+            newKeyRow[T_ID_COL] = tempTs
+
+            # Add in its share of the value
+            newKeyRow[T_DATA_COL] = value / numUnits
+
+            # Add the row in
+            curKeyRows.append(newKeyRow)
+
+            # Increment the tempTs
+            tempTs += ONE_UNIT
+
+
+        # Generate a bunch of intervals of random lengths
+        # and use their size to determine their value
+
+        lastIntervalTs = curTs
+        nextIntervalTs = None
+        curSampleRows = []
+        minIntervals = 4
+        while lastIntervalTs < nextTs:
+
+            # Initialize a new row
+            newSampleRow = {}
+
+            # Get the next endpoint based on a random number of mins
+            # We should have multiple intervals per chunk
+            numMins = random.randint(1, int((UNIT_TO_SEC_FACTOR / 60.) * numUnits / minIntervals))
+            #print("\n")
+            #print(UNIT_TO_SEC_FACTOR)
+            #print(numUnits)
+            #print(numMins)
+
+            # Cut off the last interval so as to not mess with future intervals
+            nextIntervalTs = min(lastIntervalTs + pd.Timedelta(numMins, unit=TID.MINUTE.value), nextTs)
+            numMins = (nextIntervalTs - lastIntervalTs).total_seconds() / 60.
+
+            # Form the interval
+            curInterval = pd.Interval(left=lastIntervalTs, right=nextIntervalTs)
+            newSampleRow[T_INTERVAL_COL] = curInterval
+
+            # Calculate the value as a fraction of the total time
+            newSampleRow[T_DATA_COL] = value * (numMins / (numUnits * (UNIT_TO_SEC_FACTOR / 60.)))
+
+            # Add the row
+            curSampleRows.append(newSampleRow)
+
+            # Increment the counter
+            lastIntervalTs = nextIntervalTs
+        
+        # Sanity checks:
+
+        # The total value should match the original
+        #print("\n")
+        #print(numMins)
+        #print(numUnits)
+        
+        #print(f"Value: {value}")
+        assert math.isclose(value, sum([row[T_DATA_COL] for row in curKeyRows]))
+        assert math.isclose(value, sum([row[T_DATA_COL] for row in curSampleRows]))
+
+        # Make sure each interval value is realistic
+        for row in curSampleRows:
+            assert row[T_DATA_COL] <= (value * (1./minIntervals))
+
+        
+        # Add the rows to their respective lists
+        answerKeyRows.extend(curKeyRows)
+        sampleRows.extend(curSampleRows)
+
+        # Increment the counter
+        curTs = nextTs
+
+    # Make them into dataframes
+    answerKeyDf = pd.DataFrame(data=answerKeyRows)
+    sampleDf = pd.DataFrame(data=sampleRows)
+
+    # Final sanity check: the totals should match
+    assert math.isclose(answerKeyDf[T_DATA_COL].sum(), sampleDf[T_DATA_COL].sum())
+
+    return sampleDf, answerKeyDf
+
+
+def GenerateTemporalSampleOld(startTs: pd.Timestamp, endTs: pd.Timestamp,
+                           unit: TID = TID.HOUR) \
+    -> tuple[pd.DataFrame, pd.DataFrame]:
+
+    # Use this function to generate temporal test data
+
+    answerKeyRows = []
+    sampleRows = []
+    curTs = startTs
     ONE_HOUR = pd.Timedelta(1, unit=TID.HOUR.value)
 
     # Generate the test data in blocks of hours that are subdivided
@@ -217,6 +340,33 @@ def testTemporalSumHard():
     # Check that each result matches the corresponding answer
     for unit in levels:
         CompareWithAnswer(resDfDict[unit], answerDfDict[unit])
+
+@pytest.mark.basic
+def testTemporalGenerationHard():
+
+    # Use summing to test a bunch of units for sample generation
+    random.seed(42)
+    levels = [TID.MONTH]#[TID.HOUR, TID.DAY, TID.MONTH, TID.YEAR]
+
+    # Use a smaller timespan than other tests
+    startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2021, month=2, day=1, hour=0, minute=0, second=0)
+
+    sampleDfDict = {}
+    answerKeyDfDict = {}
+    for unit in levels:
+        sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs, unit)
+        sampleDfDict[unit] = sampleDf
+        answerKeyDfDict[unit] = answerKeyDf
+        
+    
+    # Test summation for all valid units for each sample unit
+    for baseI, baseU in enumerate(levels[:-1]):
+        for testI, testU in enumerate(levels[baseI + 1:]):
+            print(baseU, testU)
+        
+
+    assert False
 
 
 @pytest.mark.equalize
