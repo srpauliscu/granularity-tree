@@ -121,13 +121,19 @@ def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     gator = Gator(None, Path('./logs/csuGator.log'))
 
     # Use the gator to get hourly data
-    resDf = gator.TemporalEqualize(csuDf, TID.MINUTE, INTERVALCOL, 'Energy (kWh)', AggMethod.SUM)
+    resDf = gator.TemporalEqualize(csuDf, TID.HOUR, INTERVALCOL, 'Energy (kWh)', AggMethod.SUM)
 
     print(csuDf['Energy (kWh)'].sum())
-    print(resDf[gator.VALUE_FACTOR_COL].sum())
+    print(resDf['Energy (kWh)'].sum())
 
     # Sanity check: the sum of the data columns should be the same
-    assert math.isclose(csuDf['Energy (kWh)'].sum(), resDf[gator.VALUE_FACTOR_COL].sum())
+    assert math.isclose(csuDf['Energy (kWh)'].sum(), resDf['Energy (kWh)'].sum())
+
+    # Plot by hour of day
+    resDf['Hour'] = resDf.index.hour
+
+    resDf.plot(x='Hour', y='Energy (kWh)', kind='scatter')
+    plt.show()
 
     print('Yay!')
 

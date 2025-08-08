@@ -16,7 +16,8 @@ T_INTERVAL_COL = "_interval_"
 
 # Use simple dataframes to test agg/deagg
 
-def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp) \
+def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
+                           unit: TID = TID.HOUR) \
     -> tuple[pd.DataFrame, pd.DataFrame]:
 
     # Use this function to generate temporal test data
@@ -299,6 +300,30 @@ def testTemporalMeanAndCount():
 
         # Now, they should match
         CompareWithAnswer(curResDf, curAnswerDf)
+
+
+
+def testTemporalCopy():
+
+    # Generate the test data
+    startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2020, month=10, day=1, hour=0, minute=0, second=0)
+    sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
+
+    # Get a gator for deaggregating
+    gator = Gator(None, Path('./logs/testTemporalCopy.log'))
+
+    # TMinutes is (currently) the only supported granularity
+    # more granular that the sample data
+    levels = [TID.MINUTE, TID.HOUR]
+
+    resDfDict = {}
+    for unit in levels:
+        resDfDict[unit] = gator.TemporalEqualize(sampleDf, unit, T_INTERVAL_COL,
+                                                 T_DATA_COL, DeAggMethod.COPY)
+
+
+    
 
 
 
