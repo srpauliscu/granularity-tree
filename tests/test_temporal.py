@@ -44,17 +44,10 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
         # Generate some random data for it
         value = random.randint(1, 100)*numUnits
 
-        print("\n")
-        print(value)
-        print(numUnits)
-        print(math.ceil(numUnits))
-
         # Each hour in the interval will evenly split the value
         lastTs = curStartTs
         curKeyRows = []
         while lastTs < nextEndTs:# and len(curKeyRows) <= numUnits:
-            print(lastTs)
-            print(nextEndTs)
 
             # Initialize a new row
             newKeyRow = {}
@@ -94,10 +87,7 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
             # Get the next endpoint based on a random number of mins
             # We should have multiple intervals per chunk
             numMins = random.randint(1, int((UNIT_TO_SEC_FACTOR / 60.) * numUnits / minIntervals))
-            #print("\n")
-            #print(UNIT_TO_SEC_FACTOR)
-            #print(numUnits)
-            #print(numMins)
+
 
             # Cut off the last interval so as to not mess with future intervals
             nextIntervalTs = min(lastIntervalTs + pd.Timedelta(numMins, unit=TID.MINUTE.value), nextEndTs)
@@ -119,11 +109,6 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
         # Sanity checks:
 
         # The total value should match the original
-        #print("\n")
-        #print(numMins)
-        #print(numUnits)
-        
-        #print(f"Value: {value}")
         assert math.isclose(value, sum([row[T_DATA_COL] for row in curKeyRows]))
         assert math.isclose(value, sum([row[T_DATA_COL] for row in curSampleRows]))
 
@@ -495,25 +480,84 @@ def testTemporalMeanAndCount():
 
 def testTemporalCopy():
 
+    # We need a map for deagg tests
+    levels = {
+        TID.HOUR: TID.MINUTE
+    }
+
     # Generate the test data
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2020, month=10, day=1, hour=0, minute=0, second=0)
-    sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
+    endTs = pd.Timestamp(year=2020, month=2, day=1, hour=0, minute=0, second=0)
 
+    sampleDfDict = {}
+    answerKeyDfDict = {}
+    for unit in levels:
+        sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs, unit)
+        sampleDfDict[unit] = sampleDf
+        answerKeyDfDict[unit] = answerKeyDf
+    
     # Get a gator for deaggregating
     gator = Gator(None, Path('./logs/testTemporalCopy.log'))
 
-    # TMinutes is (currently) the only supported granularity
-    # more granular that the sample data
-    levels = [TID.MINUTE, TID.HOUR]
-
+    # Have the gator deagg all of them
     resDfDict = {}
     for unit in levels:
-        resDfDict[unit] = gator.TemporalEqualize(sampleDf, unit, T_INTERVAL_COL,
+        targetUnit = levels[unit]
+        resDfDict[targetUnit] = gator.TemporalEqualize(sampleDfDict[unit], targetUnit, T_INTERVAL_COL,
                                                  T_DATA_COL, DeAggMethod.COPY)
-
-
     
+    # Compare each result against its appropriate answer key
+    for unit in levels:
+        targetUnit = levels[unit]
+        curAnswerKey = answerKeyDfDict[unit]
+
+        # Make a units we can use to calculate new timestamps
+        # at the given frequencies
+        argDict = {TID_TO_STRING[unit]: 1}
+        ONE_SOURCE_UNIT = pd.DateOffset(**argDict)
+        argDict = {TID_TO_STRING[targetUnit]: 1}    
+        ONE_TARGET_UNIT = pd.DateOffset(**argDict)
+
+        # Need to iterate over all rows to generate new ones for each existing row
+        newDicts = []
+        for ind, row in curAnswerKey.iterrows():
+
+            # Grab the timestamp
+            origStartTs = row[T_ID_COL]
+            origEndTs = origStartTs + ONE_SOURCE_UNIT
+
+            curTs = origStartTs
+
+            while curTs < origEndTs:
+
+                # Make a new row
+                newRow = {
+                    T_ID_COL: curTs,
+                    T_DATA_COL: row[T_DATA_COL] # This is the "copy" step
+                }
+
+                # Add it to the final dict
+                newDicts.append(newRow)
+
+                # Increment the counter
+                curTs += ONE_TARGET_UNIT
+        
+        # For a dataframe out of the new rows
+        answerKeyDf = pd.DataFrame(data=newDicts)
+
+        # Grab the appropriate result dataframe
+        curResDf = resDfDict[targetUnit]
+
+        # Do the comparison
+        CompareWithAnswer(curResDf, answerKeyDf)
+
+
+
+
+
+
+
+
 
 
 
