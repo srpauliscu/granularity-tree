@@ -24,59 +24,69 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
 
     answerKeyRows = []
     sampleRows = []
-    curTs = startTs
+    curStartTs = startTs
     argDict = {TID_TO_STRING[unit]: 1}
     ONE_UNIT = pd.DateOffset(**argDict)
-    UNIT_TO_SEC_FACTOR = ((curTs + ONE_UNIT) - curTs).total_seconds()
+    UNIT_TO_SEC_FACTOR = ((curStartTs + ONE_UNIT) - curStartTs).total_seconds()
 
-    # Generate the test data in blocks of hours that are subdivided
+    # Generate the test data in blocks of units that are subdivided
     # into intervals randomly
 
-    while curTs < endTs:
+    while curStartTs < endTs:
 
         # Generate a random length
-        numUnits = random.randint(1,16)
+        numUnits = 5#random.randint(1,16)
 
         # Get the end point
-        nextTs = min(curTs + (ONE_UNIT * numUnits), endTs)
-        numUnits = (nextTs - curTs).total_seconds() / UNIT_TO_SEC_FACTOR
-
-        # Initialize new rows
-        curKeyRows = []
-        curSampleRows = []
+        nextEndTs = min(curStartTs + (ONE_UNIT * numUnits), endTs)
+        numUnits = (nextEndTs - curStartTs).total_seconds() / UNIT_TO_SEC_FACTOR
 
         # Generate some random data for it
         value = random.randint(1, 100)*numUnits
 
+        print("\n")
+        print(value)
+        print(numUnits)
+        print(math.ceil(numUnits))
+
         # Each hour in the interval will evenly split the value
-        tempTs = curTs
+        lastTs = curStartTs
         curKeyRows = []
-        while tempTs < nextTs:
+        while lastTs < nextEndTs:# and len(curKeyRows) <= numUnits:
+            print(lastTs)
+            print(nextEndTs)
 
             # Initialize a new row
             newKeyRow = {}
 
             # Use the temp timestamp as the "id"
-            newKeyRow[T_ID_COL] = tempTs
+            newKeyRow[T_ID_COL] = lastTs
+
+            # Cut off the last interval so as to not mess with future intervals
+            nextTs = min(lastTs + ONE_UNIT, nextEndTs)
+
+            # Calculate the relative size of the current unit
+            curSize = (nextTs - lastTs).total_seconds() / (numUnits * UNIT_TO_SEC_FACTOR)
 
             # Add in its share of the value
-            newKeyRow[T_DATA_COL] = value / numUnits
+            newKeyRow[T_DATA_COL] = value * curSize
 
             # Add the row in
             curKeyRows.append(newKeyRow)
 
             # Increment the tempTs
-            tempTs += ONE_UNIT
+            #lastTs += ONE_UNIT
+            lastTs = nextTs
 
 
         # Generate a bunch of intervals of random lengths
         # and use their size to determine their value
 
-        lastIntervalTs = curTs
+        lastIntervalTs = curStartTs
         nextIntervalTs = None
         curSampleRows = []
         minIntervals = 4
-        while lastIntervalTs < nextTs:
+        while lastIntervalTs < nextEndTs:
 
             # Initialize a new row
             newSampleRow = {}
@@ -90,7 +100,7 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
             #print(numMins)
 
             # Cut off the last interval so as to not mess with future intervals
-            nextIntervalTs = min(lastIntervalTs + pd.Timedelta(numMins, unit=TID.MINUTE.value), nextTs)
+            nextIntervalTs = min(lastIntervalTs + pd.Timedelta(numMins, unit=TID.MINUTE.value), nextEndTs)
             numMins = (nextIntervalTs - lastIntervalTs).total_seconds() / 60.
 
             # Form the interval
@@ -127,7 +137,7 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
         sampleRows.extend(curSampleRows)
 
         # Increment the counter
-        curTs = nextTs
+        curStartTs = nextEndTs
 
     # Make them into dataframes
     answerKeyDf = pd.DataFrame(data=answerKeyRows)
@@ -345,12 +355,12 @@ def testTemporalSumHard():
 def testTemporalGenerationHard():
 
     # Use summing to test a bunch of units for sample generation
-    random.seed(42)
-    levels = [TID.MONTH]#[TID.HOUR, TID.DAY, TID.MONTH, TID.YEAR]
+    #random.seed(42)
+    levels = [TID.HOUR, TID.DAY, TID.MONTH, TID.YEAR]
 
     # Use a smaller timespan than other tests
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2021, month=2, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2021, month=4, day=6, hour=5, minute=0, second=0)
 
     sampleDfDict = {}
     answerKeyDfDict = {}
@@ -358,15 +368,45 @@ def testTemporalGenerationHard():
         sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs, unit)
         sampleDfDict[unit] = sampleDf
         answerKeyDfDict[unit] = answerKeyDf
+
+    
+    # Rely on the gator for the sample
+    # Yes, this is circular testing
+    gator = Gator(None, Path('./logs/testGenerationHard.log'))
         
     
     # Test summation for all valid units for each sample unit
     for baseI, baseU in enumerate(levels[:-1]):
-        for testI, testU in enumerate(levels[baseI + 1:]):
-            print(baseU, testU)
-        
+        curSampleDf = sampleDfDict[baseU]
+        curAnswerDf = answerKeyDfDict[baseU]
 
-    assert False
+        for testU in levels[baseI + 1:]:
+
+            # Get the sample and answer mean at this level
+            sampleMean = gator.TemporalEqualize(curSampleDf, testU, T_INTERVAL_COL,
+                                                T_DATA_COL, AggMethod.MEAN)
+            answerMean = curAnswerDf.groupby(pd.Grouper(key=T_ID_COL, freq=TID_TO_PERIOD[testU])).mean()
+
+            # Get the counts at this level
+            sampleCount = gator.TemporalEqualize(curSampleDf, testU, T_INTERVAL_COL,
+                                                 T_DATA_COL, AggMethod.COUNT)
+            answerCount = curAnswerDf.groupby(pd.Grouper(key=T_ID_COL, freq=TID_TO_PERIOD[testU])).count()
+
+            # Merge the counts and means
+            sampleMergedDf = pd.merge(sampleMean, sampleCount, left_index=True, right_index=True)
+            answerMergedDf = pd.merge(answerMean, answerCount, left_index=True, right_index=True)
+
+            # Form the final column
+            sampleMergedDf[T_DATA_COL] = sampleMergedDf[T_DATA_COL + '_x']*sampleMergedDf[T_DATA_COL + '_y']
+            answerMergedDf[T_DATA_COL] = answerMergedDf[T_DATA_COL + '_x']*answerMergedDf[T_DATA_COL + '_y']
+
+            # Drop the other columns
+            sampleFinalDf = sampleMergedDf.drop(labels=[T_DATA_COL + '_x', T_DATA_COL + '_y'], axis=1)
+            answerFinalDf = answerMergedDf.drop(labels=[T_DATA_COL + '_x', T_DATA_COL + '_y'], axis=1)
+
+            # Now, they should match
+            print(f"\nCurrent units: {baseU}, {testU}")
+            CompareWithAnswer(sampleFinalDf, answerFinalDf)
 
 
 @pytest.mark.equalize
@@ -444,7 +484,7 @@ def testTemporalMeanAndCount():
         curResDf[T_DATA_COL] = curResDf[T_DATA_COL + '_x']*curResDf[T_DATA_COL + '_y']
         curAnswerDf[T_DATA_COL] = curAnswerDf[T_DATA_COL + '_x']*curAnswerDf[T_DATA_COL + '_y']
 
-        # Drop the other rows
+        # Drop the other columns
         curResDf = curResDf.drop(labels=[T_DATA_COL + '_x', T_DATA_COL + '_y'], axis=1)
         curAnswerDf = curAnswerDf.drop(labels=[T_DATA_COL + '_x', T_DATA_COL + '_y'], axis=1)
 
