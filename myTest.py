@@ -11,9 +11,11 @@ from src.entities import *
 
 
 
-l = [1,2,3,4]
-print(l[:-1])
+df = pd.DataFrame([[0, 2, 3], [-1, -1, -1], [0, 4, 1], [10, 20, 30]],
+                  index=[4, 4, 5, 6], columns=['A', 'B', 'C'])
 
+for ind, row in df.loc[4].iterrows():
+    print(row['A'])
 
 
 quit()
