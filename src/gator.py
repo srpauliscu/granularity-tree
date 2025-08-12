@@ -495,12 +495,14 @@ class Gator(object):
 
             # Grab the full interval in the right units
             # Months and years can't use floor
-            if destType == TID.MONTH or destType == TID.YEAR:
+            if destType == TID.MONTH:
                 intervalStartTs = startTs.to_period(destType.value).to_timestamp()
                 intervalEndTs = endTs.to_period(destType.value).to_timestamp() + pd.tseries.offsets.MonthBegin(1)#endTs.month)
+
             elif destType == TID.YEAR:
                 intervalStartTs = startTs.to_period(destType.value).to_timestamp()
                 intervalEndTs = endTs.to_period(destType.value).to_timestamp() + pd.tseries.offsets.YearBegin(1)#endTs.year)
+
             else:
                 intervalStartTs = startTs.floor(freq=destType.value)
                 intervalEndTs = endTs.ceil(freq=destType.value)
@@ -508,8 +510,11 @@ class Gator(object):
             # Generate timestamps for each unit between the two endpoints
             tempNewRows = []
             curTimeCounter = intervalStartTs
+
+            print(f'\n{row[intervalCol]}')
             
             while curTimeCounter < intervalEndTs:
+                print(curTimeCounter)
                 newRow = {}
 
                 # Copy over the data column
@@ -559,6 +564,8 @@ class Gator(object):
 
             # Sanity check: the data column sum should match the original
             valueFactors = [r[self.VALUE_FACTOR_COL] for r in tempNewRows]
+            print(sum(valueFactors))
+            print(row[dataCol])
 
             assert math.isclose(sum(valueFactors), row[dataCol])
 

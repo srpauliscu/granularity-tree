@@ -490,16 +490,13 @@ def CompareWithAnswerRelaxed(resDf: pd.DataFrame, answerKeyDf: pd.DataFrame) -> 
     joinedDf = pd.merge(answerKeyDf, resDf, left_index=True,
                         right_index=True)
 
-    # Check that all of them have a match for each timestamp
+    # Full join on the timestamps
     joinedDf['Matching'] = joinedDf.apply(lambda x: math.isclose(
         x[T_DATA_COL + '_x'], x[T_DATA_COL + '_y']), axis=1)
     
 
-    # Testing
-    joinedDf = joinedDf.iloc[2:]
-
-    # For each timestamp, check there is at least one match in the result
-    assert joinedDf.groupby(joinedDf.index)['Matching'].any().all()
+    # For each timestamp+value combo, check there is at least one match in the result
+    assert joinedDf.groupby([joinedDf.index, T_DATA_COL + "_x"])['Matching'].any().all()
 
 
 
@@ -516,7 +513,7 @@ def testTemporalCopy():
     # Generate the test data
     random.seed(42)
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2020, month=4, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2020, month=7, day=1, hour=1, minute=0, second=0)
 
     sampleDfDict = {}
     for unit in levels:
@@ -585,8 +582,6 @@ def testTemporalCopy():
 
         # Do the comparison
         CompareWithAnswerRelaxed(curResDf, answerKeyDf)
-
-
 
 
 
