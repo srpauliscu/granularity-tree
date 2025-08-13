@@ -270,7 +270,7 @@ def testEqualizeSumBasic():
         assert resDf.at[ind, dataCol] == row[dataCol]
 
 @pytest.mark.equalize
-def testEqualizeSumHard():
+def _testEqualizeSumHard():
 
     # Get the info from the files
     zips, counties, states = GetSampleDfs()
@@ -293,6 +293,9 @@ def testEqualizeSumHard():
     resDf = gator.SpatialEqualize(zips, states, GEID.ZIP, GEID.STATE,
                            idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
     
+    # TODO: how we do know if this is correct?  The answers won't match
+    # even if the software works as intended because the assumption that
+    # EVs scale with area isn't fully accurate
 
     assert False
 

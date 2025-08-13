@@ -10,6 +10,13 @@ from src.entities import *
 
 
 
+ts1 = pd.Timestamp(year=2020, month=6, day=1, hour=0, minute=0, second=0)
+ts2 = pd.Timestamp(year=2020, month=7, day=1, hour=0, minute=0, second=0)
+
+print((ts2 - ts1).total_seconds())
+
+
+quit()
 
 df = pd.DataFrame([[0, 2, 3], [-1, -1, -1], [0, 4, 1], [10, 20, 30]],
                   index=[4, 4, 5, 6], columns=['A', 'B', 'C'])

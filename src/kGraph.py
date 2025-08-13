@@ -82,7 +82,7 @@ class GranularityGraph(object):
         self.size = 0
 
         #: dict[EdgeWeight: np.array]: The adjacency matrices
-        self.graphs = {w: np.zeros((self.maxSize, self.maxSize), dtype=np.int32) for w in EdgeType}
+        self.graphs = {w: np.zeros((self.maxSize, self.maxSize), dtype=np.float64) for w in EdgeType}
 
         # Initialize them with None to identify invalid accesses
         #for k in self.graphs:
@@ -229,12 +229,13 @@ class GranularityGraph(object):
             if (not n1 == n2) and n1i == n2i:
                 msg = f"Nodes {n1.id} and {n2.id} were assigned same index."
                 raise RuntimeError(msg)
-
+            
 
             # Update both i,j and j,i to maintain symmetry
             adjMat = self.graphs[edgeType]
             adjMat[n1i, n2i] = weight
             adjMat[n2i, n1i] = weight
+
 
             # Make sure the graph is saved again
             self.graphs[edgeType] = adjMat

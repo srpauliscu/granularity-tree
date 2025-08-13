@@ -494,7 +494,7 @@ class Gator(object):
             origSize = (endTs - startTs).total_seconds()
 
             # Grab the full interval in the right units
-            # Months and years can't use floor
+            # Months and years can't use floor()
             if destType == TID.MONTH:
                 intervalStartTs = startTs.to_period(destType.value).to_timestamp()
                 intervalEndTs = endTs.to_period(destType.value).to_timestamp() + pd.tseries.offsets.MonthBegin(1)#endTs.month)
@@ -544,9 +544,10 @@ class Gator(object):
                     overlap = ((intervalStartTs + ONE_UNIT) - startTs).total_seconds()
                 else:
                     # Any units inbetween are fully covered
-                    overlap = ((intervalStartTs + ONE_UNIT) - intervalStartTs).total_seconds()
+                    overlap = ((curTimeCounter + ONE_UNIT) - curTimeCounter).total_seconds()
 
                 # Sanity check: the overlap should never be bigger than
+                print(f"Second overlap: {overlap}")
                 assert overlap <= origSize
 
                 # Calculate the factor

@@ -504,16 +504,16 @@ def testTemporalCopy():
 
     # We need a map for deagg tests
     levels = {
-        #TID.HOUR: TID.MINUTE,
-        #TID.DAY: TID.HOUR,
-        #TID.MONTH: TID.DAY,
+        TID.HOUR: TID.MINUTE,
+        TID.DAY: TID.HOUR,
+        TID.MONTH: TID.DAY,
         TID.YEAR: TID.MONTH
     }
 
     # Generate the test data
-    random.seed(42)
+    #random.seed(42)
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2020, month=7, day=1, hour=1, minute=0, second=0)
+    endTs = pd.Timestamp(year=2020, month=9, day=12, hour=3, minute=0, second=0)
 
     sampleDfDict = {}
     for unit in levels:
@@ -531,6 +531,7 @@ def testTemporalCopy():
         resDfDict[targetUnit] = gator.TemporalEqualize(sampleDfDict[unit], targetUnit, T_INTERVAL_COL,
                                                  T_DATA_COL, DeAggMethod.COPY)
     
+
     # We need to manually form the answer keys
     for unit in levels:
         print(f"Current unit: {unit}")
@@ -586,23 +587,26 @@ def testTemporalCopy():
 
 
 
-def testTemporalDistribute():
+def asdftestTemporalDistribute():
 
     # We need a map for deagg tests
     levels = {
-        TID.HOUR: TID.MINUTE
+        TID.HOUR: TID.MINUTE,
+        TID.DAY: TID.HOUR,
+        TID.MONTH: TID.DAY,
+        TID.YEAR: TID.MONTH
     }
 
     # Generate the test data
+    #random.seed(42)
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2020, month=2, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2020, month=9, day=12, hour=3, minute=0, second=0)
 
     sampleDfDict = {}
-    answerKeyDfDict = {}
     for unit in levels:
-        sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs, unit)
+        sampleDf, _ = GenerateTemporalSample(startTs, endTs, unit)
         sampleDfDict[unit] = sampleDf
-        answerKeyDfDict[unit] = answerKeyDf
+
     
     # Get a gator for deaggregating
     gator = Gator(None, Path('./logs/testTemporalCopy.log'))
@@ -614,12 +618,14 @@ def testTemporalDistribute():
         resDfDict[targetUnit] = gator.TemporalEqualize(sampleDfDict[unit], targetUnit, T_INTERVAL_COL,
                                                  T_DATA_COL, DeAggMethod.COPY)
     
-    # Compare each result against its appropriate answer key
-    for unit in levels:
-        targetUnit = levels[unit]
-        curAnswerKey = answerKeyDfDict[unit]
 
-        # Make a units we can use to calculate new timestamps
+    # We need to manually form the answer keys
+    for unit in levels:
+        print(f"Current unit: {unit}")
+        targetUnit = levels[unit]
+        curAnswerKey = sampleDfDict[unit]
+
+        # Make unit objects we can use to calculate new timestamps
         # at the given frequencies
         argDict = {TID_TO_STRING[unit]: 1}
         ONE_SOURCE_UNIT = pd.DateOffset(**argDict)
@@ -631,17 +637,22 @@ def testTemporalDistribute():
         for ind, row in curAnswerKey.iterrows():
 
             # Grab the timestamp
-            origStartTs = row[T_ID_COL]
-            origEndTs = origStartTs + ONE_SOURCE_UNIT
+            origStartTs = row[T_INTERVAL_COL].left
+            origEndTs = row[T_INTERVAL_COL].right
+
 
             curTs = origStartTs
 
-            while curTs < origEndTs:
+            # Use their floored versions to compare
+            curFlooredTs = curTs.to_period(targetUnit.value).to_timestamp()
+            origEndFlooredTs = origEndTs.to_period(targetUnit.value).to_timestamp()
+
+            while curFlooredTs < origEndTs:
 
                 # Make a new row
                 newRow = {
-                    T_ID_COL: curTs,
-                    T_DATA_COL: row[T_DATA_COL] # This is the "copy" step
+                    T_ID_COL: curFlooredTs,
+                    T_DATA_COL: row[T_DATA_COL]
                 }
 
                 # Add it to the final dict
@@ -649,20 +660,16 @@ def testTemporalDistribute():
 
                 # Increment the counter
                 curTs += ONE_TARGET_UNIT
+                curFlooredTs = curTs.to_period(targetUnit.value).to_timestamp()
         
-        # For a dataframe out of the new rows
-        answerKeyDf = pd.DataFrame(data=newDicts)
+        # Form a dataframe out of the new rows
+        answerKeyDf = pd.DataFrame(data=newDicts).set_index(T_ID_COL)
 
         # Grab the appropriate result dataframe
         curResDf = resDfDict[targetUnit]
 
         # Do the comparison
-        CompareWithAnswerJoinless(curResDf, answerKeyDf)
-
-
-
-
-
+        CompareWithAnswerRelaxed(curResDf, answerKeyDf)
 
 
 

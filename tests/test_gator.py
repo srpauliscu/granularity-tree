@@ -32,7 +32,7 @@ def testSum():
     tot = groupedDf[[dataCol]].sum()
 
     # Now, get the gator to do it
-    resDf = gator.Aggregate(smallDf, idCol, dataCol, AggMethod.SUM)
+    resDf = gator.Aggregate(smallDf, dataCol, AggMethod.SUM)
 
     # Result df should look exactly like largeDf/totalDf, though in a real-world use case,
     # the data would be different.
@@ -72,7 +72,7 @@ def testMean():
     print(groupedDf)
     
     # Get the gator to do it
-    resDf = gator.Aggregate(smallDf, idCol, dataCol, AggMethod.MEAN)
+    resDf = gator.Aggregate(smallDf, dataCol, AggMethod.MEAN)
 
     # Check that the results match
     for ind, row in groupedDf.iterrows():
@@ -96,7 +96,7 @@ def testDistribute():
     largeDf = gator.FlattenDataframe(largeDf, largeDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
 
     # Get the gator to to the distribution
-    resDf = gator.DeAggregate(largeDf, idCol, dataCol, DeAggMethod.DISTRIBUTE)
+    resDf = gator.DeAggregate(largeDf, dataCol, DeAggMethod.DISTRIBUTE)
 
     # Check that the results match
     for ind, row in smallDf.iterrows():
@@ -121,7 +121,7 @@ def testCopy():
     largeDf = gator.FlattenDataframe(largeDf, largeDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
 
     # Get the gator to to the copying
-    resDf = gator.DeAggregate(largeDf, idCol, dataCol, DeAggMethod.COPY)
+    resDf = gator.DeAggregate(largeDf, dataCol, DeAggMethod.COPY)
 
     print(smallDf)
     print(largeDf)
