@@ -39,6 +39,15 @@ class Gator(object):
     VALUE_FACTOR_COL = '_vf_'
     NEW_VALUE_COL = '_value_'
     ERROR_COL = '_error_'
+    MATCHING_DEST_NODES_COL = '_matchingDestNodes_'
+
+    # Variables for spatio-temporal agg/deagg
+    S_FACTOR_COL = '_sFactor_'
+    T_FACTOR_COL = '_tFactor_'
+    S_VALUE_FACTOR_COL = '_svf_'
+    T_VALUE_FACTOR_COL = '_tvf_'
+
+    INTERVAL_COL = '_newInterval_'
 
     # Flag for doing additional cleanup
     DEBUG = True
@@ -105,15 +114,21 @@ class Gator(object):
             
             # Add a row for each destination
             for did in factors:
-                newDicts.append(
-                    {
-                        idCol: ind,
-                        dataCol: row[dataCol],
-                        self.DEST_COL: did,
-                        self.FACTOR_COL: factors[did],
-                        self.VALUE_FACTOR_COL: row[dataCol] * factors[did]
-                    }
-                )
+                curDict = {}
+
+                # New/hardcoded values first
+                curDict[idCol] = ind
+                curDict[self.DEST_COL] = did
+                curDict[self.FACTOR_COL] = factors[did]
+                curDict[self.VALUE_FACTOR_COL] = row[dataCol] * factors[did]
+
+                # Copy over the rest of the row
+                for col, value in row.items():
+                    if col == idCol:
+                        continue
+                    curDict[col] = value
+
+                newDicts.append(curDict)
         
         # Make it a dataframe
         expandedDf = pd.DataFrame(newDicts)
@@ -230,9 +245,172 @@ class Gator(object):
         # Return it
         return resDf
 
+    def MakeNodeObjects(self, ids1: pd.Series, ids2: pd.Series,
+                  entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:
+        
+        """
+        Make actual node objects from the given data
+
+        """
+
+        # Go through each id and instantiate the matching dummy node
+        # TODO: Should have a way to check the validity of the ids
+
+        nodes1 = []
+        for id in ids1:
+            nodes1.append(Node(id, None, entityType1))
+
+        nodes2 = []
+        for id in ids2:
+            nodes2.append(Node(id, None, entityType2))
+
+        return nodes1, nodes2
+    
+    def CalcSpatialFactors(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
+                           sourceType: GEID, destType: GEID,
+                           sourceIdCol: str, destIdCol: str,
+                           sourceDataCol: str, edgeType: EdgeType,
+                           ignoreMissing: bool = False,
+                           ignoreIncomplete: bool = False) -> pd.DataFrame:
+        
+        '''
+        Find matching destination nodes for the given source column.
+        Return the same dataframe with a new column of [destination nodes].
+        
+        '''
+
+        # 1.) Make the nodes
+        sourceNodes, destNodes = self.MakeNodeObjects(sourceDf[sourceIdCol],
+                                                      destDf[destIdCol],
+                                                      sourceType, destType)
+        
+        # Get the populated version of each node from the graph
+        newSourceNodes = []
+        newDestNodes = []
+        for sn in sourceNodes:
+            if not self.kGraph.NodeExists(sn):
+                msg = f"Source node {sn.id} does not exist in the graph."
+
+                # Throw an error if specified
+                if not ignoreMissing:
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
+                
+                # Otherwise just log the miss and continue
+                else:
+                    self.logger.warning(msg)
+                    continue
+            
+            # Get the real node from the graph
+            newSn = self.kGraph.GetNode(sn.id, sourceType)
+            newSourceNodes.append(newSn)
+
+        # Do the same thing but with the destination nodes
+        for dn in destNodes:
+            if not self.kGraph.NodeExists(dn):
+                msg = f"Dest node {dn.id} does not exist in the graph."
+
+                # Throw an error if specified
+                if not ignoreMissing:
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
+                
+                # Otherwise just log the miss and continue
+                else:
+                    self.logger.warning(msg)
+                    continue
+            
+            # Get the real node from the graph
+            newDn = self.kGraph.GetNode(dn.id, destType)
+            newDestNodes.append(newDn)
+
+        # Override the dummy nodes
+        sourceNodes = newSourceNodes
+        destNodes = newDestNodes
+
+        # 2.) For each source node, find all matching destNodes
+        allMatches = {}
+        for sn in sourceNodes:
+
+            # Get the matching dest nodes
+            matches = self.kGraph.GetMatches(sn, destNodes, edgeType)
+            allMatches[sn] = matches
+
+        # allMatches: {sourceNode: {destNode1: weight1, destNode2: weight2, ...}, ...}
+
+        # 3.) Calculate mult factors
+        allFactors = {}
+        for sn in allMatches:
+            for dn in allMatches[sn]:
+
+                # Grab the weight
+                weight = allMatches[sn][dn]
+
+                # Divide the weight by the value (e.g. area) of the source
+                factor = weight / sn.values[edgeType]
+
+                # Sanity check
+                if factor > 1:
+                    msg = f"Factor of {factor} for {dn} - {sn} is invalid.\n \
+                            destValues = {dn.values}\n \
+                            sourceValues = {dn.values}\n \
+                            weight = {weight}"
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
+
+                # Save it into a new dict
+                if not sn.id in allFactors:
+                    allFactors[sn.id] = {}
+                allFactors[sn.id][dn.id] = factor
+
+        # Sanity check to make sure the ids were indeed unique
+        if not len(allMatches) == len(allFactors):
+            msg = f"allMatches and allFactors did not match up in length."
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+        for sn in allMatches:
+            if not len(allMatches[sn]) == len(allFactors[sn.id]):
+                msg = f"allMatches and allFactors did not match up in length for source node {sn.id}."
+                self.logger.error(msg)
+                raise RuntimeError(msg)
+        
+        # Set the index so we can iterrate over it
+        sourceDf = sourceDf.set_index(sourceIdCol)
+
+        # Flatten the dataframe for easy grouby operations
+        expandedDf = self.FlattenDataframe(sourceDf, allFactors, sourceIdCol, sourceDataCol)
+
+        # If ignoreIncomplete is false, check that each destination is 100% covered
+        # We are assuming the sources are mutually exclusive (since they are the same type)
+        if not ignoreIncomplete:
+
+            # Just need to add the weights up for each edge for each dest Node
+            allTots = {}
+            for sn in allMatches:
+                for dn in allMatches[sn]:
+
+                    # Make a new entry as needed
+                    if not dn in allTots:
+                        allTots[dn] = 0
+                    
+                    allTots[dn] += allMatches[sn][dn]
+
+            # Check that they are all close to the value recorded in the graph
+            for dn in allTots:
+                if not math.isclose(allTots[dn], dn.values[edgeType], rel_tol=0.1):
+                    msg = f"Total weight {allTots[dn]} for {dn.id} is invalid.\nFactors: {allTots}\n"
+                    #self.logger.error()
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
+
+        # Return it
+        return expandedDf
+
+
+
 
     def SpatialEqualize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
-                sourceType: GEID | TID, destType: GEID | TID,
+                sourceType: GEID, destType: GEID,
                 sourceIdCol: str, destIdCol: str,
                 sourceDataCol: str,
                 method: AggMethod | DeAggMethod,
@@ -266,135 +444,12 @@ class Gator(object):
             self.logger.error(msg)
             raise RuntimeError(msg)
 
+        # Use the graph to calculate the factors and valueFactors
+        expandedDf = self.CalcSpatialFactors(sourceDf, destDf, sourceType, destType,
+                                             sourceIdCol, destIdCol, sourceDataCol,
+                                             edgeType, ignoreMissing=ignoreMissing,
+                                             ignoreIncomplete=ignoreIncomplete)
 
-        # 1.) Make the nodes
-        sourceNodes, destNodes = self.MakeNodeObjects(sourceDf[sourceIdCol],
-                                                      destDf[destIdCol],
-                                                      sourceType, destType)
-        
-        # Get the populated version of each node from the graph
-        newSourceNodes = []
-        newDestNodes = []
-        for sn in sourceNodes:
-            if not self.kGraph.NodeExists(sn):
-                msg = f"Source node {sn.id} does not exist in the graph."
-
-                # Throw an error if specified
-                if not ignoreMissing:
-                    self.logger.error(msg)
-                    raise RuntimeError(msg)
-                
-                # Otherwise just log the miss and skip it
-                else:
-                    self.logger.warning(msg)
-                    continue
-            
-            # Get the real node from the graph
-            newSn = self.kGraph.GetNode(sn.id, sourceType)
-            newSourceNodes.append(newSn)
-        
-        for dn in destNodes:
-            if not self.kGraph.NodeExists(dn):
-                msg = f"Source node {dn.id} does not exist in the graph."
-
-                # Throw an error if specified
-                if not ignoreMissing:
-                    self.logger.error(msg)
-                    raise RuntimeError(msg)
-                
-                # Otherwise just log the miss and skip it
-                else:
-                    self.logger.warning(msg)
-                    continue
-            
-            # Get the real node from the graph
-            newDn = self.kGraph.GetNode(dn.id, destType)
-            newDestNodes.append(newDn)
-
-        # Override the old lists
-        sourceNodes = newSourceNodes
-        destNodes = newDestNodes
-
-
-        # 2.) For each source node, find all matching destNodes
-        allMatches = {}
-        for sn in sourceNodes:
-
-            # Get the matching dest nodes
-            matches = self.kGraph.GetMatches(sn, destNodes, edgeType)
-            allMatches[sn] = matches
-
-        # allMatches: {sourceNode: {destNode1: weight1, destNode2: weight2, ...}, ...}
-
-        # 4.) Calculate mult factors
-        allFactors = {}
-        for sn in allMatches:
-            for dn in allMatches[sn]:
-                
-                # Grab the weight
-                weight = allMatches[sn][dn]
-
-                # Divide the weight by the value (e.g. area) of the source
-                factor = weight / sn.values[edgeType]
-
-                # Sanity check
-                if factor > 1:
-                    msg = f"Factor of {factor} for {dn} - {sn} is invalid.\n \
-                            destValues = {dn.values}\n \
-                            sourceValues = {dn.values}\n \
-                            weight = {weight}"
-                    self.logger.error(msg)
-                    raise RuntimeError(msg)
-                
-                # Save it into a new dict
-                if not sn.id in allFactors:
-                    allFactors[sn.id] = {}
-                allFactors[sn.id][dn.id] = factor
-
-        
-        # Sanity check to make sure the ids were indeed unique
-        if not len(allMatches) == len(allFactors):
-            msg = f"allMatches and allFactors did not match up in length."
-            self.logger.error(msg)
-            raise RuntimeError(msg)
-        for sn in allMatches:
-            if not len(allMatches[sn]) == len(allFactors[sn.id]):
-                msg = f"allMatches and allFactors did not match up in length for source node {sn.id}."
-                self.logger.error(msg)
-                raise RuntimeError(msg)
-
-        # Set the index so we can iterrate over it
-        sourceDf = sourceDf.set_index(sourceIdCol)
-
-        # Flatten the dataframe for easy groupby operations
-        expandedDf = self.FlattenDataframe(sourceDf, allFactors, sourceIdCol, sourceDataCol)
-
-        # Calculate the value*factor as a new column for easy agg/deagg
-        expandedDf[self.VALUE_FACTOR_COL] = expandedDf[sourceDataCol] * expandedDf[self.FACTOR_COL]
-
-        # If ignoreIncomplete is false, check that each destination is 100% covered
-        # We are assuming the sources are mutually exclusive (since they are the same type)
-        if not ignoreIncomplete:
-
-            # Just need to add the weights up for each edge for each dest Node
-            allTots = {}
-            for sn in allMatches:
-                for dn in allMatches[sn]:
-
-                    # Make a new entry as needed
-                    if not dn in allTots:
-                        allTots[dn] = 0
-                    
-                    allTots[dn] += allMatches[sn][dn]
-
-            # Check that they are all close to the value recorded in the graph
-            for dn in allTots:
-                if not math.isclose(allTots[dn], dn.values[edgeType], rel_tol=0.1):
-                    msg = f"Total weight {allTots[dn]} for {dn.id} is invalid.\nFactors: {allTots}\n"
-                    #self.logger.error()
-                    self.logger.error(msg)
-                    raise RuntimeError(msg)
-        
 
         # 5.) Do the calculation
         # We have everything we need: the destNodes, what nodes belong to each destNode, and
@@ -603,26 +658,77 @@ class Gator(object):
 
         return resDf
 
+    def FormTimeIntervals(self, sourceDf: pd.DataFrame):
+        pass
+
+    def SpatioTemporalEqualize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame, destTType: TID,
+                               sourceSType: GEID, destSType: GEID, sourceSIdCol: str,
+                               destSIdCol: str, sourceTIdCol: str, destTIdCol: str,
+                               sourceDataCol: str,
+                               sMethod: AggMethod | DeAggMethod, tMethod: AggMethod | DeAggMethod,
+                               edgeType: EdgeType, ignoreMissing: bool = False,
+                               ignoreIncomplete: bool = False) -> pd.DataFrame:
         
 
-    def MakeNodeObjects(self, ids1: pd.Series, ids2: pd.Series,
-                  entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:
+        '''
+        Do a combination spatio-temporal scaling.
+
+        1.) Group into spatial destination type and get an interval for
+            the time periods it covers.
+            TODO: What do we do with the data?  Do we start aggregating?
+        2.) 
         
-        """
-        Make actual node objects from the given data
+        '''
 
-        """
+        # 0.) Input validation
+        if not (type(sMethod) == AggMethod or type(sMethod) == DeAggMethod):
+            msg = f"SpatioTemporalEqualize spatial method was invalid type {type(sMethod)}."
+            self.logger.error(msg)
+            raise TypeError(msg)
+        
+        if not (type(tMethod) == AggMethod or type(sMethod) == DeAggMethod):
+            msg = f"SpatioTemporalEqualize temporal method was invalid type {type(sMethod)}."
+            self.logger.error(msg)
+            raise TypeError(msg)
+        
+        # We need a graph for spatial scaling
+        if self.kGraph is None:
+            msg = f"SpatioTemporalEqualize requires a kGraph for scaling."
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+        
+        # Use the graph to calculate the spatial factors
+        expandedDf = self.CalcSpatialFactors(sourceDf, destDf, sourceSType, destSType,
+                                             sourceSIdCol, destSIdCol, sourceDataCol,
+                                             edgeType, ignoreMissing, ignoreIncomplete)
+        
+        # Rename to avoid clashes later
+        expandedDf = expandedDf.rename(columns={self.FACTOR_COL: self.S_FACTOR_COL})
+        
+        # Calculate the spatial value*factor as a new column for easy agg/deagg
+        expandedDf[self.S_VALUE_FACTOR_COL] = expandedDf[sourceDataCol] * expandedDf[self.S_FACTOR_COL]
 
-        # Go through each id and instantiate the matching dummy node
-        # TODO: Should have a way to check the validity of the ids
+        # Now, do a groupby on the spatial source-dest pair to get a timestamp range, if needed
+        spatialGrouped = expandedDf.groupby([expandedDf.index, self.DEST_COL])
 
-        nodes1 = []
-        for id in ids1:
-            nodes1.append(Node(id, None, entityType1))
+        startTimestamps = spatialGrouped[sourceTIdCol].min()
+        endTimestamps = spatialGrouped[sourceTIdCol].max()
 
-        nodes2 = []
-        for id in ids2:
-            nodes2.append(Node(id, None, entityType2))
+        # Merge the timestamps and make intervals
+        mergedTimestamps = pd.merge(startTimestamps, endTimestamps, left_index=True, right_index=True)
+        mergedTimestamps[self.INTERVAL_COL] = \
+            mergedTimestamps.apply(lambda x: pd.Interval(x[sourceTIdCol + '_x'], x[sourceTIdCol + '_y']), axis=1)
+    
+        # Only keep the interval column
+        mergedTimestamps = mergedTimestamps.drop([sourceTIdCol + '_x', sourceTIdCol + '_y'])
 
-        return nodes1, nodes2
+        # Join the interval column with the flattened dataframe
+        expandedDf = pd.merge(expandedDf, mergedTimestamps, left_index=True, right_index=True)
+
+        # Now, for each source-dest pair
+
+        
+
+
+
 

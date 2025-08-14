@@ -10,19 +10,18 @@ from src.entities import *
 
 
 
-ts1 = pd.Timestamp(year=2020, month=6, day=1, hour=0, minute=0, second=0)
-ts2 = pd.Timestamp(year=2020, month=7, day=1, hour=0, minute=0, second=0)
+df1 = pd.DataFrame([[0, 2, 3], [-1, -1, -1], [0, 4, 1], [10, 20, 30]],
+                  index=[1,2,3,4], columns=['A', 'B', 'C'])
 
-print((ts2 - ts1).total_seconds())
+df2 = pd.DataFrame([[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[11], [12]],
+                   index = [1,1,1,2,2,2,3,3,3,4,4,4], columns=['D'])
 
+mergedDf = pd.merge(df1, df2, left_index=True, right_index=True)
 
-quit()
+print (df1)
+print(df2)
 
-df = pd.DataFrame([[0, 2, 3], [-1, -1, -1], [0, 4, 1], [10, 20, 30]],
-                  index=[4, 4, 5, 6], columns=['A', 'B', 'C'])
-
-for ind, row in df.loc[4].iterrows():
-    print(row['A'])
+print(mergedDf)
 
 
 quit()
