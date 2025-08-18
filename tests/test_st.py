@@ -34,4 +34,5 @@ def testSTBasic():
                                          AggMethod.SUM, AggMethod.SUM,
                                          EdgeType.AREA, True, True)
     
+    print(resDf)
     assert False

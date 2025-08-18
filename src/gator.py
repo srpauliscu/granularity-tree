@@ -738,7 +738,9 @@ class Gator(object):
         pd.set_option('display.max_columns', 500)
         pd.set_option('display.width', 1000)
 
-        sdGroups = expandedDf.groupby([sourceSIdCol, self.S_DEST_COL])
+        # We can include the factor to copy it over, as the factor will always be
+        # the same for each s-d pair, so it won't affect the output
+        sdGroups = expandedDf.groupby([sourceSIdCol, self.S_DEST_COL, self.S_FACTOR_COL])
         allRows = []
         for group in sdGroups:
             curDf = group[1]
@@ -750,31 +752,30 @@ class Gator(object):
             # Copy in the source-dest pair
             curResDf[sourceSIdCol] = group[0][0]
             curResDf[self.S_DEST_COL] = group[0][1]
+            curResDf[self.S_FACTOR_COL] = group[0][2]
+
 
             # Save the current results
             allRows.append(curResDf)
 
         
         # Concat them into one dataframe
-        concatDf = pd.concat(allRows).rename(columns={self.S_VALUE_FACTOR_COL: self.VALUE_FACTOR_COL})
+        concatDf = pd.concat(allRows)
 
-        print(concatDf)
 
-        return
         # Do the spatial scaling now
         if type(sMethod) == AggMethod:
-            resDf = self.Aggregate(concatDf, self.VALUE_FACTOR_COL, sMethod)
+            resDf = self.Aggregate(concatDf, self.VALUE_FACTOR_COL, sMethod,
+                                   self.S_DEST_COL, self.S_FACTOR_COL, self.S_VALUE_FACTOR_COL)
         elif type(sMethod) == DeAggMethod:
-            resDf = self.DeAggregate(concatDf, self.VALUE_FACTOR_COL, sMethod)
+            resDf = self.DeAggregate(concatDf, self.VALUE_FACTOR_COL, sMethod,
+                                     self.S_DEST_COL, self.S_FACTOR_COL, self.S_VALUE_FACTOR_COL)
         else:
             # Catch all
             msg = f"Invalid spatial method of type {type(sMethod)} used."
             self.logger.error(msg)
             raise TypeError(msg)
 
-        
-
-        print(resDf)
 
         return resDf
 
