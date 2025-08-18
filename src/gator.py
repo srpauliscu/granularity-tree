@@ -46,6 +46,8 @@ class Gator(object):
     T_FACTOR_COL = '_tFactor_'
     S_VALUE_FACTOR_COL = '_svf_'
     T_VALUE_FACTOR_COL = '_tvf_'
+    S_DEST_COL = '_sDestId_'
+    T_DEST_COL = '_tDestId_'
 
     INTERVAL_COL = '_newInterval_'
 
@@ -138,7 +140,8 @@ class Gator(object):
 
 
     def Aggregate(self, df: pd.DataFrame, dataCol: str,
-                  method: AggMethod)-> pd.DataFrame:
+                  method: AggMethod, destIdCol: str,
+                  fCol: str, vfCol: str)-> pd.DataFrame:
         
         # Input validation
         if not type(method) == AggMethod:
@@ -155,18 +158,18 @@ class Gator(object):
             # Ignore the data column, simply sum up the factors
             # Equivalent to adding a column of 1s for count and
             # multiplying by the factor
-            groupedDf = df.groupby(self.DEST_COL)
-            resDf = groupedDf[[self.FACTOR_COL]].sum()
+            groupedDf = df.groupby(destIdCol)
+            resDf = groupedDf[[fCol]].sum()
             #resDf = groupedDf[[self.FACTOR_COL]].count()
 
         elif method == AggMethod.MEAN:
             # Weighted mean of the source data, via the factor
-            groupedDf = df.groupby(self.DEST_COL).sum()
-            groupedDf[self.VALUE_FACTOR_COL] = \
-                pd.DataFrame(groupedDf[self.VALUE_FACTOR_COL] / groupedDf[self.FACTOR_COL])
+            groupedDf = df.groupby(destIdCol).sum()
+            groupedDf[vfCol] = \
+                pd.DataFrame(groupedDf[vfCol] / groupedDf[fCol])
             
             # We only want the index and the result column
-            resDf = groupedDf[[self.VALUE_FACTOR_COL]]
+            resDf = groupedDf[[vfCol]]
             
 
         elif method == AggMethod.MEDIAN:
@@ -181,8 +184,8 @@ class Gator(object):
             contributes only its share to each destination.
             '''
 
-            groupedDf = df.groupby(self.DEST_COL)
-            resDf = groupedDf[[self.VALUE_FACTOR_COL]].sum()
+            groupedDf = df.groupby(destIdCol)
+            resDf = groupedDf[[vfCol]].sum()
 
         # Check that something was actually added
         if resDf is None or resDf.shape[0] == 0:
@@ -193,9 +196,9 @@ class Gator(object):
         # Rename the column to match the original
         if method == AggMethod.COUNT:
             # Need to keep the dataCol name for error calc
-            resDf = resDf.rename(columns={self.FACTOR_COL: dataCol})
+            resDf = resDf.rename(columns={fCol: dataCol})
         else:
-            resDf = resDf.rename(columns={self.VALUE_FACTOR_COL: dataCol})
+            resDf = resDf.rename(columns={vfCol: dataCol})
 
         
         # Return it as a dataframe
@@ -203,7 +206,8 @@ class Gator(object):
 
 
     def DeAggregate(self, df: pd.DataFrame, dataCol: str,
-                    method: DeAggMethod) -> pd.DataFrame:
+                    method: DeAggMethod, destIdCol: str,
+                    fCol: str, vfCol: str) -> pd.DataFrame:
         
 
         # Input validation
@@ -222,7 +226,7 @@ class Gator(object):
             #print(df)
 
             # Just take the original data and make the destId the index
-            resDf = df[[self.DEST_COL, dataCol]].set_index(self.DEST_COL)
+            resDf = df[[destIdCol, dataCol]].set_index(destIdCol)
 
 
         elif method == DeAggMethod.DISTRIBUTE:
@@ -230,7 +234,7 @@ class Gator(object):
             # Good for quantities, e.g. population
 
             # This was essentially already calculated, in the value*factor column
-            resDf = df[[self.VALUE_FACTOR_COL]]
+            resDf = df[[vfCol]]
 
 
         # Check that something was actually added
@@ -240,7 +244,7 @@ class Gator(object):
             raise RuntimeError(msg)
         
         # Rename the column to match the original
-        resDf = resDf.rename(columns={self.VALUE_FACTOR_COL: dataCol})
+        resDf = resDf.rename(columns={vfCol: dataCol})
 
         # Return it
         return resDf
@@ -350,7 +354,7 @@ class Gator(object):
                 factor = weight / sn.values[edgeType]
 
                 # Sanity check
-                if factor > 1:
+                if factor > 1 and not math.isclose(factor, 1):
                     msg = f"Factor of {factor} for {dn} - {sn} is invalid.\n \
                             destValues = {dn.values}\n \
                             sourceValues = {dn.values}\n \
@@ -457,14 +461,16 @@ class Gator(object):
         # The actual operation depends on 'method'
 
         if type(method) == AggMethod:
-            resDf = self.Aggregate(expandedDf, sourceDataCol, method)
+            resDf = self.Aggregate(expandedDf, sourceDataCol, method,
+                                   self.DEST_COL, self.FACTOR_COL, self.VALUE_FACTOR_COL)
         elif type(method) == DeAggMethod:
-            resDf = self.DeAggregate(expandedDf, sourceDataCol, method)
+            resDf = self.DeAggregate(expandedDf, sourceDataCol, method,
+                                     self.DEST_COL, self.FACTOR_COL, self.VALUE_FACTOR_COL)
         else:
             # Catch all
             msg = f"Invalid method of type {type(method)} used."
             self.logger.error(msg)
-            raise RuntimeError(msg)
+            raise TypeError(msg)
         
         # 6.) Error calculation
 
@@ -566,10 +572,10 @@ class Gator(object):
             tempNewRows = []
             curTimeCounter = intervalStartTs
 
-            print(f'\n{row[intervalCol]}')
+            #print(f'\n{row[intervalCol]}')
             
             while curTimeCounter < intervalEndTs:
-                print(curTimeCounter)
+                #print(curTimeCounter)
                 newRow = {}
 
                 # Copy over the data column
@@ -602,7 +608,7 @@ class Gator(object):
                     overlap = ((curTimeCounter + ONE_UNIT) - curTimeCounter).total_seconds()
 
                 # Sanity check: the overlap should never be bigger than
-                print(f"Second overlap: {overlap}")
+                #print(f"Second overlap: {overlap}")
                 assert overlap <= origSize
 
                 # Calculate the factor
@@ -620,8 +626,8 @@ class Gator(object):
 
             # Sanity check: the data column sum should match the original
             valueFactors = [r[self.VALUE_FACTOR_COL] for r in tempNewRows]
-            print(sum(valueFactors))
-            print(row[dataCol])
+            #print(sum(valueFactors))
+            #print(row[dataCol])
 
             assert math.isclose(sum(valueFactors), row[dataCol])
 
@@ -647,9 +653,11 @@ class Gator(object):
         expandedDf = pd.DataFrame(data=newRows)
 
         if type(method) == AggMethod:
-            resDf = self.Aggregate(expandedDf, dataCol, method)
+            resDf = self.Aggregate(expandedDf, dataCol, method,
+                                   self.DEST_COL, self.FACTOR_COL, self.VALUE_FACTOR_COL)
         elif type(method) == DeAggMethod:
-            resDf = self.DeAggregate(expandedDf, dataCol, method)
+            resDf = self.DeAggregate(expandedDf, dataCol, method,
+                                     self.DEST_COL, self.FACTOR_COL, self.VALUE_FACTOR_COL)
         else:
             # Catch all
             msg = f"Invalid method of type {type(method)} used."
@@ -658,8 +666,6 @@ class Gator(object):
 
         return resDf
 
-    def FormTimeIntervals(self, sourceDf: pd.DataFrame):
-        pass
 
     def SpatioTemporalEqualize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame, destTType: TID,
                                sourceSType: GEID, destSType: GEID, sourceSIdCol: str,
@@ -697,35 +703,81 @@ class Gator(object):
             self.logger.error(msg)
             raise RuntimeError(msg)
         
-        # Use the graph to calculate the spatial factors
+        # Use the graph to calculate the spatial factors and value factors
         expandedDf = self.CalcSpatialFactors(sourceDf, destDf, sourceSType, destSType,
                                              sourceSIdCol, destSIdCol, sourceDataCol,
                                              edgeType, ignoreMissing, ignoreIncomplete)
         
         # Rename to avoid clashes later
-        expandedDf = expandedDf.rename(columns={self.FACTOR_COL: self.S_FACTOR_COL})
+        expandedDf = expandedDf.rename(columns={self.FACTOR_COL: self.S_FACTOR_COL,
+                                                self.VALUE_FACTOR_COL: self.S_VALUE_FACTOR_COL,
+                                                self.DEST_COL: self.S_DEST_COL})
         
-        # Calculate the spatial value*factor as a new column for easy agg/deagg
-        expandedDf[self.S_VALUE_FACTOR_COL] = expandedDf[sourceDataCol] * expandedDf[self.S_FACTOR_COL]
-
         # Now, do a groupby on the spatial source-dest pair to get a timestamp range, if needed
-        spatialGrouped = expandedDf.groupby([expandedDf.index, self.DEST_COL])
+        if not isinstance(expandedDf[sourceTIdCol].dtype, pd.IntervalDtype):
+            spatialGrouped = expandedDf.groupby([expandedDf.index, self.DEST_COL])
 
-        startTimestamps = spatialGrouped[sourceTIdCol].min()
-        endTimestamps = spatialGrouped[sourceTIdCol].max()
+            startTimestamps = spatialGrouped[sourceTIdCol].min()
+            endTimestamps = spatialGrouped[sourceTIdCol].max()
 
-        # Merge the timestamps and make intervals
-        mergedTimestamps = pd.merge(startTimestamps, endTimestamps, left_index=True, right_index=True)
-        mergedTimestamps[self.INTERVAL_COL] = \
-            mergedTimestamps.apply(lambda x: pd.Interval(x[sourceTIdCol + '_x'], x[sourceTIdCol + '_y']), axis=1)
-    
-        # Only keep the interval column
-        mergedTimestamps = mergedTimestamps.drop([sourceTIdCol + '_x', sourceTIdCol + '_y'])
+            # Merge the timestamps and make intervals
+            mergedTimestamps = pd.merge(startTimestamps, endTimestamps, left_index=True, right_index=True)
+            mergedTimestamps[self.INTERVAL_COL] = \
+                mergedTimestamps.apply(lambda x: pd.Interval(x[sourceTIdCol + '_x'], x[sourceTIdCol + '_y']), axis=1)
+        
+            # Only keep the interval column
+            mergedTimestamps = mergedTimestamps.drop([sourceTIdCol + '_x', sourceTIdCol + '_y'])
 
-        # Join the interval column with the flattened dataframe
-        expandedDf = pd.merge(expandedDf, mergedTimestamps, left_index=True, right_index=True)
+            # Join the interval column with the flattened dataframe
+            expandedDf = pd.merge(expandedDf, mergedTimestamps, left_index=True, right_index=True)
 
-        # Now, for each source-dest pair
+
+            # Rename it back to the original name
+            expandedDf = expandedDf.rename(columns={self.INTERVAL_COL: sourceTIdCol})
+
+        # Now, for each source-dest pair, do the temporal operation
+        pd.set_option('display.max_columns', 500)
+        pd.set_option('display.width', 1000)
+
+        sdGroups = expandedDf.groupby([sourceSIdCol, self.S_DEST_COL])
+        allRows = []
+        for group in sdGroups:
+            curDf = group[1]
+
+            curResDf = self.TemporalEqualize(curDf, destTType,
+                                             sourceTIdCol, self.S_VALUE_FACTOR_COL,
+                                             tMethod)
+            
+            # Copy in the source-dest pair
+            curResDf[sourceSIdCol] = group[0][0]
+            curResDf[self.S_DEST_COL] = group[0][1]
+
+            # Save the current results
+            allRows.append(curResDf)
+
+        
+        # Concat them into one dataframe
+        concatDf = pd.concat(allRows).rename(columns={self.S_VALUE_FACTOR_COL: self.VALUE_FACTOR_COL})
+
+        print(concatDf)
+
+        return
+        # Do the spatial scaling now
+        if type(sMethod) == AggMethod:
+            resDf = self.Aggregate(concatDf, self.VALUE_FACTOR_COL, sMethod)
+        elif type(sMethod) == DeAggMethod:
+            resDf = self.DeAggregate(concatDf, self.VALUE_FACTOR_COL, sMethod)
+        else:
+            # Catch all
+            msg = f"Invalid spatial method of type {type(sMethod)} used."
+            self.logger.error(msg)
+            raise TypeError(msg)
+
+        
+
+        print(resDf)
+
+        return resDf
 
         
 

@@ -10,6 +10,10 @@ from src.gator import *
 from pathlib import Path
 import shutil
 from collections.abc import Callable
+import random
+
+# To reduce code duplication
+from src.connecticutGraph import LoadShapefile, AddLevel
 
 
 TEST_GRAPH_NAME = 'testGraph'
@@ -19,6 +23,13 @@ ZIP_TEST_FILE = Path("./tests/zips.csv")
 COUNTY_TEST_FILE = Path("./tests/counties.csv")
 STATE_TEST_FILE = Path("./tests/states.csv")
 ADJ_TEST_FILE = Path("./tests/adjMat.csv")
+
+
+# Global vars for column names
+T_ID_COL = "_hour_start_"
+T_DATA_COL = "_value_"
+T_INTERVAL_COL = "_interval_"
+ZCTA_COL = 'ZCTA'
 
 COUNTY_ASSIGNMENT = {'s0': [f'c{i}' for i in range(0,4)],
                      's1': [f'c{i}' for i in range(4,6)],
@@ -287,3 +298,187 @@ def GetGatorSamples(gator: Gator, sampleSize: int, idCol: str, dataCol: str) \
 
 
     return smallDf, largeDf
+
+
+def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
+                           unit: TID = TID.HOUR) \
+    -> tuple[pd.DataFrame, pd.DataFrame]:
+
+    # Use this function to generate temporal test data
+
+    answerKeyRows = []
+    sampleRows = []
+    curStartTs = startTs
+    argDict = {TID_TO_STRING[unit]: 1}
+    ONE_UNIT = pd.DateOffset(**argDict)
+    UNIT_TO_SEC_FACTOR = ((curStartTs + ONE_UNIT) - curStartTs).total_seconds()
+
+    # Generate the test data in blocks of units that are subdivided
+    # into intervals randomly
+
+    while curStartTs < endTs:
+
+        # Generate a random length
+        numUnits = 5#random.randint(1,16)
+
+        # Get the end point
+        nextEndTs = min(curStartTs + (ONE_UNIT * numUnits), endTs)
+        numUnits = (nextEndTs - curStartTs).total_seconds() / UNIT_TO_SEC_FACTOR
+
+        # Generate some random data for it
+        value = random.randint(1, 100)*numUnits
+
+        # Each hour in the interval will evenly split the value
+        lastTs = curStartTs
+        curKeyRows = []
+        while lastTs < nextEndTs:# and len(curKeyRows) <= numUnits:
+
+            # Initialize a new row
+            newKeyRow = {}
+
+            # Use the temp timestamp as the "id"
+            newKeyRow[T_ID_COL] = lastTs
+
+            # Cut off the last interval so as to not mess with future intervals
+            nextTs = min(lastTs + ONE_UNIT, nextEndTs)
+
+            # Calculate the relative size of the current unit
+            curSize = (nextTs - lastTs).total_seconds() / (numUnits * UNIT_TO_SEC_FACTOR)
+
+            # Add in its share of the value
+            newKeyRow[T_DATA_COL] = value * curSize
+
+            # Add the row in
+            curKeyRows.append(newKeyRow)
+
+            # Increment the tempTs
+            #lastTs += ONE_UNIT
+            lastTs = nextTs
+
+
+        # Generate a bunch of intervals of random lengths
+        # and use their size to determine their value
+
+        lastIntervalTs = curStartTs
+        nextIntervalTs = None
+        curSampleRows = []
+        minIntervals = 4
+        while lastIntervalTs < nextEndTs:
+
+            # Initialize a new row
+            newSampleRow = {}
+
+            # Get the next endpoint based on a random number of mins
+            # We should have multiple intervals per chunk
+            numMins = random.randint(1, int((UNIT_TO_SEC_FACTOR / 60.) * numUnits / minIntervals))
+
+
+            # Cut off the last interval so as to not mess with future intervals
+            nextIntervalTs = min(lastIntervalTs + pd.Timedelta(numMins, unit=TID.MINUTE.value), nextEndTs)
+            numMins = (nextIntervalTs - lastIntervalTs).total_seconds() / 60.
+
+            # Form the interval
+            curInterval = pd.Interval(left=lastIntervalTs, right=nextIntervalTs)
+            newSampleRow[T_INTERVAL_COL] = curInterval
+
+            # Calculate the value as a fraction of the total time
+            newSampleRow[T_DATA_COL] = value * (numMins / (numUnits * (UNIT_TO_SEC_FACTOR / 60.)))
+
+            # Add the row
+            curSampleRows.append(newSampleRow)
+
+            # Increment the counter
+            lastIntervalTs = nextIntervalTs
+        
+        # Sanity checks:
+
+        # The total value should match the original
+        assert math.isclose(value, sum([row[T_DATA_COL] for row in curKeyRows]))
+        assert math.isclose(value, sum([row[T_DATA_COL] for row in curSampleRows]))
+
+        # Make sure each interval value is realistic
+        for row in curSampleRows:
+            assert row[T_DATA_COL] <= (value * (1./minIntervals))
+
+        
+        # Add the rows to their respective lists
+        answerKeyRows.extend(curKeyRows)
+        sampleRows.extend(curSampleRows)
+
+        # Increment the counter
+        curStartTs = nextEndTs
+
+    # Make them into dataframes
+    answerKeyDf = pd.DataFrame(data=answerKeyRows)
+    sampleDf = pd.DataFrame(data=sampleRows)
+
+    # Final sanity check: the totals should match
+    assert math.isclose(answerKeyDf[T_DATA_COL].sum(), sampleDf[T_DATA_COL].sum())
+
+    return sampleDf, answerKeyDf
+
+def GenerateSTSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
+                     tUnit: TID = TID.HOUR,
+                     load: bool = True,
+                     overwrite: bool = True,
+                     relTol: float = .00001):
+
+    # Form a spatial dataframe based on delaware ZCTA codes
+    DE_FIPS = "10"
+    parentDir = Path("./data/tiger")
+
+    # Let's just get county and ZCTA information
+    countyGdf = LoadShapefile(parentDir, 'county')
+    countyGdf = countyGdf[countyGdf['STATEFP'] == DE_FIPS]
+
+    zctaGdf = LoadShapefile(parentDir, 'zcta')
+
+    # Not exactly just Delaware, but close enough
+    zctaGdf = zctaGdf[zctaGdf['GISJOIN'].str.contains('G197') | 
+                      zctaGdf['GISJOIN'].str.contains('G198') |
+                      zctaGdf['GISJOIN'].str.contains('G199')]
+
+    zctaSeries = zctaGdf['GISJOIN']
+
+    # For each ZCTA, generate a random temporal sample
+    allSamples = []
+    allAnswerKeys = []
+    for zcta in zctaSeries:
+
+        tSampleDf, tAnswerKeyDf = GenerateTemporalSample(startTs, endTs, tUnit)
+
+        # Copy in the zcta as a new column
+        tSampleDf[ZCTA_COL] = zcta
+        tAnswerKeyDf[ZCTA_COL] = zcta
+
+        # Save them
+        allSamples.append(tSampleDf)
+        allAnswerKeys.append(tAnswerKeyDf)
+
+    # Concatenate all samples into two dataframes
+    allSamplesDf = pd.concat(allSamples)
+    allAnswerKeysDf = pd.concat(allAnswerKeys)
+
+    # Sanity check: the sums should be the same
+    assert math.isclose(allSamplesDf[T_DATA_COL].sum(), allAnswerKeysDf[T_DATA_COL].sum())
+
+    # Now, we have data for the ZCTAs in Delaware between start and end timestamps
+
+    # Construct the graph
+    graphsDir = Path("./graphs")
+    graph = GranularityGraph('stTest', Path('./logs/stTestGraph.log'))
+    if load:
+        graph.LoadGraph(graphsDir)
+
+    if not load or len(graph) == 0:
+        graph = AddLevel(graph, countyGdf, zctaGdf,
+                        n1Type=GEID.COUNTY, n2Type=GEID.ZCTA)
+        
+        # Save, if specified
+        if overwrite:
+            graph.SaveGraph(graphsDir)
+        
+    # Get a gator object
+    gator = Gator(graph, Path('./logs/stTestGator.log'))
+
+    return allSamplesDf, allAnswerKeysDf, countyGdf, gator
