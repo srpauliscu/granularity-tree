@@ -126,9 +126,8 @@ class Gator(object):
 
                 # Copy over the rest of the row
                 for col, value in row.items():
-                    if col == idCol:
-                        continue
-                    curDict[col] = value
+                    if not col in curDict:
+                        curDict[col] = value
 
                 newDicts.append(curDict)
         

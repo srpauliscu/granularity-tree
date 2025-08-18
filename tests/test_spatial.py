@@ -41,8 +41,8 @@ def testSum():
     # Go through one at a time to make sure it all matches
     for ind, row in largeDf.iterrows():
 
-        assert tot.at[(ind,), dataCol] == row[dataCol]
-        assert resDf.at[(ind,), dataCol] == row[dataCol]
+        assert tot.at[ind, dataCol] == row[dataCol]
+        assert resDf.at[ind, dataCol] == row[dataCol]
 
 @pytest.mark.aggregate
 def testMean():
@@ -65,22 +65,16 @@ def testMean():
     # This means we need to flatten the large dataframe too
     largeDf = gator.FlattenDataframe(largeDf, largeDf[gator.FACTOR_COL].to_dict(), idCol, dataCol)
 
-    print(largeDf)
-
     groupedDf = largeDf.groupby(idCol)[[gator.VALUE_FACTOR_COL]].mean()
     groupedDf = groupedDf.rename(columns={gator.VALUE_FACTOR_COL: dataCol})
 
-    #print(smallDf)
-    #print(largeDf)
-    print(groupedDf)
-    
     # Get the gator to do it
     resDf = gator.Aggregate(smallDf, dataCol, AggMethod.MEAN,
                             gator.DEST_COL, gator.FACTOR_COL, gator.VALUE_FACTOR_COL)
 
     # Check that the results match
     for ind, row in groupedDf.iterrows():
-        assert resDf.at[(ind,), dataCol] == row[dataCol]
+        assert resDf.at[ind, dataCol] == row[dataCol]
 
 
 @pytest.mark.deaggregate
@@ -128,13 +122,9 @@ def testCopy():
     # Get the gator to to the copying
     resDf = gator.DeAggregate(largeDf, dataCol, DeAggMethod.COPY,
                               gator.DEST_COL, gator.FACTOR_COL, gator.VALUE_FACTOR_COL)
-
-    print(smallDf)
-    print(largeDf)
-    print(resDf)
-
+    
     # Check that each id in the smallDf was correctly assigned
     # the value of its owner id
     for ind, row in smallDf.iterrows():
         for did in row[gator.DEST_COL]:
-            assert resDf.at[(did,), dataCol] == largeDf.at[did, dataCol]
+            assert resDf.at[did, dataCol] == largeDf.at[did, dataCol]
