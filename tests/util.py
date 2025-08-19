@@ -26,7 +26,7 @@ ADJ_TEST_FILE = Path("./tests/adjMat.csv")
 
 
 # Global vars for column names
-T_ID_COL = "_hour_start_"
+T_ID_COL = "_timestamp_start_"
 T_DATA_COL = "_value_"
 T_INTERVAL_COL = "_interval_"
 ZCTA_COL = 'ZCTA'
@@ -423,20 +423,20 @@ def GenerateSTSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
                      overwrite: bool = True,
                      relTol: float = .00001):
 
-    # Form a spatial dataframe based on delaware ZCTA codes
-    DE_FIPS = "10"
+    # Form a spatial dataframe based on Rhode Island ZCTA codes
+    # RI only has 5 counties
+    STATE_FIPS = "44"
     parentDir = Path("./data/tiger")
 
     # Let's just get county and ZCTA information
     countyGdf = LoadShapefile(parentDir, 'county')
-    countyGdf = countyGdf[countyGdf['STATEFP'] == DE_FIPS]
+    countyGdf = countyGdf[countyGdf['STATEFP'] == STATE_FIPS]
 
     zctaGdf = LoadShapefile(parentDir, 'zcta')
 
-    # Not exactly just Delaware, but close enough
-    zctaGdf = zctaGdf[zctaGdf['GISJOIN'].str.contains('G197') | 
-                      zctaGdf['GISJOIN'].str.contains('G198') |
-                      zctaGdf['GISJOIN'].str.contains('G199')]
+    # Not exactly just RI, but close enough
+    zctaGdf = zctaGdf[zctaGdf['GISJOIN'].str.contains('G028') | 
+                      zctaGdf['GISJOIN'].str.contains('G029')]
 
     zctaSeries = zctaGdf['GISJOIN']
 
@@ -462,7 +462,7 @@ def GenerateSTSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
     # Sanity check: the sums should be the same
     assert math.isclose(allSamplesDf[T_DATA_COL].sum(), allAnswerKeysDf[T_DATA_COL].sum())
 
-    # Now, we have data for the ZCTAs in Delaware between start and end timestamps
+    # Now, we have data for the ZCTAs in RI between start and end timestamps
 
     # Construct the graph
     graphsDir = Path("./graphs")

@@ -139,7 +139,7 @@ class Gator(object):
 
 
     def Aggregate(self, df: pd.DataFrame, dataCol: str,
-                  method: AggMethod, destIdCol: str,
+                  method: AggMethod, destIdCol: list | str,
                   fCol: str, vfCol: str)-> pd.DataFrame:
         
         # Input validation
@@ -205,7 +205,7 @@ class Gator(object):
 
 
     def DeAggregate(self, df: pd.DataFrame, dataCol: str,
-                    method: DeAggMethod, destIdCol: str,
+                    method: DeAggMethod, destIdCol: list | str,
                     fCol: str, vfCol: str) -> pd.DataFrame:
         
 
@@ -714,21 +714,25 @@ class Gator(object):
         
         # Now, do a groupby on the spatial source-dest pair to get a timestamp range, if needed
         if not isinstance(expandedDf[sourceTIdCol].dtype, pd.IntervalDtype):
-            spatialGrouped = expandedDf.groupby([expandedDf.index, self.DEST_COL])
+            spatialGrouped = expandedDf.groupby([sourceSIdCol, self.S_DEST_COL])
 
             startTimestamps = spatialGrouped[sourceTIdCol].min()
             endTimestamps = spatialGrouped[sourceTIdCol].max()
 
             # Merge the timestamps and make intervals
             mergedTimestamps = pd.merge(startTimestamps, endTimestamps, left_index=True, right_index=True)
+
             mergedTimestamps[self.INTERVAL_COL] = \
                 mergedTimestamps.apply(lambda x: pd.Interval(x[sourceTIdCol + '_x'], x[sourceTIdCol + '_y']), axis=1)
         
-            # Only keep the interval column
-            mergedTimestamps = mergedTimestamps.drop([sourceTIdCol + '_x', sourceTIdCol + '_y'])
+
+            mergedTimestamps = mergedTimestamps.drop([sourceTIdCol + '_x', sourceTIdCol + '_y'], axis=1)
 
             # Join the interval column with the flattened dataframe
-            expandedDf = pd.merge(expandedDf, mergedTimestamps, left_index=True, right_index=True)
+            print(mergedTimestamps)
+            print(expandedDf)
+            #assert False
+            expandedDf = pd.merge(expandedDf, mergedTimestamps, on=[sourceSIdCol, self.S_DEST_COL])
 
 
             # Rename it back to the original name
@@ -766,16 +770,15 @@ class Gator(object):
         # Do the spatial scaling now
         if type(sMethod) == AggMethod:
             resDf = self.Aggregate(concatDf, self.VALUE_FACTOR_COL, sMethod,
-                                   self.S_DEST_COL, self.S_FACTOR_COL, self.S_VALUE_FACTOR_COL)
+                                   [concatDf.index, self.S_DEST_COL], self.S_FACTOR_COL, self.S_VALUE_FACTOR_COL)
         elif type(sMethod) == DeAggMethod:
             resDf = self.DeAggregate(concatDf, self.VALUE_FACTOR_COL, sMethod,
-                                     self.S_DEST_COL, self.S_FACTOR_COL, self.S_VALUE_FACTOR_COL)
+                                     [concatDf.index, self.S_DEST_COL], self.S_FACTOR_COL, self.S_VALUE_FACTOR_COL)
         else:
             # Catch all
             msg = f"Invalid spatial method of type {type(sMethod)} used."
             self.logger.error(msg)
             raise TypeError(msg)
-
 
         return resDf
 
