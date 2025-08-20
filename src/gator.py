@@ -50,6 +50,8 @@ class Gator(object):
     T_DEST_COL = '_tDestId_'
 
     INTERVAL_COL = '_newInterval_'
+    TEMP_END_TS_COL = '_tempEndTsCol_'
+    TEMP_LEN_COL = '_tempAvgSizeCol_'
 
     # Flag for doing additional cleanup
     DEBUG = True
@@ -712,12 +714,46 @@ class Gator(object):
                                                 self.VALUE_FACTOR_COL: self.S_VALUE_FACTOR_COL,
                                                 self.DEST_COL: self.S_DEST_COL})
         
-        # Now, do a groupby on the spatial source-dest pair to get a timestamp range, if needed
+        # Print options for debugging
+        pd.set_option('display.max_columns', 500)
+        pd.set_option('display.width', 1000)
+        
+        # If we have time-series data, we need to form intervals first
         if not isinstance(expandedDf[sourceTIdCol].dtype, pd.IntervalDtype):
+
+            # Group by source-dest pairs
             spatialGrouped = expandedDf.groupby([sourceSIdCol, self.S_DEST_COL])
+
+            # We need to chunk the data for each group to form intervals
+            for group in spatialGrouped:
+
+                curDf = group[1]
+
+                # Sort by the timestamp
+                curDf = curDf.sort_values(by=sourceTIdCol, ascending=True)
+
+                # Shift the timestamps back to get an end point for each interval
+                curDf[self.TEMP_END_TS_COL] = curDf[sourceTIdCol].shift(periods=-1)
+
+                # We have to guesstimate an end point for the last entry
+                curDf[self.TEMP_LEN_COL] = (curDf[self.TEMP_END_TS_COL] - curDf[sourceTIdCol]).dt.total_seconds()
+                avgLen = curDf[self.TEMP_LEN_COL].mean()
+
+                # We don't want to cross into a new unit though
+                lastTs = min(curDf.tail(n=1)[sourceTIdCol].item() + pd.Timedelta(seconds=avgLen),
+                             TODO)
+
+
+
+                print(group)
+                print(curDf)
+                assert False
 
             startTimestamps = spatialGrouped[sourceTIdCol].min()
             endTimestamps = spatialGrouped[sourceTIdCol].max()
+
+            print(startTimestamps)
+            assert False
 
             # Merge the timestamps and make intervals
             mergedTimestamps = pd.merge(startTimestamps, endTimestamps, left_index=True, right_index=True)
@@ -735,12 +771,15 @@ class Gator(object):
             expandedDf = pd.merge(expandedDf, mergedTimestamps, on=[sourceSIdCol, self.S_DEST_COL])
 
 
-            # Rename it back to the original name
-            expandedDf = expandedDf.rename(columns={self.INTERVAL_COL: sourceTIdCol})
+            # Rename it back to the original name after dropping the original column
+            #expandedDf = expandedDf.drop(sourceTIdCol)
+            #expandedDf = expandedDf.rename(columns={self.INTERVAL_COL: sourceTIdCol})
 
         # Now, for each source-dest pair, do the temporal operation
-        pd.set_option('display.max_columns', 500)
-        pd.set_option('display.width', 1000)
+
+
+        print(expandedDf)
+        assert False
 
         # We can include the factor to copy it over, as the factor will always be
         # the same for each s-d pair, so it won't affect the output
