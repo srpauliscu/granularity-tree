@@ -33,9 +33,9 @@ def testSTBasic():
     
     # Realistically, the only check we can do is total sum
     # Allow for some error since the spatial data isn't perfectly complete
-    assert math.isclose(resDf[gator.VALUE_FACTOR_COL].sum(),
+    assert math.isclose(resDf[T_DATA_COL].sum(),
                         allAnswerKeysDf[T_DATA_COL].sum(),
-                        rel_tol=.01)
+                        rel_tol=.001)
     
 
 @pytest.mark.basic
@@ -45,10 +45,10 @@ def testSTNoInterval():
     # the gator's ability to make intervals
 
     # Generate the original sample
-    random.seed(42)
+    #random.seed(42)
     startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
-    endTs = pd.Timestamp(year=2020, month=1, day=5, hour=0, minute=0, second=0)
-    #endTs = pd.Timestamp(year=2020, month=4, day=1, hour=0, minute=0, second=0)
+    #endTs = pd.Timestamp(year=2020, month=1, day=5, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2020, month=4, day=1, hour=0, minute=0, second=0)
 
     allSamplesDf, allAnswerKeysDf, countyGdf, gator = GenerateSTSample(startTs, endTs, TID.HOUR)
 
@@ -59,6 +59,7 @@ def testSTNoInterval():
                                          AggMethod.SUM, AggMethod.SUM,
                                          EdgeType.AREA, True, True)
     
-    print(resDf)
-
-    assert False
+    # Best we can do is make sure the total sums match
+    assert math.isclose(allSamplesDf[T_DATA_COL].sum(),
+                        resDf[T_DATA_COL].sum(),
+                        rel_tol=.001)

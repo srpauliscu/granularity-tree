@@ -30,6 +30,28 @@ def CalculateError(row: pd.Series, origDataCol: str, newDataCol: str):
 
     return (round(lowerError, 2), round(upperError,2))
     
+def FormInterval(row: pd.Series, tsCol: str, unit: TID) -> pd.Interval:
+
+    # A function for df.apply() to form an interval
+    # for the timestamp of a given row
+
+    ts = row[tsCol]
+
+    # Months and years can't use floor()
+    if unit == TID.MONTH:
+        startTs = ts.to_period(unit.value).to_timestamp()
+        endTs = startTs + pd.tseries.offsets.MonthBegin(1)
+
+    elif unit == TID.YEAR:
+        startTs = ts.to_period(unit.value).to_timestamp()
+        endTs = startTs + pd.tseries.offsets.YearBegin(1)
+    
+    else:
+        startTs = ts.floor(freq=unit.value)
+        endTs = ts.ceil(freq=unit.value)
+    
+    return pd.Interval(startTs, endTs)
+
 
 class Gator(object):
 
@@ -50,8 +72,6 @@ class Gator(object):
     T_DEST_COL = '_tDestId_'
 
     INTERVAL_COL = '_newInterval_'
-    TEMP_END_TS_COL = '_tempEndTsCol_'
-    TEMP_LEN_COL = '_tempAvgSizeCol_'
 
     # Flag for doing additional cleanup
     DEBUG = True
@@ -718,68 +738,18 @@ class Gator(object):
         pd.set_option('display.max_columns', 500)
         pd.set_option('display.width', 1000)
         
-        # If we have time-series data, we need to form intervals first
+        # If we have time-series data, we need to make intervals
         if not isinstance(expandedDf[sourceTIdCol].dtype, pd.IntervalDtype):
 
-            # Group by source-dest pairs
-            spatialGrouped = expandedDf.groupby([sourceSIdCol, self.S_DEST_COL])
+            # Our "intervals" will just be one unit, starting at the floor
+            # of the timestamp and ending at the ceil
 
-            # We need to chunk the data for each group to form intervals
-            for group in spatialGrouped:
-
-                curDf = group[1]
-
-                # Sort by the timestamp
-                curDf = curDf.sort_values(by=sourceTIdCol, ascending=True)
-
-                # Shift the timestamps back to get an end point for each interval
-                curDf[self.TEMP_END_TS_COL] = curDf[sourceTIdCol].shift(periods=-1)
-
-                # We have to guesstimate an end point for the last entry
-                curDf[self.TEMP_LEN_COL] = (curDf[self.TEMP_END_TS_COL] - curDf[sourceTIdCol]).dt.total_seconds()
-                avgLen = curDf[self.TEMP_LEN_COL].mean()
-
-                # We don't want to cross into a new unit though
-                lastTs = min(curDf.tail(n=1)[sourceTIdCol].item() + pd.Timedelta(seconds=avgLen),
-                             TODO)
-
-
-
-                print(group)
-                print(curDf)
-                assert False
-
-            startTimestamps = spatialGrouped[sourceTIdCol].min()
-            endTimestamps = spatialGrouped[sourceTIdCol].max()
-
-            print(startTimestamps)
-            assert False
-
-            # Merge the timestamps and make intervals
-            mergedTimestamps = pd.merge(startTimestamps, endTimestamps, left_index=True, right_index=True)
-
-            mergedTimestamps[self.INTERVAL_COL] = \
-                mergedTimestamps.apply(lambda x: pd.Interval(x[sourceTIdCol + '_x'], x[sourceTIdCol + '_y']), axis=1)
-        
-
-            mergedTimestamps = mergedTimestamps.drop([sourceTIdCol + '_x', sourceTIdCol + '_y'], axis=1)
-
-            # Join the interval column with the flattened dataframe
-            print(mergedTimestamps)
-            print(expandedDf)
-            #assert False
-            expandedDf = pd.merge(expandedDf, mergedTimestamps, on=[sourceSIdCol, self.S_DEST_COL])
-
-
-            # Rename it back to the original name after dropping the original column
-            #expandedDf = expandedDf.drop(sourceTIdCol)
-            #expandedDf = expandedDf.rename(columns={self.INTERVAL_COL: sourceTIdCol})
-
-        # Now, for each source-dest pair, do the temporal operation
-
-
-        print(expandedDf)
-        assert False
+            # We can just overwrite the previous time column
+            # since it will go away with aggregation anyway
+            expandedDf[sourceTIdCol] = expandedDf.apply(FormInterval,
+                                                        args=[sourceTIdCol, destTType],
+                                                        axis=1)
+            
 
         # We can include the factor to copy it over, as the factor will always be
         # the same for each s-d pair, so it won't affect the output
@@ -818,6 +788,14 @@ class Gator(object):
             msg = f"Invalid spatial method of type {type(sMethod)} used."
             self.logger.error(msg)
             raise TypeError(msg)
+        
+        # Rename it to match the original columns
+        resDf.index = resDf.index.set_names({
+            self.S_DEST_COL: sourceSIdCol,
+            self.DEST_COL: sourceTIdCol
+        })
+        
+        resDf = resDf.rename(columns={self.VALUE_FACTOR_COL: sourceDataCol})
 
         return resDf
 
