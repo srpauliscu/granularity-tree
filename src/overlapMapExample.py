@@ -52,6 +52,7 @@ def main():
     #print(ov.head())
     #quit()
     base = schoolGdf.plot(color=schoolGdf['color'])
+    #schoolGdf.boundary.plot(ax=base, color='black', linewidth=2, linestyle="dashed")
     countyGdf.boundary.plot(ax=base, color='black')
 
     plt.show()
