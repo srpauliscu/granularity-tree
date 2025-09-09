@@ -24,11 +24,6 @@ def main():
     # Only get one state's data
     countyGdf = countyGdf[countyGdf['STATEFP'] == ST_FIPS]
 
-    #print(zctaGdf.head())
-    #quit()
-
-    #print(countyGdf.head())
-    #quit()
 
     # ZCTAs aren't bound to one state, so use overlapping instead
     ov = gpd.overlay(countyGdf, schoolGdf, how="intersection", keep_geom_type=False)
@@ -37,7 +32,15 @@ def main():
     ov['Area'] = ov.geometry.area
 
     # Remove false positives
-    ov = ov[ov['Area'] > 0]
+    ov = ov[ov['Area'] > 1]
+
+    # Our example is Eagle County
+    exampleCounty = ov[ov['NAME_1'] == "Eagle"]
+    
+    # Calculate overlap factor
+    exampleCounty['overlap_factor'] = ov['Area'] / ov['Shape_Area_1']
+    print(exampleCounty[['NAME_2', 'overlap_factor']])
+    quit()
 
     # Use the overlaps to filter the original GDF
     schoolGdf = schoolGdf[schoolGdf['GISJOIN'].isin(ov['GISJOIN_2'].to_list())]
@@ -55,7 +58,13 @@ def main():
     #schoolGdf.boundary.plot(ax=base, color='black', linewidth=2, linestyle="dashed")
     countyGdf.boundary.plot(ax=base, color='black')
 
+    # Our example is Eagle County
+    exampleCounty = ov[ov['NAME_1'] == "Eagle"]
+    print(exampleCounty)
+
     plt.show()
+
+
 
 
 
