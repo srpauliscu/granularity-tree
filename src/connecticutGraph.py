@@ -45,6 +45,11 @@ def ZctaIdConverter(row, zctaDict: dict):
     zcta = row['ZCTA']
     if zcta in zctaDict:
         return zctaDict[zcta]
+    
+    # Account for differing data types
+    elif str(zcta) in zctaDict:
+        return zctaDict[str(zcta)]
+    
     else:
         return ""
 

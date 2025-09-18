@@ -634,7 +634,11 @@ class Gator(object):
 
                 # Calculate the factor
                 # TODO: Is this correct for both agg/deagg?
-                newRow[self.FACTOR_COL] = overlap / origSize
+                if origSize == 0:
+                    # Avoid divide by zero error
+                    newRow[self.FACTOR_COL] = 1
+                else:
+                    newRow[self.FACTOR_COL] = overlap / origSize
 
                 # Calculate the value-factor
                 newRow[self.VALUE_FACTOR_COL] = newRow[self.FACTOR_COL] * row[dataCol]
@@ -686,6 +690,19 @@ class Gator(object):
             raise RuntimeError(msg)
 
         return resDf
+    
+    def asdf(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame, destTType: TID,
+                               sourceSType: GEID, destSType: GEID, sourceSIdCol: str,
+                               destSIdCol: str, sourceTIdCol: str, destTIdCol: str,
+                               sourceDataCol: str,
+                               sMethod: AggMethod | DeAggMethod, tMethod: AggMethod | DeAggMethod,
+                               edgeType: EdgeType, ignoreMissing: bool = False,
+                               ignoreIncomplete: bool = False) -> pd.DataFrame:
+        '''
+        Do a combination spatio-temporal scaling, grouping by temporal last
+        
+        '''
+        pass
 
 
     def SpatioTemporalEqualize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame, destTType: TID,
@@ -698,7 +715,7 @@ class Gator(object):
         
 
         '''
-        Do a combination spatio-temporal scaling.
+        Do a combination spatio-temporal scaling, grouping by spatial last
 
         1.) Group into spatial destination type and get an interval for
             the time periods it covers.

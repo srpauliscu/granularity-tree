@@ -20,7 +20,7 @@ CO_FIPS = "08"
 SEG_ID_COL = "tmc"
 COUNTY_COL = "county"
 ZIP_COL = "zip"
-ZCTA_COL = "zcta"
+ZCTA_COL = "ZCTA"
 
 TIMESTAMP_COL = "measurement_tstamp"
 SPEED_COL = "speed"
@@ -59,11 +59,11 @@ def CalcInterval(row: pd.Series):
 
     return pd.Interval(row[TIMESTAMP_COL], endTime)
 
-def main(load: bool = False, overwrite: bool = False):
+def main(load: bool = False, overwrite: bool = True):
 
     # Get the data
     dataDir = Path("./data/ntdas")
-    vehicleDf, roadDf = LoadData(dataDir, numRows=100)
+    vehicleDf, roadDf = LoadData(dataDir, numRows=10000)
 
     # We need to calculate an end timestamp for each measurement
     vehicleDf[INTERVAL_COL] = vehicleDf.apply(CalcInterval, axis=1)
@@ -109,7 +109,7 @@ def main(load: bool = False, overwrite: bool = False):
     if not load:
         msg = "Adding school district-ZCTA layer..."
         print(msg)
-        graph = AddLevel(graph, sdGdf, zctaDict,
+        graph = AddLevel(graph, sdGdf, zctaGdf,
                         n1Type=GEID.SD, n2Type=GEID.ZCTA)
         
         # Save it out
@@ -121,12 +121,61 @@ def main(load: bool = False, overwrite: bool = False):
 
     # Before aggregation, we need to do a join
     # to assign ZCTAs to each vehicle reading
+
+    # Get rid of unneeded columns before the join
+    roadDf = roadDf[[SEG_ID_COL, "GISJOIN"]]
+
+    # Do the join
+    joinedDf = pd.merge(vehicleDf, roadDf, on=SEG_ID_COL, how='inner')
+
+    print(joinedDf.head())
+
+    # Do the scaling
+    resDf = gator.SpatioTemporalEqualize(joinedDf, sdGdf,
+                                         TID.HOUR, GEID.ZCTA, GEID.SD,
+                                         'GISJOIN', 'GISJOIN', INTERVAL_COL,
+                                         None, SPEED_COL, AggMethod.MEAN,
+                                         AggMethod.MEAN, EdgeType.AREA,
+                                         True, True
+                                         )
     
-
-
-
-    print(sdGdf.columns)
+    pd.set_option('display.max_rows', None)
     
+    # Fix the ordering of the multindex
+    resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
+
+    print(resDf)
+    #quit()
+    
+    #resDf = resDf.unstack(level=0)
+    # Group them one at a time to spread out subplots
+    # among multiple figures
+    plotCount = 0
+    for lv, group in resDf.groupby(level=0):
+        if plotCount % 4 == 0:
+            curFig, axisPairs = plt.subplots(2,2)
+            axisPairs = axisPairs.flatten()
+
+        # Do this to get rid of the GISJOIN as an axis label
+        group = group.droplevel(0)
+        
+        # Pass a specific axis pair to pd.plot
+        curAxPair = axisPairs[plotCount % 4]
+        group.plot(kind='line', rot=0, ax=curAxPair)
+        curAxPair.set_xlabel('Timestamp')
+        #plt.tight_layout()
+
+        plotCount += 1
+
+        # For testing
+        if plotCount >= 16:
+            break
+        
+    # Use to plot all on one graph
+    #ax = resDf.unstack(level=0).plot(kind='line', subplots=False, rot=0, figsize=(9,7), layout=(10,10))
+    #plt.tight_layout()
+
+    plt.show()
 
 
 if __name__ == "__main__":
