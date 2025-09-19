@@ -359,7 +359,8 @@ class Gator(object):
 
             # Get the matching dest nodes
             matches = self.kGraph.GetMatches(sn, destNodes, edgeType)
-            allMatches[sn] = matches
+            if len(matches) > 0:
+                allMatches[sn] = matches
 
         # allMatches: {sourceNode: {destNode1: weight1, destNode2: weight2, ...}, ...}
 

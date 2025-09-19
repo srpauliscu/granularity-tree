@@ -27,6 +27,28 @@ SPEED_COL = "speed"
 TRAVEL_TIME_COL = "travel_time_minutes"
 INTERVAL_COL = "_time_interval_"
 
+# List of GISJOIN ids for Denver SDs
+# Names included for convenience
+DENVER_SD_IDS = {"G08006900": "Adams 12 Five Star Schools",
+                "G13001440": "Commerce City School District",
+                "G40008490": "Commerce Public Schools",
+                "G08002340": "Adams-Arapahoe School District 28J",
+                "G08002490": "Boulder Valley School District RE-2",
+                "G08002910": "Cherry Creek School District 5",
+                "G08003000": "Clear Creek School District RE-1",
+                "G08003360": "Denver County School District 1",
+                "G08003450": "Douglas County School District RE-1",
+                "G08003720": "Elizabeth School District",
+                "G08003780": "Englewood School District 1",
+                "G08004230": "Gilpin County School District RE-1",
+                "G08004800": "Jefferson County School District R-1",
+                "G08005310": "Littleton School District 6",
+                "G08005550": "Mapleton School District 1",
+                "G08002370": "Platte Canyon School District 1",
+                "G08002580": "School District 27J",
+                "G08006540": "Sheridan School District 2",
+                "G08007230": "Westminster Public School District"}
+
 
 # Function to load in the data
 def LoadData(parentDir: Path, numRows: int = 100):
@@ -63,7 +85,7 @@ def main(load: bool = False, overwrite: bool = True):
 
     # Get the data
     dataDir = Path("./data/ntdas")
-    vehicleDf, roadDf = LoadData(dataDir, numRows=10000)
+    vehicleDf, roadDf = LoadData(dataDir, numRows=100000)
 
     # We need to calculate an end timestamp for each measurement
     vehicleDf[INTERVAL_COL] = vehicleDf.apply(CalcInterval, axis=1)
@@ -139,10 +161,11 @@ def main(load: bool = False, overwrite: bool = True):
                                          True, True
                                          )
     
-    pd.set_option('display.max_rows', None)
-    
     # Fix the ordering of the multindex
     resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
+
+    # For plotting purposes, just look at Denver districts
+    resDf = resDf.loc[resDf.index.get_level_values(0).isin(list(DENVER_SD_IDS.keys()))]
 
     print(resDf)
     #quit()
