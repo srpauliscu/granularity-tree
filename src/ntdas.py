@@ -24,8 +24,10 @@ ZCTA_COL = "ZCTA"
 
 TIMESTAMP_COL = "measurement_tstamp"
 SPEED_COL = "speed"
+REFERENCE_COL = "reference_speed"
 TRAVEL_TIME_COL = "travel_time_minutes"
 INTERVAL_COL = "_time_interval_"
+SPEED_RATIO_COL = "_speed_ratio_col_"
 
 # List of GISJOIN ids for Denver SDs
 # Names included for convenience
@@ -127,6 +129,9 @@ def main(load: bool = False, overwrite: bool = True):
     # Remove ZIPs we didn't have
     roadDf = roadDf[roadDf['GISJOIN'] != ""]
 
+    # Calculate ratio of speed to reference speed
+    vehicleDf[SPEED_RATIO_COL] = vehicleDf[SPEED_COL] / vehicleDf[REFERENCE_COL]
+
     # Construct the graph, if needed
     if not load:
         msg = "Adding school district-ZCTA layer..."
@@ -150,13 +155,16 @@ def main(load: bool = False, overwrite: bool = True):
     # Do the join
     joinedDf = pd.merge(vehicleDf, roadDf, on=SEG_ID_COL, how='inner')
 
+    # Drop NANs
+    joinedDf = joinedDf.dropna(subset=[SPEED_RATIO_COL])
+
     print(joinedDf.head())
 
     # Do the scaling
     resDf = gator.SpatioTemporalEqualize(joinedDf, sdGdf,
                                          TID.HOUR, GEID.ZCTA, GEID.SD,
                                          'GISJOIN', 'GISJOIN', INTERVAL_COL,
-                                         None, SPEED_COL, AggMethod.MEAN,
+                                         None, SPEED_RATIO_COL, AggMethod.MEAN,
                                          AggMethod.MEAN, EdgeType.AREA,
                                          True, True
                                          )
@@ -185,7 +193,11 @@ def main(load: bool = False, overwrite: bool = True):
         # Pass a specific axis pair to pd.plot
         curAxPair = axisPairs[plotCount % 4]
         group.plot(kind='line', rot=0, ax=curAxPair)
+
+        # Set labels
         curAxPair.set_xlabel('Timestamp')
+        curAxPair.set_ylabel('Speed')
+        curAxPair.set_title(DENVER_SD_IDS[lv])
         #plt.tight_layout()
 
         plotCount += 1

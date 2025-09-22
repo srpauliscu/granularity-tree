@@ -359,8 +359,7 @@ class Gator(object):
 
             # Get the matching dest nodes
             matches = self.kGraph.GetMatches(sn, destNodes, edgeType)
-            if len(matches) > 0:
-                allMatches[sn] = matches
+            allMatches[sn] = matches
 
         # allMatches: {sourceNode: {destNode1: weight1, destNode2: weight2, ...}, ...}
 
@@ -654,7 +653,11 @@ class Gator(object):
             valueFactors = [r[self.VALUE_FACTOR_COL] for r in tempNewRows]
             #print(sum(valueFactors))
             #print(row[dataCol])
-
+            
+            if not math.isclose(sum(valueFactors), row[dataCol]):
+                print(sum(valueFactors))
+                print(row[dataCol])
+                raise RuntimeError
             assert math.isclose(sum(valueFactors), row[dataCol])
 
             # Cutoff the last entry if the overlap is 0
