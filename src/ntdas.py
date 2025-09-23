@@ -175,23 +175,25 @@ def main(load: bool = False, overwrite: bool = True):
     # For plotting purposes, just look at Denver districts
     resDf = resDf.loc[resDf.index.get_level_values(0).isin(list(DENVER_SD_IDS.keys()))]
 
-    print(resDf)
+    #print(resDf)
     #quit()
     
     #resDf = resDf.unstack(level=0)
     # Group them one at a time to spread out subplots
     # among multiple figures
     plotCount = 0
+    figRows = 1
+    figCols = 1
     for lv, group in resDf.groupby(level=0):
-        if plotCount % 4 == 0:
-            curFig, axisPairs = plt.subplots(2,2)
+        if plotCount % (figRows * figCols) == 0:
+            curFig, axisPairs = plt.subplots(figCols, figRows)
             axisPairs = axisPairs.flatten()
 
         # Do this to get rid of the GISJOIN as an axis label
         group = group.droplevel(0)
         
         # Pass a specific axis pair to pd.plot
-        curAxPair = axisPairs[plotCount % 4]
+        curAxPair = axisPairs[plotCount % (figRows * figCols)]
         group.plot(kind='line', rot=0, ax=curAxPair)
 
         # Set labels
