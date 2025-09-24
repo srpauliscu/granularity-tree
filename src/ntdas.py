@@ -53,7 +53,7 @@ DENVER_SD_IDS = {"G08006900": "Adams 12 Five Star Schools",
 
 
 # Function to load in the data
-def LoadData(parentDir: Path, numRows: int = 100):
+def LoadData(parentDir: Path, numRows: int = 100, skiprows: int = 0):
 
     # Load in both files from the NTDAS download
     if numRows > 0:
@@ -87,7 +87,13 @@ def main(load: bool = False, overwrite: bool = True):
 
     # Get the data
     dataDir = Path("./data/ntdas")
-    vehicleDf, roadDf = LoadData(dataDir, numRows=100000)
+    vehicleDf, roadDf = LoadData(dataDir, numRows=2000000)
+
+    # For bug testing
+    #vehicleDf = vehicleDf.tail(n=50000)
+
+    # Take out rows with a travel time of 0 minutes
+    vehicleDf = vehicleDf[vehicleDf[TRAVEL_TIME_COL] > 0]
 
     # We need to calculate an end timestamp for each measurement
     vehicleDf[INTERVAL_COL] = vehicleDf.apply(CalcInterval, axis=1)
@@ -187,25 +193,39 @@ def main(load: bool = False, overwrite: bool = True):
     for lv, group in resDf.groupby(level=0):
         if plotCount % (figRows * figCols) == 0:
             curFig, axisPairs = plt.subplots(figCols, figRows)
-            axisPairs = axisPairs.flatten()
+            if figRows*figCols > 1:
+                axisPairs = axisPairs.flatten()
 
         # Do this to get rid of the GISJOIN as an axis label
         group = group.droplevel(0)
         
         # Pass a specific axis pair to pd.plot
-        curAxPair = axisPairs[plotCount % (figRows * figCols)]
+        if figRows*figCols > 1:
+            curAxPair = axisPairs[plotCount % (figRows * figCols)]
+        else:
+            curAxPair = axisPairs
+
         group.plot(kind='line', rot=0, ax=curAxPair)
 
         # Set labels
-        curAxPair.set_xlabel('Timestamp')
-        curAxPair.set_ylabel('Speed')
-        curAxPair.set_title(DENVER_SD_IDS[lv])
+        curAxPair.set_xlabel('Timestamp', fontsize=24)
+        curAxPair.set_ylabel('Ratio of Recorded to Typical Speed', fontsize=24)
+        curAxPair.set_title(DENVER_SD_IDS[lv] + ", 2020"  , fontsize=28)
+
+        # Fix tick font sizes
+        curAxPair.tick_params(axis='x', which='major', labelsize=16)
+        curAxPair.tick_params(axis='y', which='major', labelsize=16)
+        curAxPair.tick_params(axis='x', which='minor', labelsize=16)
+
+        # Fix the legend label
+        curAxPair.legend(["Ratio"], fontsize=16)
+
         #plt.tight_layout()
 
         plotCount += 1
 
         # For testing
-        if plotCount >= 16:
+        if plotCount >= 8:
             break
         
     # Use to plot all on one graph

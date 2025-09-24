@@ -657,6 +657,8 @@ class Gator(object):
             if not math.isclose(sum(valueFactors), row[dataCol]):
                 print(sum(valueFactors))
                 print(row[dataCol])
+                print(row)
+                print(tempNewRows)
                 raise RuntimeError
             assert math.isclose(sum(valueFactors), row[dataCol])
 
