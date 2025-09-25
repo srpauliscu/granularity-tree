@@ -51,9 +51,22 @@ DENVER_SD_IDS = {"G08006900": "Adams 12 Five Star Schools",
                 "G08006540": "Sheridan School District 2",
                 "G08007230": "Westminster Public School District"}
 
+# ZIP codes for the roads
+DENVER_ZIPS = [80002, 80003, 80004, 80005, 80007]
+DENVER_ZIPS.extend([i for i in range(80010, 80020)])
+DENVER_ZIPS.extend([80303, 80305, 80301])
+DENVER_ZIPS.extend([i for i in range(80601, 80604)])
+DENVER_ZIPS.extend([80020, 80021, 80023, 80108, 80022, 80025])
+DENVER_ZIPS.extend([i for i in range(80202, 80235)])
+DENVER_ZIPS.extend([i for i in range(80110, 80114)])
+DENVER_ZIPS.extend([80516, 80118, 80401, 80403, 80640, 80126, 80129, 80130])
+DENVER_ZIPS.extend([80026, 80503, 80504, 80501, 80027])
+DENVER_ZIPS.extend([i for i in range(80121, 80128)])
+DENVER_ZIPS.extend([80465, 80134, 80138, 80108, 80030, 80031])
+#DENVER_ZIPS = [str(v) for v in DENVER_ZIPS]
 
 # Function to load in the data
-def LoadData(parentDir: Path, numRows: int = 100, skiprows: int = 0):
+def LoadData(parentDir: Path, numRows: int = 100):
 
     # Load in both files from the NTDAS download
     if numRows > 0:
@@ -89,12 +102,13 @@ def main(load: bool = False, overwrite: bool = True):
     dataDir = Path("./data/ntdas")
     vehicleDf, roadDf = LoadData(dataDir, numRows=-1)
 
-    # For bug testing
-    #vehicleDf = vehicleDf.tail(n=5375000)
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
+    # Only get specific dates of data
+    #dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
     vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
-    #vehicleDf = vehicleDf.sample(n=10000, random_state=42)
 
+    # Only get Denver zip codes for the roads
+    roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
 
     # Take out rows with a travel time of 0 minutes
     vehicleDf = vehicleDf[vehicleDf[TRAVEL_TIME_COL] > 0]
