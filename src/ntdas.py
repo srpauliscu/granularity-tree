@@ -87,10 +87,14 @@ def main(load: bool = False, overwrite: bool = True):
 
     # Get the data
     dataDir = Path("./data/ntdas")
-    vehicleDf, roadDf = LoadData(dataDir, numRows=2000000)
+    vehicleDf, roadDf = LoadData(dataDir, numRows=-1)
 
     # For bug testing
-    #vehicleDf = vehicleDf.tail(n=50000)
+    #vehicleDf = vehicleDf.tail(n=5375000)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
+    vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
+    #vehicleDf = vehicleDf.sample(n=10000, random_state=42)
+
 
     # Take out rows with a travel time of 0 minutes
     vehicleDf = vehicleDf[vehicleDf[TRAVEL_TIME_COL] > 0]
@@ -192,25 +196,37 @@ def main(load: bool = False, overwrite: bool = True):
     figCols = 1
     for lv, group in resDf.groupby(level=0):
         if plotCount % (figRows * figCols) == 0:
-            curFig, axisPairs = plt.subplots(figCols, figRows)
+            curFig, axisPairs = plt.subplots(figCols, figRows, figsize=(15,9))
             if figRows*figCols > 1:
                 axisPairs = axisPairs.flatten()
 
         # Do this to get rid of the GISJOIN as an axis label
         group = group.droplevel(0)
-        
+
         # Pass a specific axis pair to pd.plot
         if figRows*figCols > 1:
             curAxPair = axisPairs[plotCount % (figRows * figCols)]
         else:
             curAxPair = axisPairs
 
-        group.plot(kind='line', rot=0, ax=curAxPair)
+        # Now, we want to group and plot each day as separate lines
+        days = group.groupby(group.index.get_level_values(0).day_name())
+        legendList = []
+        for day, dayGroup in days:
+
+            if day == "Saturday" or day == "Sunday":
+                # Skip weekends
+                continue
+
+            # Plot by hour of the day
+            dayGroup.set_index(dayGroup.index.get_level_values(0).hour, inplace=True)
+            dayGroup.plot(kind='line', rot=0, ax=curAxPair, linewidth=2.5)
+            legendList.append(day)
 
         # Set labels
-        curAxPair.set_xlabel('Timestamp', fontsize=24)
-        curAxPair.set_ylabel('Ratio of Recorded to Typical Speed', fontsize=24)
-        curAxPair.set_title(DENVER_SD_IDS[lv] + ", 2020"  , fontsize=28)
+        curAxPair.set_xlabel('Hour of Day', fontsize=20)
+        curAxPair.set_ylabel('Ratio of Recorded to Typical Speed', fontsize=20)
+        curAxPair.set_title(DENVER_SD_IDS[lv] + ", 10/5/20 - 10/9/20", fontsize=24)
 
         # Fix tick font sizes
         curAxPair.tick_params(axis='x', which='major', labelsize=16)
@@ -218,21 +234,25 @@ def main(load: bool = False, overwrite: bool = True):
         curAxPair.tick_params(axis='x', which='minor', labelsize=16)
 
         # Fix the legend label
-        curAxPair.legend(["Ratio"], fontsize=16)
+        curAxPair.legend(legendList, fontsize=16)
 
-        #plt.tight_layout()
+        plt.tight_layout()
+        curFig.tight_layout()
+        curFig.set_tight_layout(True)
 
         plotCount += 1
 
+        plt.savefig(f"./data/ntdas/figures/{DENVER_SD_IDS[lv]}.svg", dpi=curFig.dpi)
+
         # For testing
-        if plotCount >= 8:
+        if plotCount >= 24:
             break
         
     # Use to plot all on one graph
     #ax = resDf.unstack(level=0).plot(kind='line', subplots=False, rot=0, figsize=(9,7), layout=(10,10))
     #plt.tight_layout()
 
-    plt.show()
+    #plt.show()
 
 
 if __name__ == "__main__":
