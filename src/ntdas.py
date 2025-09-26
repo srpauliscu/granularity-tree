@@ -3,11 +3,14 @@
 # Functions to generate temporal test data
 import pandas as pd
 import geopandas as gpd
+import matplotlib
+matplotlib.use("agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
 import math
 from tqdm import tqdm
+import time
 
 from gator import *
 from kGraph import Node, GranularityGraph
@@ -103,9 +106,10 @@ def main(load: bool = False, overwrite: bool = True):
     vehicleDf, roadDf = LoadData(dataDir, numRows=-1)
 
     # Only get specific dates of data
-    #dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
+    #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
     vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
+    #vehicleDf = vehicleDf.sample(n=10000, random_state=42)
 
     # Only get Denver zip codes for the roads
     roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
@@ -185,6 +189,7 @@ def main(load: bool = False, overwrite: bool = True):
     print(joinedDf.head())
 
     # Do the scaling
+    st = time.time()
     resDf = gator.SpatioTemporalEqualize(joinedDf, sdGdf,
                                          TID.HOUR, GEID.ZCTA, GEID.SD,
                                          'GISJOIN', 'GISJOIN', INTERVAL_COL,
@@ -192,6 +197,7 @@ def main(load: bool = False, overwrite: bool = True):
                                          AggMethod.MEAN, EdgeType.AREA,
                                          True, True
                                          )
+    print(f"Runtime: {time.time() - st}")
     
     # Fix the ordering of the multindex
     resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
@@ -208,7 +214,9 @@ def main(load: bool = False, overwrite: bool = True):
     plotCount = 0
     figRows = 1
     figCols = 1
-    for lv, group in resDf.groupby(level=0):
+    dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    print("Beginning plotting...")
+    for lv, group in tqdm(resDf.groupby(level=0)):
         if plotCount % (figRows * figCols) == 0:
             curFig, axisPairs = plt.subplots(figCols, figRows, figsize=(15,9))
             if figRows*figCols > 1:
@@ -226,6 +234,7 @@ def main(load: bool = False, overwrite: bool = True):
         # Now, we want to group and plot each day as separate lines
         days = group.groupby(group.index.get_level_values(0).day_name())
         legendList = []
+        handleList = []
         for day, dayGroup in days:
 
             if day == "Saturday" or day == "Sunday":
@@ -235,6 +244,9 @@ def main(load: bool = False, overwrite: bool = True):
             # Plot by hour of the day
             dayGroup.set_index(dayGroup.index.get_level_values(0).hour, inplace=True)
             dayGroup.plot(kind='line', rot=0, ax=curAxPair, linewidth=2.5)
+
+            # Save handles and labels to fix legend later
+            handleList.append(curAxPair.get_lines()[-1])
             legendList.append(day)
 
         # Set labels
@@ -242,21 +254,44 @@ def main(load: bool = False, overwrite: bool = True):
         curAxPair.set_ylabel('Ratio of Recorded to Typical Speed', fontsize=20)
         curAxPair.set_title(DENVER_SD_IDS[lv] + ", 10/5/20 - 10/9/20", fontsize=24)
 
-        # Fix tick font sizes
+        # Fix tick sizes and fonts
         curAxPair.tick_params(axis='x', which='major', labelsize=16)
         curAxPair.tick_params(axis='y', which='major', labelsize=16)
         curAxPair.tick_params(axis='x', which='minor', labelsize=16)
+        curAxPair.tick_params(axis='both', length=12, width=3)
+
+        # Reorder the legend labels
+        newHandleList = []
+        for d in dayOrder:
+            curI = legendList.index(d)
+            newHandleList.append(handleList[curI])
+
 
         # Fix the legend label
-        curAxPair.legend(legendList, fontsize=16)
+        curAxPair.legend(newHandleList, dayOrder, fontsize=16)
 
+        # Add lines for the times
+        xticks = curAxPair.get_xticks()
+        ymin, ymax = curAxPair.get_ylim()
+        for i, xt in enumerate(xticks):
+            if i==0:
+                continue
+            curAxPair.vlines(xt, ymin-.2, ymax+.2, color='gray', linestyle=':', linewidth=1.25)
+
+        # Fix overlapping labels
         plt.tight_layout()
         curFig.tight_layout()
         curFig.set_tight_layout(True)
 
+
         plotCount += 1
 
-        plt.savefig(f"./data/ntdas/figures/{DENVER_SD_IDS[lv]}.svg", dpi=curFig.dpi)
+        plt.savefig(f"./data/ntdas/fixedFigs/{DENVER_SD_IDS[lv]}.png", dpi=1600)
+
+        # Clear figures and axes for memory issues
+        plt.clf()
+        plt.cla()
+        plt.close()
 
         # For testing
         if plotCount >= 24:
