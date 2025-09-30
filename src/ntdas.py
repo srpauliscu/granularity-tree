@@ -109,7 +109,7 @@ def main(load: bool = False, overwrite: bool = True):
     dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
     vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
-    #vehicleDf = vehicleDf.sample(n=10000, random_state=42)
+    #vehicleDf = vehicleDf.sample(n=1000, random_state=42)
 
     # Only get Denver zip codes for the roads
     roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
@@ -216,6 +216,7 @@ def main(load: bool = False, overwrite: bool = True):
     figCols = 1
     dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     print("Beginning plotting...")
+    quit()
     for lv, group in tqdm(resDf.groupby(level=0)):
         if plotCount % (figRows * figCols) == 0:
             curFig, axisPairs = plt.subplots(figCols, figRows, figsize=(15,9))
