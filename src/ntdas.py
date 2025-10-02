@@ -109,7 +109,7 @@ def main(load: bool = False, overwrite: bool = True):
     dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
     vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
-    #vehicleDf = vehicleDf.sample(n=1000, random_state=42)
+    #vehicleDf = vehicleDf.sample(n=10000, random_state=42)
 
     # Only get Denver zip codes for the roads
     roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
@@ -171,43 +171,58 @@ def main(load: bool = False, overwrite: bool = True):
         if overwrite:
             graph.SaveGraph(graphsDir)
     
-    # Get a gator object
-    gator = Gator(graph, Path('./logs/ntdasGator.log'))
 
-    # Before aggregation, we need to do a join
-    # to assign ZCTAs to each vehicle reading
+    # Check if we have an existing file first
+    fname = Path("./data/ntdas/shouldHaveDoneThisSooner.csv")
+    if fname.exists():
+        resDf = pd.read_csv(fname)
 
-    # Get rid of unneeded columns before the join
-    roadDf = roadDf[[SEG_ID_COL, "GISJOIN"]]
+        # Make the interval column timestamps
+        resDf[INTERVAL_COL] = pd.to_datetime(resDf[INTERVAL_COL])
 
-    # Do the join
-    joinedDf = pd.merge(vehicleDf, roadDf, on=SEG_ID_COL, how='inner')
+        # Reform the multiindex
+        resDf = resDf.set_index(['GISJOIN', INTERVAL_COL])
 
-    # Drop NANs
-    joinedDf = joinedDf.dropna(subset=[SPEED_RATIO_COL])
+    else:
+            
+        # Get a gator object
+        gator = Gator(graph, Path('./logs/ntdasGator.log'))
 
-    print(joinedDf.head())
+        # Before aggregation, we need to do a join
+        # to assign ZCTAs to each vehicle reading
 
-    # Do the scaling
-    st = time.time()
-    resDf = gator.SpatioTemporalEqualize(joinedDf, sdGdf,
-                                         TID.HOUR, GEID.ZCTA, GEID.SD,
-                                         'GISJOIN', 'GISJOIN', INTERVAL_COL,
-                                         None, SPEED_RATIO_COL, AggMethod.MEAN,
-                                         AggMethod.MEAN, EdgeType.AREA,
-                                         True, True
-                                         )
-    print(f"Runtime: {time.time() - st}")
-    
-    # Fix the ordering of the multindex
-    resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
+        # Get rid of unneeded columns before the join
+        roadDf = roadDf[[SEG_ID_COL, "GISJOIN"]]
 
-    # For plotting purposes, just look at Denver districts
-    resDf = resDf.loc[resDf.index.get_level_values(0).isin(list(DENVER_SD_IDS.keys()))]
+        # Do the join
+        joinedDf = pd.merge(vehicleDf, roadDf, on=SEG_ID_COL, how='inner')
 
-    #print(resDf)
-    #quit()
-    
+        # Drop NANs
+        joinedDf = joinedDf.dropna(subset=[SPEED_RATIO_COL])
+
+        #print(joinedDf.head())
+
+        # Do the scaling
+        st = time.time()
+        resDf = gator.SpatioTemporalEqualize(joinedDf, sdGdf,
+                                            TID.HOUR, GEID.ZCTA, GEID.SD,
+                                            'GISJOIN', 'GISJOIN', INTERVAL_COL,
+                                            None, SPEED_RATIO_COL, AggMethod.MEAN,
+                                            AggMethod.MEAN, EdgeType.AREA,
+                                            True, True
+                                            )
+        print(f"Runtime: {time.time() - st}")
+        
+        # Fix the ordering of the multindex
+        resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
+
+        # For plotting purposes, just look at Denver districts
+        resDf = resDf.loc[resDf.index.get_level_values(0).isin(list(DENVER_SD_IDS.keys()))]
+
+        # Save it for speed ups
+        resDf.to_csv("./data/ntdas/shouldHaveDoneThisSooner.csv")
+
+
     #resDf = resDf.unstack(level=0)
     # Group them one at a time to spread out subplots
     # among multiple figures
@@ -216,8 +231,14 @@ def main(load: bool = False, overwrite: bool = True):
     figCols = 1
     dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     print("Beginning plotting...")
-    quit()
+
+
     for lv, group in tqdm(resDf.groupby(level=0)):
+
+        # We only need a couple specific plots
+        if not ("Denver" in DENVER_SD_IDS[lv] or "Gilpin" in DENVER_SD_IDS[lv]):
+            continue
+
         if plotCount % (figRows * figCols) == 0:
             curFig, axisPairs = plt.subplots(figCols, figRows, figsize=(15,9))
             if figRows*figCols > 1:
@@ -255,6 +276,12 @@ def main(load: bool = False, overwrite: bool = True):
         curAxPair.set_ylabel('Ratio of Recorded to Typical Speed', fontsize=20)
         curAxPair.set_title(DENVER_SD_IDS[lv] + ", 10/5/20 - 10/9/20", fontsize=24)
 
+        # Set limits for specific graphs
+        if 'Denver' in DENVER_SD_IDS[lv]:
+            curAxPair.set_ylim(bottom=0.5, top=1.0)
+        elif 'Gilpin' in DENVER_SD_IDS[lv]:
+            curAxPair.set_ylim(bottom=0.6, top=1.2)
+
         # Fix tick sizes and fonts
         curAxPair.tick_params(axis='x', which='major', labelsize=16)
         curAxPair.tick_params(axis='y', which='major', labelsize=16)
@@ -287,7 +314,7 @@ def main(load: bool = False, overwrite: bool = True):
 
         plotCount += 1
 
-        plt.savefig(f"./data/ntdas/fixedFigs/{DENVER_SD_IDS[lv]}.png", dpi=1600)
+        plt.savefig(f"./data/ntdas/smallerFigs/{DENVER_SD_IDS[lv]}.png", dpi=1600)
 
         # Clear figures and axes for memory issues
         plt.clf()
