@@ -40,7 +40,6 @@ def main():
     # Calculate overlap factor
     exampleCounty['overlap_factor'] = ov['Area'] / ov['Shape_Area_1']
     print(exampleCounty[['NAME_2', 'overlap_factor']])
-    quit()
 
     # Use the overlaps to filter the original GDF
     schoolGdf = schoolGdf[schoolGdf['GISJOIN'].isin(ov['GISJOIN_2'].to_list())]
@@ -62,7 +61,12 @@ def main():
     exampleCounty = ov[ov['NAME_1'] == "Eagle"]
     print(exampleCounty)
 
-    plt.show()
+    # Set the zoom before saving
+    
+    base.set_xlim(-.96*(10**6), -0.85*(10**6))
+    base.set_ylim(241000, 332000)
+    plt.savefig("./data/overlapMapExampleZoomed.png", dpi=1600)
+    #plt.show()
 
 
 
