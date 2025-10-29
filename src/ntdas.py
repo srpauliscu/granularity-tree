@@ -29,8 +29,8 @@ TIMESTAMP_COL = "measurement_tstamp"
 SPEED_COL = "speed"
 REFERENCE_COL = "reference_speed"
 TRAVEL_TIME_COL = "travel_time_minutes"
-INTERVAL_COL = "_time_interval_"
-SPEED_RATIO_COL = "_speed_ratio_col_"
+INTERVAL_COL = "a_time_interval_"
+SPEED_RATIO_COL = "a_speed_ratio_col_"
 
 # List of GISJOIN ids for Denver SDs
 # Names included for convenience
@@ -99,69 +99,100 @@ def CalcInterval(row: pd.Series):
 
     return pd.Interval(row[TIMESTAMP_COL], endTime)
 
-def main(load: bool = False, overwrite: bool = True):
+def LoadSavedDFs(parentDir: Path) -> tuple[pd.DataFrame, gpd.GeoDataFrame, pd.DataFrame, gpd.GeoDataFrame]:
+
+    # Load the vehicle, school district, and road
+    # DFS that were already converted
+
+    vehicleDf = pd.read_csv(parentDir / Path("vehicleDf.csv"))
+    sdGdf = gpd.read_file(parentDir / Path("sdGdf.geojson"))
+    roadDf = pd.read_csv(parentDir / Path("roadDf.csv"))
+    zctaGdf = gpd.read_file(parentDir / Path("zctaGdf.geojson"))
+
+    return vehicleDf, sdGdf, roadDf, zctaGdf
+
+
+
+def main(load: bool = True, overwrite: bool = True):
 
     # Get the data
     dataDir = Path("./data/ntdas")
-    vehicleDf, roadDf = LoadData(dataDir, numRows=-1)
+    dfCacheDir = Path("./data/ntdas/gdfs")
 
-    # Only get specific dates of data
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
-    #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
-    vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
-    #vehicleDf = vehicleDf.sample(n=10000, random_state=42)
+    # Check if the gdfs already exist
+    if dfCacheDir.exists() and load:
+        vehicleDf, sdGdf, roadDf, zctaGdf = LoadSavedDFs(dfCacheDir)
 
-    # Only get Denver zip codes for the roads
-    roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
+    # Otherwise, load from scratch
+    else:
+        vehicleDf, roadDf = LoadData(dataDir, numRows=-1)
 
-    # Take out rows with a travel time of 0 minutes
-    vehicleDf = vehicleDf[vehicleDf[TRAVEL_TIME_COL] > 0]
+        # Only get specific dates of data
+        #dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
+        #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+        #vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
+        #vehicleDf = vehicleDf.sample(n=1000000, random_state=42)
 
-    # We need to calculate an end timestamp for each measurement
-    vehicleDf[INTERVAL_COL] = vehicleDf.apply(CalcInterval, axis=1)
+        # Only get Denver zip codes for the roads
+        #roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
 
-    # Set up the graph
-    graphsDir = Path("./graphs")
-    graph = GranularityGraph('ntdasGraph', Path('./logs/ntdasGraph.log'))
-    if load:
-        # This will run even if we don't have a save file
-        graph.LoadGraph(graphsDir)
+        # Take out rows with a travel time of 0 minutes
+        vehicleDf = vehicleDf[vehicleDf[TRAVEL_TIME_COL] > 0]
+
+        # We need to calculate an end timestamp for each measurement
+        vehicleDf[INTERVAL_COL] = vehicleDf.apply(CalcInterval, axis=1)
     
-    # We need a zip - school district layer
-    # We also need to convert zip to zcta first
-    parentDir = Path("./data/tiger")
-    sdGdf = LoadShapefile(parentDir, 'school')
+        # We need a zip - school district layer
+        # We also need to convert zip to zcta first
+        parentDir = Path("./data/tiger")
+        sdGdf = LoadShapefile(parentDir, 'school')
 
-    # We only need school districts in CO
-    sdGdf = sdGdf[sdGdf['STATEFP'] == CO_FIPS]
+        # We only need school districts in CO
+        sdGdf = sdGdf[sdGdf['STATEFP'] == CO_FIPS]
 
-    # Now, load in the zctas
-    zctaGdf = LoadShapefile(parentDir, 'zcta')
+        # Now, load in the zctas
+        zctaGdf = LoadShapefile(parentDir, 'zcta')
 
-    # Get the mapping from zip to zcta
-    ztzGdf = gpd.read_file("./data/zipToZcta.csv")
-    ztzGdf = ztzGdf[ztzGdf['STATE'] == 'CO']
+        # Get the mapping from zip to zcta
+        ztzGdf = gpd.read_file("./data/zipToZcta.csv")
+        ztzGdf = ztzGdf[ztzGdf['STATE'] == 'CO']
 
-    # Make a dictionary out of the two columns
-    ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
+        # Make a dictionary out of the two columns
+        ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
 
-    # Do the conversion from zip to zcta
-    roadDf[ZCTA_COL] = roadDf.apply(ZipZctaConverter, args=(ztzDict,), axis=1)
+        # Do the conversion from zip to zcta
+        roadDf[ZCTA_COL] = roadDf.apply(ZipZctaConverter, args=(ztzDict,), axis=1)
 
-    # Make a zcta: GISJOIN dict
-    zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
+        # Make a zcta: GISJOIN dict
+        zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
 
-    # Add a column to the roads for the GISJOIN ID of their ZCTA
-    roadDf['GISJOIN'] = roadDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
+        # Add a column to the roads for the GISJOIN ID of their ZCTA
+        roadDf['GISJOIN'] = roadDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
 
-    # Remove ZIPs we didn't have
-    roadDf = roadDf[roadDf['GISJOIN'] != ""]
+        # Remove ZIPs we didn't have
+        roadDf = roadDf[roadDf['GISJOIN'] != ""]
 
-    # Calculate ratio of speed to reference speed
-    vehicleDf[SPEED_RATIO_COL] = vehicleDf[SPEED_COL] / vehicleDf[REFERENCE_COL]
+        # Calculate ratio of speed to reference speed
+        vehicleDf[SPEED_RATIO_COL] = vehicleDf[SPEED_COL] / vehicleDf[REFERENCE_COL]
+
+        # Write out the adjusted source files
+        if not dfCacheDir.exists():
+            dfCacheDir.mkdir()
+        vehicleDf.to_csv(dfCacheDir / Path("vehicleDf.csv"))
+        sdGdf.to_file(dfCacheDir / Path("sdGdf.geojson"), driver="GeoJSON")
+        roadDf.to_csv(dfCacheDir / Path("roadDf.csv"))
+        zctaGdf.to_file(dfCacheDir / Path("zctaGdf.geojson"), driver="GeoJSON")
+
+    print("Constructing graph...")
+    
 
     # Construct the graph, if needed
-    if not load:
+    graphsDir = Path("./graphs")
+    graph = GranularityGraph('ntdasGraph', Path('./logs/ntdasGraph.log'))
+    if False:#load or overwrite:
+        # This will run even if we don't have a save file
+        graph.LoadGraph(graphsDir)
+    else:
         msg = "Adding school district-ZCTA layer..."
         print(msg)
         graph = AddLevel(graph, sdGdf, zctaGdf,
@@ -172,7 +203,7 @@ def main(load: bool = False, overwrite: bool = True):
             graph.SaveGraph(graphsDir)
     
 
-    # Check if we have an existing file first
+    # Check if we have an existing result file first
     fname = Path("./data/ntdas/shouldHaveDoneThisSooner.csv")
     if fname.exists():
         resDf = pd.read_csv(fname)
@@ -220,7 +251,7 @@ def main(load: bool = False, overwrite: bool = True):
         resDf = resDf.loc[resDf.index.get_level_values(0).isin(list(DENVER_SD_IDS.keys()))]
 
         # Save it for speed ups
-        resDf.to_csv("./data/ntdas/shouldHaveDoneThisSooner.csv")
+        #resDf.to_csv("./data/ntdas/shouldHaveDoneThisSooner.csv")
 
 
     #resDf = resDf.unstack(level=0)
@@ -232,7 +263,8 @@ def main(load: bool = False, overwrite: bool = True):
     dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     print("Beginning plotting...")
 
-
+    return
+    
     for lv, group in tqdm(resDf.groupby(level=0)):
 
         # We only need a couple specific plots
