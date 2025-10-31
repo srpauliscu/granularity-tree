@@ -109,11 +109,12 @@ def LoadSavedDFs(parentDir: Path) -> tuple[pd.DataFrame, gpd.GeoDataFrame, pd.Da
     roadDf = pd.read_csv(parentDir / Path("roadDf.csv"))
     zctaGdf = gpd.read_file(parentDir / Path("zctaGdf.geojson"))
 
+
     return vehicleDf, sdGdf, roadDf, zctaGdf
 
 
 
-def main(load: bool = True, overwrite: bool = True):
+def main(load: bool = True, overwrite: bool = False):
 
     # Get the data
     dataDir = Path("./data/ntdas")
@@ -121,20 +122,22 @@ def main(load: bool = True, overwrite: bool = True):
 
     # Check if the gdfs already exist
     if dfCacheDir.exists() and load:
+        print("Loading gdfs...")
         vehicleDf, sdGdf, roadDf, zctaGdf = LoadSavedDFs(dfCacheDir)
 
     # Otherwise, load from scratch
     else:
+        print("Making gdfs...")
         vehicleDf, roadDf = LoadData(dataDir, numRows=-1)
 
         # Only get specific dates of data
         #dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
-        #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
-        #vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
+        dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+        vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
         #vehicleDf = vehicleDf.sample(n=1000000, random_state=42)
 
         # Only get Denver zip codes for the roads
-        #roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
+        roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
 
         # Take out rows with a travel time of 0 minutes
         vehicleDf = vehicleDf[vehicleDf[TRAVEL_TIME_COL] > 0]
@@ -176,12 +179,14 @@ def main(load: bool = True, overwrite: bool = True):
         vehicleDf[SPEED_RATIO_COL] = vehicleDf[SPEED_COL] / vehicleDf[REFERENCE_COL]
 
         # Write out the adjusted source files
+        '''
         if not dfCacheDir.exists():
             dfCacheDir.mkdir()
         vehicleDf.to_csv(dfCacheDir / Path("vehicleDf.csv"))
         sdGdf.to_file(dfCacheDir / Path("sdGdf.geojson"), driver="GeoJSON")
         roadDf.to_csv(dfCacheDir / Path("roadDf.csv"))
         zctaGdf.to_file(dfCacheDir / Path("zctaGdf.geojson"), driver="GeoJSON")
+        '''
 
     print("Constructing graph...")
     
@@ -189,7 +194,7 @@ def main(load: bool = True, overwrite: bool = True):
     # Construct the graph, if needed
     graphsDir = Path("./graphs")
     graph = GranularityGraph('ntdasGraph', Path('./logs/ntdasGraph.log'))
-    if False:#load or overwrite:
+    if load and not overwrite:
         # This will run even if we don't have a save file
         graph.LoadGraph(graphsDir)
     else:
@@ -202,7 +207,6 @@ def main(load: bool = True, overwrite: bool = True):
         if overwrite:
             graph.SaveGraph(graphsDir)
     
-
     # Check if we have an existing result file first
     fname = Path("./data/ntdas/shouldHaveDoneThisSooner.csv")
     if fname.exists():
