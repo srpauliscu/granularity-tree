@@ -5,10 +5,73 @@
 import numpy as np
 from pprint import pprint
 import pandas as pd
+import xxhash
 
 from src.entities import *
 
 
+
+
+
+colName = 'aaacol1_'
+def IterTest():
+
+    col1 = [i for i in range(5)]
+    testDf = pd.DataFrame({colName: col1})
+
+    #for i, row in testDf.iterrows():
+    #    res = row['col1'] + 1
+
+    for row in testDf.itertuples():
+        res = row.__getattribute__(colName) + 1
+        print(res)
+
+IterTest()
+
+def HashTest():
+
+    hasher = xxhash.xxh64()
+    d = {}
+    for i in range(4*(10**7)):
+        res = f"{i}"#.__hash__()
+        #res = hash(f"{i}")
+        d[res] = i
+        a = d[res]
+
+
+def AssignmentTest():
+
+    size = 4*(10**4)
+    ar = np.ones((size, size))
+
+    testList = [ar, ar, ar]
+
+    for i in range(size - 1):
+
+
+        #adjMat = testList[0]
+        #res1 = adjMat[i, i+1] == adjMat[i+1, i]
+        #res2 = not adjMat[i, i+1] == 0
+
+        res1 = testList[0][i, i+1] == testList[0][i+1, i]
+        res2 = not testList[0][i,i+1] == 0
+
+#testDf = pd.DataFrame()
+#HashTest()
+#AssignmentTest()
+
+
+
+
+
+
+
+
+
+
+
+
+quit()
 
 df1 = pd.DataFrame([[0, 2, 3], [-1, -1, -1], [0, 4, 1], [10, 20, 30]],
                   index=[1,2,3,4], columns=['A', 'B', 'C'])

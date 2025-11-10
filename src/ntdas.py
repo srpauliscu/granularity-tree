@@ -129,6 +129,7 @@ def main(load: bool = True, overwrite: bool = False):
     else:
         print("Making gdfs...")
         vehicleDf, roadDf = LoadData(dataDir, numRows=-1)
+        #vehicleDf, roadDf = LoadData(dataDir, numRows=100)
 
         # Only get specific dates of data
         #dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)

@@ -29,10 +29,19 @@ class Node(object):
         #: StrEnum: An enum that says what this node represents (e.g. CITY, HOUR, etc.)
         self.entityType = _entityType
 
+        #: int: The hash of the node reprsented by this entity
+        self.myHash = f"{self.id}_{self.entityType}".__hash__()
+
+
     pass
 
+    def GenerateHash(self):
+        self.myHash = f"{self.id}_{self.entityType}".__hash__()
+
     def __hash__(self):
-        return hash(self.id + '_' + self.entityType)
+        #return hash(self.id + '_' + self.entityType)
+        #return f"{self.id}_{self.entityType}".__hash__()
+        return self.myHash
 
     def __eq__(self, value) -> bool:
         """
@@ -135,10 +144,10 @@ class GranularityGraph(object):
         n2i = self.indexMap[n2]
 
         # Check for symmetry (internal sanity check)
-        if not adjMat[n1i, n2i] == adjMat[n2i, n1i]:
-            msg = f'Matrix symmetry broken at {n1i},{n2i}\n{adjMat}'
-            self.logger.error(msg)
-            raise RuntimeError(msg)
+        #if not adjMat[n1i, n2i] == adjMat[n2i, n1i]:
+        #    msg = f'Matrix symmetry broken at {n1i},{n2i}\n{adjMat}'
+        #    self.logger.error(msg)
+        #    raise RuntimeError(msg)
 
         return not adjMat[n1i, n2i] == 0
     
@@ -352,6 +361,9 @@ class GranularityGraph(object):
                 # Go through the values and instantiate EdgeType objects
                 newVals = {EdgeType(w): newNode.values[w] for w in newNode.values}
                 newNode.values = newVals
+
+                # Force the hash to be updated
+                newNode.GenerateHash()
 
 
                 # Add it to the final indexMap

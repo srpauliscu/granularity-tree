@@ -56,22 +56,22 @@ def FormInterval(row: pd.Series, tsCol: str, unit: TID) -> pd.Interval:
 class Gator(object):
 
     # Class variables for column names
-    FACTOR_COL = '_factor_'
-    DEST_COL = '_destId_'
-    VALUE_FACTOR_COL = '_vf_'
-    NEW_VALUE_COL = '_value_'
-    ERROR_COL = '_error_'
-    MATCHING_DEST_NODES_COL = '_matchingDestNodes_'
+    FACTOR_COL = 'factor__'
+    DEST_COL = 'destId__'
+    VALUE_FACTOR_COL = 'vf__'
+    NEW_VALUE_COL = 'value__'
+    ERROR_COL = 'error__'
+    MATCHING_DEST_NODES_COL = 'matchingDestNodes__'
 
     # Variables for spatio-temporal agg/deagg
-    S_FACTOR_COL = '_sFactor_'
-    T_FACTOR_COL = '_tFactor_'
-    S_VALUE_FACTOR_COL = '_svf_'
-    T_VALUE_FACTOR_COL = '_tvf_'
-    S_DEST_COL = '_sDestId_'
-    T_DEST_COL = '_tDestId_'
+    S_FACTOR_COL = 'sFactor__'
+    T_FACTOR_COL = 'tFactor__'
+    S_VALUE_FACTOR_COL = 'svf__'
+    T_VALUE_FACTOR_COL = 'tvf__'
+    S_DEST_COL = 'sDestId__'
+    T_DEST_COL = 'tDestId__'
 
-    INTERVAL_COL = '_newInterval_'
+    INTERVAL_COL = 'newInterval__'
 
     # Flag for doing additional cleanup
     DEBUG = True
@@ -566,11 +566,14 @@ class Gator(object):
         argDict = {TID_TO_STRING[destType]: 1}
         ONE_UNIT = pd.DateOffset(**argDict)
 
-        for i, row in sourceDf.iterrows():
+        for row in sourceDf.itertuples():
 
             # Get the two endpoints of the interval
-            startTs = row[intervalCol].left
-            endTs = row[intervalCol].right
+            startTs = row.__getattribute__(intervalCol).left
+            endTs = row.__getattribute__(intervalCol).right
+
+            # Get the data once for efficiency
+            actualData = row.__getattribute__(dataCol)
 
             # Calculate the value of the origin "node"
             origSize = (endTs - startTs).total_seconds()
@@ -600,7 +603,7 @@ class Gator(object):
                 newRow = {}
 
                 # Copy over the data column
-                newRow[dataCol] = row[dataCol]
+                newRow[dataCol] = actualData
 
                 # Add in the current timestamp
                 newRow[self.DEST_COL] = curTimeCounter
@@ -641,7 +644,7 @@ class Gator(object):
                     newRow[self.FACTOR_COL] = overlap / origSize
 
                 # Calculate the value-factor
-                newRow[self.VALUE_FACTOR_COL] = newRow[self.FACTOR_COL] * row[dataCol]
+                newRow[self.VALUE_FACTOR_COL] = newRow[self.FACTOR_COL] * actualData
 
                 # Add the new row to the list
                 tempNewRows.append(newRow)
@@ -654,13 +657,9 @@ class Gator(object):
             #print(sum(valueFactors))
             #print(row[dataCol])
             
-            if not math.isclose(sum(valueFactors), row[dataCol]):
-                print(sum(valueFactors))
-                print(row[dataCol])
-                print(row)
-                print(tempNewRows)
+            if not math.isclose(sum(valueFactors), actualData):
                 raise RuntimeError
-            assert math.isclose(sum(valueFactors), row[dataCol])
+            assert math.isclose(sum(valueFactors), actualData)
 
             # Cutoff the last entry if the overlap is 0
             # This is just an inclusive/exclusive interval problem
