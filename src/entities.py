@@ -43,6 +43,8 @@ class AggMethod(StrEnum):
     MEDIAN = "Median"   # Weighted median
     SUM = "Sum"
 
+    KRIGING = "Kriging" # Best linear unbiased predictor (BLUP)
+
 class DeAggMethod(StrEnum):
 
     """
@@ -51,6 +53,8 @@ class DeAggMethod(StrEnum):
 
     DISTRIBUTE = "Distribute"
     COPY = "Copy"
+
+    KRIGING = "Kriging" # BLUP
 
 
 class GEID(StrEnum):

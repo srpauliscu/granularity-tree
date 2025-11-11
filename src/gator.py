@@ -353,8 +353,10 @@ class Gator(object):
         sourceNodes = newSourceNodes
         destNodes = newDestNodes
 
-        # 2.) For each source node, find all matching destNodes
+        # 2a.) For each source node, find all matching destNodes
         allMatches = {}
+
+        if TODO: pass;
         for sn in sourceNodes:
 
             # Get the matching dest nodes
@@ -362,6 +364,9 @@ class Gator(object):
             allMatches[sn] = matches
 
         # allMatches: {sourceNode: {destNode1: weight1, destNode2: weight2, ...}, ...}
+
+        # 2b.) If kriging, we need to find all source nodes for each dest node instead
+
 
         # 3.) Calculate mult factors
         allFactors = {}
