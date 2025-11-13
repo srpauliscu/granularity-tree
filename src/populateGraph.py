@@ -33,8 +33,8 @@ def AddNodes(row, curGraph: GranularityGraph, edgeType: EdgeType,
     v2[edgeType] = row['Shape_Area_2']
 
     # Use the GISJOIN as the id
-    node1 = Node(row['GISJOIN_1'], v1, n1Type)
-    node2 = Node(row['GISJOIN_2'], v2, n2Type)
+    node1 = Node(row['GISJOIN_1'], v1, n1Type, row['geoCopy_1'])
+    node2 = Node(row['GISJOIN_2'], v2, n2Type, row['geoCopy_2'])
 
     # Add them to the graph
     status = curGraph.AddNodes(node1, node2, edgeType, row[OVERLAY_AREA_COLUMN])
@@ -58,7 +58,13 @@ def AddLevel(curGraph: GranularityGraph,
 
     # Only grab needed columns
     #neededColumns = ['GISJOIN', 'GEOIDFQ', 'Shape_Area', 'geometry']
-    neededColumns = ['GISJOIN', 'Shape_Area', 'geometry']
+    
+    # Make a duplicate of the geometry columns
+    gdf1['geoCopy'] = gdf1['geometry']
+    gdf2['geoCopy'] = gdf2['geometry']
+
+    neededColumns = ['GISJOIN', 'Shape_Area', 'geoCopy', 'geometry']
+
     
     gdf1 = gdf1[neededColumns]
     gdf2 = gdf2[neededColumns]
@@ -71,6 +77,7 @@ def AddLevel(curGraph: GranularityGraph,
 
     # Remove false positives
     ov = ov[ov[OVERLAY_AREA_COLUMN] > 0]
+
 
     # Step 2: Add a node for each entity, using the area as the edge weight
     ov.apply(AddNodes, axis=1, args=(curGraph, EdgeType.AREA, n1Type, n2Type))

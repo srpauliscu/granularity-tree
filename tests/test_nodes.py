@@ -22,7 +22,8 @@ def testNodeBasic():
     nodes = []
     for i in range(sampleSize):
 
-        n = Node('node{i}', {EdgeType.AREA: i}, GEID.TEST)
+        n = Node('node{i}', {EdgeType.AREA: i}, GEID.TEST,
+                 Polygon(((i, i), (i, i+2), (i+2, i+2), (i+2, i))))
         nodes.append(n)
 
     # Make sure the equality function works

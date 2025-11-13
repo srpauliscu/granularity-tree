@@ -253,8 +253,9 @@ def testEqualizeSumBasic():
     # Easiest one first- counties to states
     idCol = 'ID'
     dataCol = 'TotalEVs'
+    geoCol = 'geo'
     resDf = gator.SpatialEqualize(counties, states, GEID.COUNTY, GEID.STATE,
-                           idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
+                           idCol, idCol, dataCol, geoCol, geoCol, AggMethod.SUM, EdgeType.AREA)
     
     # Make sure the values match
     statesTemp = states.set_index('ID')
@@ -264,7 +265,7 @@ def testEqualizeSumBasic():
     # Do the same with population, just for testing
     dataCol = 'Population'
     resDf = gator.SpatialEqualize(counties, states, GEID.COUNTY, GEID.STATE,
-                           idCol, idCol, dataCol, AggMethod.SUM, EdgeType.AREA)
+                           idCol, idCol, dataCol, geoCol, geoCol, AggMethod.SUM, EdgeType.AREA)
     
     for ind, row in statesTemp.iterrows():
         assert resDf.at[ind, dataCol] == row[dataCol]

@@ -298,7 +298,8 @@ class Gator(object):
         return resDf
 
     def MakeNodeObjects(self, ids1: pd.Series, ids2: pd.Series,
-                  entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:
+                  entityType1: GEID | TID, entityType2: GEID | TID,
+                  geometries1: pd.Series, geometries2: pd.Series) -> tuple[list[Node], list[Node]]:
         
         """
         Make actual node objects from the given data
@@ -309,19 +310,26 @@ class Gator(object):
         # TODO: Should have a way to check the validity of the ids
 
         nodes1 = []
-        for id in ids1:
-            nodes1.append(Node(id, None, entityType1))
+        for i, id in enumerate(ids1):
+            print(geometries1[184])
+            #print(geometries1[185])
+            quit() #TODO
+            nodes1.append(Node(id, None, entityType1, geometries1[i]))
 
         nodes2 = []
-        for id in ids2:
-            nodes2.append(Node(id, None, entityType2))
+        for i, id in enumerate(ids2):
+            nodes2.append(Node(id, None, entityType2, geometries2[i]))
+        
+        quit()
 
         return nodes1, nodes2
     
     def CalcSpatialFactors(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
                            sourceType: GEID, destType: GEID,
                            sourceIdCol: str, destIdCol: str,
-                           sourceDataCol: str, edgeType: EdgeType,
+                           sourceDataCol: str,
+                           sourceGeoCol: str, destGeoCol: str,
+                           edgeType: EdgeType,
                            ignoreMissing: bool = False,
                            ignoreIncomplete: bool = False) -> pd.DataFrame:
         
@@ -334,7 +342,9 @@ class Gator(object):
         # 1.) Make the nodes
         sourceNodes, destNodes = self.MakeNodeObjects(sourceDf[sourceIdCol],
                                                       destDf[destIdCol],
-                                                      sourceType, destType)
+                                                      sourceType, destType,
+                                                      sourceDf[sourceGeoCol],
+                                                      destDf[destGeoCol])
         
         # Get the populated version of each node from the graph
         newSourceNodes = []
@@ -469,6 +479,8 @@ class Gator(object):
                 sourceType: GEID, destType: GEID,
                 sourceIdCol: str, destIdCol: str,
                 sourceDataCol: str,
+                sourceGeoCol: str,
+                destGeoCol: str,
                 method: AggMethod | DeAggMethod,
                 edgeType: EdgeType, ignoreMissing: bool = False,
                 ignoreIncomplete: bool = False) -> pd.DataFrame:
@@ -503,6 +515,7 @@ class Gator(object):
         # Use the graph to calculate the factors and valueFactors
         expandedDf = self.CalcSpatialFactors(sourceDf, destDf, sourceType, destType,
                                              sourceIdCol, destIdCol, sourceDataCol,
+                                             sourceGeoCol, destGeoCol,
                                              edgeType, ignoreMissing=ignoreMissing,
                                              ignoreIncomplete=ignoreIncomplete)
 
@@ -744,7 +757,7 @@ class Gator(object):
     def SpatioTemporalEqualize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame, destTType: TID,
                                sourceSType: GEID, destSType: GEID, sourceSIdCol: str,
                                destSIdCol: str, sourceTIdCol: str, destTIdCol: str,
-                               sourceDataCol: str,
+                               sourceDataCol: str, sourceGeoCol: str, destGeoCol: str,
                                sMethod: AggMethod | DeAggMethod, tMethod: AggMethod | DeAggMethod,
                                edgeType: EdgeType, ignoreMissing: bool = False,
                                ignoreIncomplete: bool = False) -> pd.DataFrame:
@@ -780,6 +793,7 @@ class Gator(object):
         # Use the graph to calculate the spatial factors and value factors
         expandedDf = self.CalcSpatialFactors(sourceDf, destDf, sourceSType, destSType,
                                              sourceSIdCol, destSIdCol, sourceDataCol,
+                                             sourceGeoCol, destGeoCol,
                                              edgeType, ignoreMissing, ignoreIncomplete)
         
         # Rename to avoid clashes later

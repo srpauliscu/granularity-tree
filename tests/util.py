@@ -48,7 +48,8 @@ def HashWeight(i, j, wm):
 def MakeTestSamples(sampleSize: int, weightModifier: float, WeightCalc: Callable):
 
     # Make the nodes programatically for testing
-    sampleNodes = [Node(f"node{i}", {w: i for w in EdgeType}, GEID.TEST) for i in range(sampleSize)]
+    sampleNodes = [Node(f"node{i}", {w: i for w in EdgeType}, GEID.TEST,
+                        Polygon(((i, i), (i, i+2), (i+2, i+2), (i+2, i)))) for i in range(sampleSize)]
 
     # Need actual loops to form the numpy arrays
     # Note: This is NOT the array(s) that the graph keeps - 
@@ -176,8 +177,8 @@ def GenerateSampleGraph(zips: pd.DataFrame, counties: pd.DataFrame,
 
         for ind, row in df.iterrows():
             
-            # Make the node
-            newNode = Node(row['ID'], {EdgeType.AREA: row['Area']}, k)
+            # Make the node, ignoring geometry
+            newNode = Node(row['ID'], {EdgeType.AREA: row['Area']}, k, None)
             allNodes[row['ID']] = newNode
 
     # Now, add the nodes and edges
@@ -450,6 +451,10 @@ def GenerateSTSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
         # Copy in the zcta as a new column
         tSampleDf[ZCTA_COL] = zcta
         tAnswerKeyDf[ZCTA_COL] = zcta
+
+        # Provide dummy geometries
+        tSampleDf['geometry'] = Polygon(((0,0), (0,2), (2,2), (2,0)))
+        tAnswerKeyDf['geometry'] = tSampleDf['geometry']
 
         # Save them
         allSamples.append(tSampleDf)

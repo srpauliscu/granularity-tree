@@ -8,7 +8,7 @@ from pathlib import Path
 
 from entities import *
 
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry import Polygon, MultiPolygon, mapping, shape
 
 class Node(object):
 
@@ -18,12 +18,13 @@ class Node(object):
     
     """
 
-    def __init__(self, _id: str, _values: dict[EdgeType, float] | None, _entityType: StrEnum,):
+    def __init__(self, _id: str, _values: dict[EdgeType, float] | None, _entityType: StrEnum,
+                 _geometry: Polygon | MultiPolygon | None):
 
 
         #: str: a globally unique ID
         # (e.g. for spatial data, the GISJOIN value as defined by NHGIS)
-        self.id = _id 
+        self.id = _id
 
         #: dict: kv pairs for data used to calculate edge weights
         self.values = _values
@@ -35,14 +36,8 @@ class Node(object):
         self.myHash = f"{self.id}_{self.entityType}".__hash__()
 
         #: Polygon | Multipolygon: The polygon(s) that spatially define this object
-        self.geometry = None
-
-
-    def AddGeometry(self, _geometry: Polygon | MultiPolygon):
-        # Seperate function to add a geometry
-        # since it is only needed for kriging
-
         self.geometry = _geometry
+
 
     def GenerateHash(self):
         self.myHash = f"{self.id}_{self.entityType}".__hash__()
@@ -127,7 +122,7 @@ class GranularityGraph(object):
         # Get the node with that id
 
         # Form a dummy node
-        dummyNode = Node(id, None, entityType)
+        dummyNode = Node(id, None, entityType, None)
 
         # If it exists, return the populated node object
         for k in self.indexMap:
@@ -302,6 +297,10 @@ class GranularityGraph(object):
             for node in self.indexMap:
                 resDict['indexMap'][self.indexMap[node]] = node.__dict__
 
+                # Need to convert the Polgyon to a dict for serialization
+                resDict['indexMap'][self.indexMap[node]]['geometry'] = \
+                    mapping(resDict['indexMap'][self.indexMap[node]]['geometry'])
+
             # Make the folder, if needed
             saveDir = parentDir / Path(self.name)
             if not saveDir.exists():
@@ -324,6 +323,8 @@ class GranularityGraph(object):
 
             # Put the filenames in the final file
             resDict['graphFilenames'] = graphFiles
+
+            print(resDict['indexMap'][0]['geometry'])
 
             # Dump the dict to a json
             with open(saveDir / Path('main.json'), "w") as f:
@@ -361,11 +362,14 @@ class GranularityGraph(object):
             for matIndex in indexMap:
 
                 # Instantiate blank node object
-                newNode = Node("", None, None)
+                newNode = Node("", None, None, None)
 
                 # Load all member variables
                 for k in indexMap[matIndex]:
                     newNode.__dict__[k] = indexMap[matIndex][k]
+
+                # Convert the polygon back to a Polygon object
+                newNode.geometry = shape(newNode.geometry)
 
                 # Go through the values and instantiate EdgeType objects
                 newVals = {EdgeType(w): newNode.values[w] for w in newNode.values}
