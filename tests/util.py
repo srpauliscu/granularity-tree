@@ -26,9 +26,9 @@ ADJ_TEST_FILE = Path("./tests/adjMat.csv")
 
 
 # Global vars for column names
-T_ID_COL = "_timestamp_start_"
-T_DATA_COL = "_value_"
-T_INTERVAL_COL = "_interval_"
+T_ID_COL = "timestamp_start__"
+T_DATA_COL = "value__"
+T_INTERVAL_COL = "interval__"
 ZCTA_COL = 'ZCTA'
 
 COUNTY_ASSIGNMENT = {'s0': [f'c{i}' for i in range(0,4)],

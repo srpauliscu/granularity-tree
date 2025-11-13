@@ -53,6 +53,33 @@ def FormInterval(row: pd.Series, tsCol: str, unit: TID) -> pd.Interval:
     return pd.Interval(startTs, endTs)
 
 
+
+class Kriger(object):
+
+    def __init__(self):
+
+        # Fit function in the form of C(h)
+        semivariogram = None
+
+        # Sample weights (vector W)
+        W = None
+
+        # Lagrange parameter (used in error calc)
+        langrange = None
+
+        # Covariance matrix (matrix C)
+        C = None
+
+        # Prediction covariances (vector D)
+        D = None
+
+    def FitSemivariogram(self, samples: pd.DataFrame, idCol: str, dataCol: str,
+                         allMatches: dict[Node, dict[Node, np.float64]]):
+        
+        # allMatches: {destNode: {source}}
+
+        pass
+
 class Gator(object):
 
     # Class variables for column names
@@ -356,7 +383,6 @@ class Gator(object):
         # 2a.) For each source node, find all matching destNodes
         allMatches = {}
 
-        if TODO: pass;
         for sn in sourceNodes:
 
             # Get the matching dest nodes

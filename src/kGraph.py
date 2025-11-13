@@ -8,6 +8,8 @@ from pathlib import Path
 
 from entities import *
 
+from shapely.geometry import Polygon, MultiPolygon
+
 class Node(object):
 
     """
@@ -16,7 +18,7 @@ class Node(object):
     
     """
 
-    def __init__(self, _id: str, _values: dict[EdgeType, float] | None, _entityType: StrEnum):
+    def __init__(self, _id: str, _values: dict[EdgeType, float] | None, _entityType: StrEnum,):
 
 
         #: str: a globally unique ID
@@ -32,8 +34,15 @@ class Node(object):
         #: int: The hash of the node reprsented by this entity
         self.myHash = f"{self.id}_{self.entityType}".__hash__()
 
+        #: Polygon | Multipolygon: The polygon(s) that spatially define this object
+        self.geometry = None
 
-    pass
+
+    def AddGeometry(self, _geometry: Polygon | MultiPolygon):
+        # Seperate function to add a geometry
+        # since it is only needed for kriging
+
+        self.geometry = _geometry
 
     def GenerateHash(self):
         self.myHash = f"{self.id}_{self.entityType}".__hash__()
@@ -364,7 +373,6 @@ class GranularityGraph(object):
 
                 # Force the hash to be updated
                 newNode.GenerateHash()
-
 
                 # Add it to the final indexMap
                 self.indexMap[newNode] = int(matIndex)

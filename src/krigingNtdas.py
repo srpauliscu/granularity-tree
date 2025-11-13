@@ -42,6 +42,10 @@ def Kriging():
     # We need to convert from ZIP to ZCTA
     parentDir = Path("./data/tiger")
     zctaGdf = LoadShapefile(parentDir, 'zcta')
+
+    print(type(zctaGdf['geometry'].iloc[0]))
+    quit()
+
     ztzGdf = gpd.read_file("./data/zipToZcta.csv")
     ztzGdf = ztzGdf[ztzGdf['STATE'] == 'CO']
     ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
