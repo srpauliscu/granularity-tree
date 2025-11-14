@@ -297,9 +297,10 @@ class Gator(object):
         # Return it
         return resDf
 
-    def MakeNodeObjects(self, ids1: pd.Series, ids2: pd.Series,
-                  entityType1: GEID | TID, entityType2: GEID | TID,
-                  geometries1: pd.Series, geometries2: pd.Series) -> tuple[list[Node], list[Node]]:
+    def MakeNodeObjects(self, ids1: pd.DataFrame, ids2: pd.DataFrame,
+                        id1IdCol: str, id2IdCol: str,
+                        id1GeoCol: str, id2GeoCol: str,
+                        entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:
         
         """
         Make actual node objects from the given data
@@ -310,18 +311,18 @@ class Gator(object):
         # TODO: Should have a way to check the validity of the ids
 
         nodes1 = []
-        for i, id in enumerate(ids1):
-            print(geometries1[184])
-            #print(geometries1[185])
-            quit() #TODO
-            nodes1.append(Node(id, None, entityType1, geometries1[i]))
+        for row in ids1.itertuples():
+            nodes1.append(Node(row.__getattribute__(id1IdCol),
+                               None, entityType1,
+                               row.__getattribute__(id1GeoCol)))
+        
 
         nodes2 = []
-        for i, id in enumerate(ids2):
-            nodes2.append(Node(id, None, entityType2, geometries2[i]))
+        for row in ids2.itertuples():
+            nodes2.append(Node(row.__getattribute__(id2IdCol),
+                               None, entityType2,
+                               row.__getattribute__(id2GeoCol)))
         
-        quit()
-
         return nodes1, nodes2
     
     def CalcSpatialFactors(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
@@ -340,11 +341,10 @@ class Gator(object):
         '''
 
         # 1.) Make the nodes
-        sourceNodes, destNodes = self.MakeNodeObjects(sourceDf[sourceIdCol],
-                                                      destDf[destIdCol],
-                                                      sourceType, destType,
-                                                      sourceDf[sourceGeoCol],
-                                                      destDf[destGeoCol])
+        sourceNodes, destNodes = self.MakeNodeObjects(sourceDf, destDf,
+                                                      sourceIdCol, destIdCol,
+                                                      sourceGeoCol, destGeoCol,
+                                                      sourceType, destType)
         
         # Get the populated version of each node from the graph
         newSourceNodes = []

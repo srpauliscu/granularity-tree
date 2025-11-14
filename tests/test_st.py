@@ -57,6 +57,7 @@ def testSTNoInterval():
     resDf = gator.SpatioTemporalEqualize(allAnswerKeysDf, pd.DataFrame(countyGdf), TID.MONTH,
                                          GEID.ZCTA, GEID.COUNTY, ZCTA_COL, 'GISJOIN', T_ID_COL,
                                          'NONE', T_DATA_COL,
+                                         'geometry', 'geometry',
                                          AggMethod.SUM, AggMethod.SUM,
                                          EdgeType.AREA, True, True)
     
