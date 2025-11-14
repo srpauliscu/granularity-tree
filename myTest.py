@@ -6,11 +6,42 @@ import numpy as np
 from pprint import pprint
 import pandas as pd
 import xxhash
+import geopandas as gpd
+from shapely.geometry import Polygon, shape, mapping
 
 from src.entities import *
 
 
 
+
+
+testd = {'value': [1,2,3],
+ 'geometry': [
+     Polygon(((0,0),(0,1),(1,1),(1,0))),
+     Polygon(((0,0),(0,2),(2,2),(2,0))),
+     Polygon(((0,0),(0,2),(2,2),(2,0)))
+ ]}
+
+testGpd = gpd.GeoDataFrame(testd)
+
+testGpd['mappedGeo'] = testGpd['geometry'].apply(mapping)
+
+print(testGpd)
+
+testGpd.to_csv("./testGeo.csv", index=False)
+
+testGpd2 = gpd.read_file("./testGeo.csv")
+
+
+
+
+testGpd2['mappedGeo'] = testGpd2['mappedGeo'].apply(lambda x: shape(eval(x)))
+
+print(type(testGpd2['mappedGeo'].iloc[0]))
+
+
+
+quit()
 
 
 colName = 'aaacol1_'
@@ -43,6 +74,7 @@ def AssignmentTest():
 
     size = 4*(10**4)
     ar = np.ones((size, size))
+
 
     testList = [ar, ar, ar]
 

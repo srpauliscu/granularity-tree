@@ -74,7 +74,7 @@ class Kriger(object):
         D = None
 
     def FitSemivariogram(self, samples: pd.DataFrame, idCol: str, dataCol: str,
-                         allMatches: dict[Node, dict[Node, np.float64]]):
+                         matchingNodes: list[Node]):
         
         # allMatches: {destNode: {source}}
 
@@ -325,6 +325,87 @@ class Gator(object):
         
         return nodes1, nodes2
     
+    def CalcKrigingWeights(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
+                           sourceType: GEID, destType: GEID,
+                           sourceIdCol: str, destIdCol: str,
+                           sourceDataCol: str,
+                           sourceGeoCol: str, destGeoCol: str,
+                           edgeType: EdgeType,
+                           ignoreMissing: bool = False,
+                           ignoreInomplete: bool = False) -> pd.DataFrame:
+        
+        '''
+        Use kriging to calculate the linear weights for each destination
+        '''
+
+        # 1.) Make the nodes
+        sourceNodes, destNodes = self.MakeNodeObjects(sourceDf, destDf,
+                                                      sourceIdCol, destIdCol,
+                                                      sourceGeoCol, destGeoCol,
+                                                      sourceType, destType)
+        
+        # Get the populated version of each node from the graph
+        newSourceNodes = []
+        newDestNodes = []
+        for sn in sourceNodes:
+            if not self.kGraph.NodeExists(sn):
+                msg = f"Source node {sn.id} does not exist in the graph."
+
+                # Throw an error if specified
+                if not ignoreMissing:
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
+                
+                # Otherwise just log the miss and continue
+                else:
+                    self.logger.warning(msg)
+                    continue
+            
+            # Get the real node from the graph
+            newSn = self.kGraph.GetNode(sn.id, sourceType)
+            newSourceNodes.append(newSn)
+
+        # Do the same thing but with the destination nodes
+        for dn in destNodes:
+            if not self.kGraph.NodeExists(dn):
+                msg = f"Dest node {dn.id} does not exist in the graph."
+
+                # Throw an error if specified
+                if not ignoreMissing:
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
+                
+                # Otherwise just log the miss and continue
+                else:
+                    self.logger.warning(msg)
+                    continue
+            
+            # Get the real node from the graph
+            newDn = self.kGraph.GetNode(dn.id, destType)
+            newDestNodes.append(newDn)
+        
+        # Override the dummy nodes
+        sourceNodes = newSourceNodes
+        destNodes = newDestNodes
+
+        # 2.) For each dest node, find all matching source nodes
+        allMatches = {}
+
+        for dn in destNodes:
+
+            # Get the matching source nodes
+            matches = self.kGraph.GetMatches(sn, destNodes, edgeType)
+            allMatches[dn] = matches
+        
+        # allMatches: {destNode: {sourceNode1: weight1, sourceNode2: weight2, ...}, ...}
+
+        # 3.) For each destNode, make a Kriging object to handle the math
+        krigers = [Kriger() for dn in allMatches]
+
+        
+
+
+
     def CalcSpatialFactors(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
                            sourceType: GEID, destType: GEID,
                            sourceIdCol: str, destIdCol: str,
@@ -390,7 +471,7 @@ class Gator(object):
         sourceNodes = newSourceNodes
         destNodes = newDestNodes
 
-        # 2a.) For each source node, find all matching destNodes
+        # 2.) For each source node, find all matching destNodes
         allMatches = {}
 
         for sn in sourceNodes:
@@ -400,9 +481,6 @@ class Gator(object):
             allMatches[sn] = matches
 
         # allMatches: {sourceNode: {destNode1: weight1, destNode2: weight2, ...}, ...}
-
-        # 2b.) If kriging, we need to find all source nodes for each dest node instead
-
 
         # 3.) Calculate mult factors
         allFactors = {}
@@ -512,12 +590,18 @@ class Gator(object):
             self.logger.error(msg)
             raise RuntimeError(msg)
 
-        # Use the graph to calculate the factors and valueFactors
-        expandedDf = self.CalcSpatialFactors(sourceDf, destDf, sourceType, destType,
-                                             sourceIdCol, destIdCol, sourceDataCol,
-                                             sourceGeoCol, destGeoCol,
-                                             edgeType, ignoreMissing=ignoreMissing,
-                                             ignoreIncomplete=ignoreIncomplete)
+        # If kriging, calculate weights using the data
+        if method == AggMethod.KRIGING or method == DeAggMethod.KRIGING:
+
+            pass
+        
+        else:
+            # Use the graph to calculate the factors and valueFactors
+            expandedDf = self.CalcSpatialFactors(sourceDf, destDf, sourceType, destType,
+                                                sourceIdCol, destIdCol, sourceDataCol,
+                                                sourceGeoCol, destGeoCol,
+                                                edgeType, ignoreMissing=ignoreMissing,
+                                                ignoreIncomplete=ignoreIncomplete)
 
 
         # 5.) Do the calculation
