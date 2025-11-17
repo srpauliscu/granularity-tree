@@ -6,10 +6,173 @@ import numpy as np
 from pprint import pprint
 import pandas as pd
 import xxhash
+import math
 import geopandas as gpd
-from shapely.geometry import Polygon, shape, mapping
+from shapely import centroid, distance
+from shapely.geometry import Polygon, Point, shape, mapping
+from scipy.optimize import curve_fit
+
+from matplotlib import pyplot as plt
+from typing import Callable
 
 from src.entities import *
+
+testd = {
+    'id': ['a','b','c','d'],
+    'value': [1,3,4,5],
+    'centroid': [
+            Point((0,0)),
+            Point((0,3)),
+            Point((4,0)),
+            Point((4,3))
+        ]}
+testDf = pd.DataFrame(testd)
+
+def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
+                  dataCol: str, geoColumn: str,
+                  poi: Point,
+                  model: Callable = VariogramModel.EXPONENTIAL,
+                  binPercentage: float = .01):
+    
+
+    # Use the samples to perform kriging to estimate the value at the poi
+
+    # Column names
+    CENTROID_COL = "centroid__"
+    DIST_COL = "dist__"
+    COV_COL = "covariance__"
+
+
+    # 1.) Estimate semivariogram
+
+    # First, extract centroids for all samples
+    CENTROID_COL = "centroid"
+    samplesDf[CENTROID_COL] = samplesDf[geoColumn].apply(centroid)
+
+    # Iterate over all pairs of sample points to calculate distances
+    newRows = []
+    maxDist = -1
+    for i, curSample in samplesDf.iterrows():
+        for j, compSample in samplesDf.iterrows():
+
+            # Add the ids
+            newRow = {'id1': curSample[idCol],
+                      'id2': compSample[idCol]}
+
+            # Distance for same point is zero
+            dist = -1
+            if i == j:
+                dist = 0
+            else:
+                dist = distance(curSample[CENTROID_COL], compSample[CENTROID_COL])
+            
+            # Reset max dist if needed
+            if dist > maxDist:
+                maxDist = dist
+            
+            # Add the distance to the new row
+            newRow[DIST_COL] = dist
+
+            # Calculate the covariance
+            newRow[COV_COL] = (compSample[dataCol] - curSample[dataCol])**2
+
+            # Add the new row to the list of all new rows
+            newRows.append(newRow)
+
+    # Now, bin the distances
+    print(newRows)
+    binSize = math.ceil(binPercentage * maxDist)
+    for row in newRows:
+        flooredDist = math.floor(row[DIST_COL] / binSize)
+        row[DIST_COL] = flooredDist
+    
+    # Make it a df for maniuplation
+    pairsDf = pd.DataFrame(data=newRows)
+
+    print(pairsDf)
+
+    # We can group by distance to get an average for each bin
+    binAvgsDf = pairsDf[[DIST_COL, COV_COL]].groupby(DIST_COL).mean()
+
+    print(binAvgsDf)
+
+    # Use the data to fit a curve
+    params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
+    params = list(params)
+
+    x = [i for i in range(7)]
+    y = [model(i, *params) for i in x ]
+    
+
+
+    # 2.) Use the SEMI-variogram to calculate matrix C and D
+    numRows = samplesDf.shape[0]
+    C = np.ones(shape=(numRows+1, numRows+1))
+    D = np.ones(shape=(numRows+1, 1))
+
+    for i in range(numRows):
+        for j in range(numRows):
+            cov = .5*model(pairsDf.iloc[i*numRows][DIST_COL], *params)
+            C[i,j] = cov
+            C[j,i] = cov
+    
+    # Make the last entry 0 for the lagrange multiplier
+    C[-1, -1] = 0
+
+    # Iterate through each sample again for matrix D
+    for i, row in samplesDf.iterrows():
+
+        # Calc the distance from this point to the poi
+        poiDist = distance(poi, row[CENTROID_COL])
+
+        # Estimate covariance
+        D[i, 0] = .5*model(poiDist, *params)
+
+    # 3.) Use linear algebra to calculate weights
+    print(C)
+    print(D)
+
+    W = np.linalg.inv(C) @ D
+
+    # 4.) Sanity check that the weights sum to 1
+    assert math.isclose(np.sum(W[:numRows,0]), 1)
+
+    # 5.) Use the weights to estimate the value at the poi
+    val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows,0])
+    return val
+
+
+    plt.scatter(binAvgsDf.index, binAvgsDf[COV_COL])
+    plt.plot(x, y)
+
+
+    plt.show()
+
+    
+
+
+
+v = ManualKriging(testDf, 'id', 'value', 'centroid', poi=Point((4,3)))
+#v = ManualKriging(testDf, 'id', 'value', 'centroid', poi=centroid(Polygon(testd['centroid'])))
+print(v)
+
+
+quit()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

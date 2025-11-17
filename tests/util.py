@@ -15,6 +15,12 @@ import random
 # To reduce code duplication
 from src.connecticutGraph import LoadShapefile, AddLevel
 
+# For kriging
+from shapely import centroid, distance
+from shapely.geometry import Point, shape
+from scipy.optimize import curve_fit
+
+from typing import Callable
 
 TEST_GRAPH_NAME = 'testGraph'
 
@@ -112,6 +118,11 @@ def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
         # Areas should add up to 4000
         assert df0['Area'].sum() == 4000
 
+        # Make sure the geometry areas add up to 4000
+        df0['TempArea'] = df0['shape'].apply(lambda x: x.area)
+        assert math.isclose(df0['TempArea'].sum(), 4000)
+        df0.drop(columns=['TempArea'], inplace=True)
+
         # All three columns should have the same total across the dfs
         for k1 in dfs:
             
@@ -125,15 +136,20 @@ def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
             # Test each column except ID
             for c in df0:
                 
-                # Skip the IDs
-                if c == 'ID':
+                # Skip non-numeric columns
+                # and the avg column
+                if (c == 'ID' or
+                    c == 'geo' or
+                    c == 'shape' or
+                    c == 'AvgEVs'):
                     continue
 
 
                 # In case the test fails, print the column and frames
                 #print(k0, k1, c)
                 #print(df0[c].sum(), df1[c].sum())
-                assert df0[c].sum() == df1[c].sum()
+                print(c)
+                assert math.isclose(df0[c].sum(), df1[c].sum())
     
     # Make sure the adjMat is symmetric
     for i in range(adjMat.shape[0]):
@@ -141,11 +157,28 @@ def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
 
             assert adjMat[i, j] == adjMat[j, i]
 
+
 def GetSampleDfs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     zips = pd.read_csv(ZIP_TEST_FILE)
     counties = pd.read_csv(COUNTY_TEST_FILE)
     states = pd.read_csv(STATE_TEST_FILE)
+
+    # Make actual shape objects
+    SHAPE_COL = 'shape'
+    zips[SHAPE_COL] = zips[SHAPE_COL].apply(lambda x: shape(eval(x)))
+    counties[SHAPE_COL] = counties[SHAPE_COL].apply(lambda x: shape(eval(x)))
+    states[SHAPE_COL] = states[SHAPE_COL].apply(lambda x: shape(eval(x)))
+
+    # Calculate average EVs per area (?) for kriging tests
+    AVG_COL = 'AvgEVs'
+    AREA_COL = 'Area'
+    EV_COL = 'TotalEVs'
+
+    zips[AVG_COL] = zips.apply(lambda x: x[EV_COL] / x[AREA_COL], axis=1)
+    counties[AVG_COL] = counties.apply(lambda x: x[EV_COL] / x[AREA_COL], axis=1)
+    states[AVG_COL] = states.apply(lambda x: x[EV_COL] / x[AREA_COL], axis=1)
+
 
     return zips, counties, states
 
@@ -487,3 +520,117 @@ def GenerateSTSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
     gator = Gator(graph, Path('./logs/stTestGator.log'))
 
     return allSamplesDf, allAnswerKeysDf, countyGdf, gator
+
+
+def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
+                  dataCol: str, geoColumn: str,
+                  poi: Point,
+                  model: Callable = VariogramModel.EXPONENTIAL,
+                  binPercentage: float = .01):
+    
+
+    # Use the samples to perform kriging to estimate the value at the poi
+
+    # Column names
+    CENTROID_COL = "centroid__"
+    DIST_COL = "dist__"
+    COV_COL = "covariance__"
+
+
+    # 1.) Estimate semivariogram
+
+    # First, extract centroids for all samples
+    CENTROID_COL = "centroid"
+    samplesDf[CENTROID_COL] = samplesDf[geoColumn].apply(centroid)
+
+    # Iterate over all pairs of sample points to calculate distances
+    newRows = []
+    maxDist = -1
+    for i, curSample in samplesDf.iterrows():
+        for j, compSample in samplesDf.iterrows():
+
+            # Add the ids
+            newRow = {'id1': curSample[idCol],
+                      'id2': compSample[idCol]}
+
+            # Distance for same point is zero
+            dist = -1
+            if i == j:
+                dist = 0
+            else:
+                dist = distance(curSample[CENTROID_COL], compSample[CENTROID_COL])
+            
+            # Reset max dist if needed
+            if dist > maxDist:
+                maxDist = dist
+            
+            # Add the distance to the new row
+            newRow[DIST_COL] = dist
+
+            # Calculate the covariance
+            newRow[COV_COL] = (compSample[dataCol] - curSample[dataCol])**2
+
+            # Add the new row to the list of all new rows
+            newRows.append(newRow)
+
+    # Now, bin the distances
+    print(newRows)
+    binSize = math.ceil(binPercentage * maxDist)
+    for row in newRows:
+        flooredDist = math.floor(row[DIST_COL] / binSize)
+        row[DIST_COL] = flooredDist
+    
+    # Make it a df for maniuplation
+    pairsDf = pd.DataFrame(data=newRows)
+
+    print(pairsDf)
+
+    # We can group by distance to get an average for each bin
+    binAvgsDf = pairsDf[[DIST_COL, COV_COL]].groupby(DIST_COL).mean()
+
+    print(binAvgsDf)
+
+    # Use the data to fit a curve
+    params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
+    params = list(params)
+
+    x = [i for i in range(7)]
+    y = [model(i, *params) for i in x ]
+    
+
+
+    # 2.) Use the SEMI-variogram to calculate matrix C and D
+    numRows = samplesDf.shape[0]
+    C = np.ones(shape=(numRows+1, numRows+1))
+    D = np.ones(shape=(numRows+1, 1))
+
+    for i in range(numRows):
+        for j in range(numRows):
+            cov = .5*model(pairsDf.iloc[i*numRows][DIST_COL], *params)
+            C[i,j] = cov
+            C[j,i] = cov
+    
+    # Make the last entry 0 for the lagrange multiplier
+    C[-1, -1] = 0
+
+    # Iterate through each sample again for matrix D
+    for i, row in samplesDf.iterrows():
+
+        # Calc the distance from this point to the poi
+        poiDist = distance(poi, row[CENTROID_COL])
+
+        # Estimate covariance
+        D[i, 0] = .5*model(poiDist, *params)
+
+    # 3.) Use linear algebra to calculate weights
+    print(C)
+    print(D)
+
+    W = np.linalg.inv(C) @ D
+
+    # 4.) Sanity check that the weights sum to 1
+    assert math.isclose(np.sum(W[:numRows,0]), 1)
+
+    # 5.) Use the weights to estimate the value at the poi
+    val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows,0])
+    return val

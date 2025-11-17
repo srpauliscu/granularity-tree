@@ -2,6 +2,7 @@
 
 
 from enum import Enum, StrEnum
+import numpy as np
 
 
 # Global delimeter to denote different entities in an ID chain
@@ -17,8 +18,6 @@ class Status(Enum):
     SUCCESS = 1
     EXISTS = 2
     NOTEXISTS = 3
-
-
 
 
 class EdgeType(StrEnum):
@@ -56,6 +55,14 @@ class DeAggMethod(StrEnum):
 
     KRIGING = "Kriging" # BLUP
 
+class VariogramModel(Enum):
+
+    """
+    Enumeration that defines currently accepted models for fitting
+    the semivariogram for kriging.    
+    """
+    TEST = lambda x: x+1
+    EXPONENTIAL = lambda x,a,b,c: a*np.exp(b*x) + c
 
 class GEID(StrEnum):
 
