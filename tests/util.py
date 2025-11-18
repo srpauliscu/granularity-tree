@@ -210,8 +210,8 @@ def GenerateSampleGraph(zips: pd.DataFrame, counties: pd.DataFrame,
 
         for ind, row in df.iterrows():
             
-            # Make the node, ignoring geometry
-            newNode = Node(row['ID'], {EdgeType.AREA: row['Area']}, k, None)
+            # Make the node
+            newNode = Node(row['ID'], {EdgeType.AREA: row['Area']}, k, row['shape'])
             allNodes[row['ID']] = newNode
 
     # Now, add the nodes and edges

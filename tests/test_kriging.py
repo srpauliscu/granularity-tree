@@ -37,7 +37,7 @@ def testSinglePOI():
     zips, counties, states = GetSampleDfs()
 
     # Form the adjMat from the CSV
-    adjMat, _ = GetSampleAdjMat()
+    adjMat, adjDf = GetSampleAdjMat()
 
     # Do a validity check
     SampleValidityCheck(zips, counties, states, adjMat)
@@ -53,10 +53,26 @@ def testSinglePOI():
 
 
     # Use the manual kriging method to compute ground truth
-    gt = ManualKriging(states, 'ID', 'TotalEVs')
+    idCol = 'ID'
+    dataCol = 'AvgEVs'
+    geoCol = 'shape'
+
+    countyGt = ManualKriging(counties, idCol, dataCol, geoCol, poi)
+    #zipGt = ManualKriging(zips, idCol, dataCol, geoCol, poi)
+
+    # Now, set up the example for the Gator
+
+    # Make the graph
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
+
+    # Make the gator
+    gator = Gator(graph, Path('./logs/testSampleKrigingBasic.log'))
+
+    # Using the gator, try to calculate the POI using each entity type as a base
+
+    
 
 
 
 
 
-    pass

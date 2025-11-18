@@ -7,6 +7,8 @@ import json
 import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy # For type hints
 from pathlib import Path
+from typing import Callable
+
 import math
 
 from kGraph import *
@@ -56,27 +58,30 @@ def FormInterval(row: pd.Series, tsCol: str, unit: TID) -> pd.Interval:
 
 class Kriger(object):
 
-    def __init__(self):
+    def __init__(self, samples: pd.DataFrame, idCol: str,
+                 dataCol: str, dist: Callable):
+
+        # Save the info relevant to these samples
+        self.samples = samples
+        self.idCol = idCol
+        self.dataCol = dataCol
 
         # Fit function in the form of C(h)
-        semivariogram = None
-
-        # Sample weights (vector W)
-        W = None
+        self.semivariogram = None
 
         # Lagrange parameter (used in error calc)
-        langrange = None
+        self.langrange = None
 
         # Covariance matrix (matrix C)
-        C = None
+        self.C = None
 
-        # Prediction covariances (vector D)
-        D = None
-
-    def FitSemivariogram(self, samples: pd.DataFrame, idCol: str, dataCol: str,
-                         matchingNodes: list[Node]):
+    def FitVariogram(self) -> None:
         
-        # allMatches: {destNode: {source}}
+        # 
+
+        pass
+
+    def CalcWeights(self, poi: Node) -> np.ndarray:
 
         pass
 
@@ -331,6 +336,7 @@ class Gator(object):
                            sourceDataCol: str,
                            sourceGeoCol: str, destGeoCol: str,
                            edgeType: EdgeType,
+                           distFunction: Callable,
                            ignoreMissing: bool = False,
                            ignoreInomplete: bool = False) -> pd.DataFrame:
         
@@ -394,13 +400,42 @@ class Gator(object):
         for dn in destNodes:
 
             # Get the matching source nodes
-            matches = self.kGraph.GetMatches(sn, destNodes, edgeType)
-            allMatches[dn] = matches
-        
-        # allMatches: {destNode: {sourceNode1: weight1, sourceNode2: weight2, ...}, ...}
+            matches = self.kGraph.GetMatches(dn, sourceNodes, edgeType)
 
-        # 3.) For each destNode, make a Kriging object to handle the math
-        krigers = [Kriger() for dn in allMatches]
+            # We can discard the weights since we're calculating new ones
+            allMatches[dn] = list(matches.keys())
+        
+        # allMatches: {destNode: [sourceNode1, sourceNode2, ...], ...}
+
+        # 3.) For each destNode, we need to separate the corresponding
+        # samples from the full dataframe
+        sepSamples = {}
+        for dn in allMatches:
+            sourceIds = [sn.id for sn in allMatches[dn]]
+            sepSamples[dn] = sourceDf[sourceDf[sourceDataCol].isin(sourceIds)]
+
+
+        # separatedSamples: {destNode: pd.DataFrame, ...}
+
+        # 4.) For each set of samples, make a Kriger object to handle
+        # the math
+        krigers = {dn: Kriger(sepSamples[dn], sourceIdCol,
+                          sourceDataCol, distFunction)
+                   for dn in sepSamples}
+
+        # Have each Kriger fit their variogram
+        for k in krigers:
+            k.FitVariogram()
+        
+        # 5.) Use each kriger to calculate weights
+        weights = {}
+        for dn in krigers:
+            weights[dn] = krigers[dn].CalcWeights(dn)
+        
+        # TODO
+
+
+        
 
         
 
@@ -824,19 +859,6 @@ class Gator(object):
 
         return resDf
     
-    def asdf(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame, destTType: TID,
-                               sourceSType: GEID, destSType: GEID, sourceSIdCol: str,
-                               destSIdCol: str, sourceTIdCol: str, destTIdCol: str,
-                               sourceDataCol: str,
-                               sMethod: AggMethod | DeAggMethod, tMethod: AggMethod | DeAggMethod,
-                               edgeType: EdgeType, ignoreMissing: bool = False,
-                               ignoreIncomplete: bool = False) -> pd.DataFrame:
-        '''
-        Do a combination spatio-temporal scaling, grouping by temporal last
-        
-        '''
-        pass
-
 
     def SpatioTemporalEqualize(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame, destTType: TID,
                                sourceSType: GEID, destSType: GEID, sourceSIdCol: str,

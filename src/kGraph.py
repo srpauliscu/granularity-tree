@@ -38,6 +38,11 @@ class Node(object):
         #: Polygon | Multipolygon: The polygon(s) that spatially define this object
         self.geometry = _geometry
 
+        #: Point: The centroid of the given geometry
+        self.centroid = None
+        if not self.geometry is None:
+            self.centroid = self.geometry.centroid
+
 
     def GenerateHash(self):
         self.myHash = f"{self.id}_{self.entityType}".__hash__()
@@ -324,8 +329,6 @@ class GranularityGraph(object):
             # Put the filenames in the final file
             resDict['graphFilenames'] = graphFiles
 
-            print(resDict['indexMap'][0]['geometry'])
-
             # Dump the dict to a json
             with open(saveDir / Path('main.json'), "w") as f:
                 json.dump(resDict, f)
@@ -370,6 +373,7 @@ class GranularityGraph(object):
 
                 # Convert the polygon back to a Polygon object
                 newNode.geometry = shape(newNode.geometry)
+                newNode.centroid = newNode.geometry.centroid
 
                 # Go through the values and instantiate EdgeType objects
                 newVals = {EdgeType(w): newNode.values[w] for w in newNode.values}
