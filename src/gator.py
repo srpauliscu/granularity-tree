@@ -9,6 +9,11 @@ from pandas.core.groupby import DataFrameGroupBy # For type hints
 from pathlib import Path
 from typing import Callable
 
+# For kriging
+from shapely import centroid, distance
+from shapely.geometry import Point, shape
+from scipy.optimize import curve_fit
+
 import math
 
 from kGraph import *
@@ -54,38 +59,163 @@ def FormInterval(row: pd.Series, tsCol: str, unit: TID) -> pd.Interval:
     
     return pd.Interval(startTs, endTs)
 
-
-
 class Kriger(object):
 
+    # Column names for relevant new columns
+    NODE_DIST_COL = "nodeDist__"
+    COV_COL = "covariance__"
+
     def __init__(self, samples: pd.DataFrame, idCol: str,
-                 dataCol: str, dist: Callable):
+                 dataCol: str, centroidCol: str, dist: Callable):
+
+
 
         # Save the info relevant to these samples
         self.samples = samples
         self.idCol = idCol
         self.dataCol = dataCol
+        self.centroidCol = centroidCol
 
-        # Fit function in the form of C(h)
-        self.semivariogram = None
+        # Function to calculate "distance" between nodes
+        # (allows for flexible defintion of distance)
+        self.dist: Callable
+
+        # The cross join of the samples
+        self.samplePairs: pd.DataFrame
+
+        # The data used to fit the semivariogram
+        self.sampleCovs: pd.DataFrame
+
+        # Parameters for the function currently fit to the semivariogram
+        self.curParams: np.ndarray
+        self.model: Callable
 
         # Lagrange parameter (used in error calc)
-        self.langrange = None
+        self.langrange: float
 
         # Covariance matrix (matrix C)
-        self.C = None
+        self.C: np.ndarray
 
-    def FitVariogram(self) -> None:
+    def CalcSemivariogram(self) -> None:
         
-        # 
+        # 1.) Do a cross join to get a row for each pair of nodes
+        self.samplePairs = pd.merge(self.samples, self.samples, how="cross")
 
-        pass
+        # 2.) Calculate the distance between each pair of nodes
+        # Assume that the distance function floors the result for us
+        self.samplePairs[self.NODE_DIST_COL] = \
+            self.samplePairs.apply(lambda x: 
+                                   self.dist(x[self.centroidCol+'_1'], 
+                                             x[self.centroidCol+'_2']), 
+                                             axis=1)
+        # 3.) Calculate the covariance (?) for each pair
+        self.samplePairs[self.COV_COL] = \
+            self.samplePairs.apply(lambda x: 
+                                   (x[self.dataCol+'_2'] - x[self.dataCol + '_1'])**2, 
+                                   axis=1)
+        
+        # 4.) Get average values for each distance bin
+        self.sampleCovs = self.samplePairs[
+            [self.NODE_DIST_COL, self.COV_COL]]\
+                .groupby(self.NODE_DIST_COL).mean()
+        
+        # Make sure to use the semivariogram
+        self.sampleCovs[self.COV_COL] *= .5
+
+    def FitSemivariogram(self, 
+                         model: Callable = VariogramModel.EXPONENTIAL)\
+                            -> np.ndarray:
+        
+        # Make sure the avgs have been calced
+        if self.sampleCovs is None:
+            raise RuntimeError("You must call CalcSemivariogram before FitSemivariogram.")
+
+        # Use the averaged covariances to fit the given model
+        params, cov = curve_fit(model,
+                                self.sampleCovs.index,
+                                self.sampleCovs[self.COV_COL])
+        
+        # Save the params and the model
+        self.curParams = params
+        self.model = model
+
+        # Return the covariance from fitting the model
+        # in case we want to use it for error calcs
+        return cov
+    
+    def CalcC(self) -> None:
+
+        # Function to calculate matrix C since it doesn't depend
+        # on the POI
+
+        # Make sure that the semivariogram has been fit
+        if self.model is None:
+            raise RuntimeError("Call FitSemivariogram first.")
+        
+        # Use CW = D to calculate the weights vector W
+
+        # First, form an empty C
+        # Add in the extra row/column for the Lagrage restraint
+        numRows = self.samples.shape[0]
+        self.C = np.ones(shape=(numRows+1, numRows+1))
+
+        # TODO: There might be a more efficient way to do this
+        # Populate C using the fit semivariogram
+        for i in range(numRows):
+            for j in range(numRows):
+                cov = self.model(self.samplePairs.iloc[i*numRows][self.NODE_DIST_COL], *self.curParams)
+
+                # Symmetric matrix assumes the value is isotropic
+                self.C[i,j] = cov
+                self.C[j,i] = cov
+
+        # Make the last entry 0 for the Lagrange
+        self.C[-1,-1] = 0
+        
+
 
     def CalcWeights(self, poi: Node) -> np.ndarray:
 
-        pass
+        # Make sure that the C matrix has been constructed first
+        if self.C is None:
+            raise RuntimeError("Call CalcC first.")
+        
+        # Calculate the D vector
+        numRows = self.samples.shape[0]
+        D = np.ones(shape=(numRows+1, 1))
+
+        # Iterate through each sample again for matrix D
+        curRow = 0
+        for row in self.samples.itertuples():
+
+            # Grab the centroid
+            curCentroid = row.__getattribute__(self.centroidCol)
+
+            # Calc the distance from this point to the poi
+            poiDist = self.dist(poi.centroid, curCentroid)
+
+            # Estimate the covariance
+            D[curRow, 0] = self.model(poiDist, *self.curParams)
+
+            # Increment counter
+            curRow += 1
+        
+        # Use linear algebra to calculate weights
+        W = np.linalg.inv(self.C) @ D
+
+        # Sanity check that the weights sum to 1
+        assert math.isclose(np.sum(W[:numRows, 0]), 1)
+
+        # Return the calculated weights
+        return W
+
+
+        
+
+
 
 class Gator(object):
+
 
     # Class variables for column names
     FACTOR_COL = 'factor__'
@@ -102,6 +232,8 @@ class Gator(object):
     T_VALUE_FACTOR_COL = 'tvf__'
     S_DEST_COL = 'sDestId__'
     T_DEST_COL = 'tDestId__'
+    S_NODE_COL = 'sNode__'
+    S_CENTROID_COL = 'sCentroid__'
 
     INTERVAL_COL = 'newInterval__'
 
@@ -337,6 +469,7 @@ class Gator(object):
                            sourceGeoCol: str, destGeoCol: str,
                            edgeType: EdgeType,
                            distFunction: Callable,
+                           model: Callable,
                            ignoreMissing: bool = False,
                            ignoreInomplete: bool = False) -> pd.DataFrame:
         
@@ -352,6 +485,7 @@ class Gator(object):
         
         # Get the populated version of each node from the graph
         newSourceNodes = []
+        sourceNodeDict = {}
         newDestNodes = []
         for sn in sourceNodes:
             if not self.kGraph.NodeExists(sn):
@@ -370,6 +504,9 @@ class Gator(object):
             # Get the real node from the graph
             newSn = self.kGraph.GetNode(sn.id, sourceType)
             newSourceNodes.append(newSn)
+
+            # Also, populate a dictionary of id: node for later
+            sourceNodeDict[sn.id] = newSn
 
         # Do the same thing but with the destination nodes
         for dn in destNodes:
@@ -414,23 +551,41 @@ class Gator(object):
             sourceIds = [sn.id for sn in allMatches[dn]]
             sepSamples[dn] = sourceDf[sourceDf[sourceDataCol].isin(sourceIds)]
 
+            # We also need to add the node objects as a column so we can
+            # access their centroids
+            sepSamples[dn][self.S_NODE_COL] = \
+                sepSamples[dn].apply(lambda x:
+                                     sourceNodeDict[x[sourceIdCol]], axis=1)
+
+            # Calculate the "centroids" depending on the type of scaling
+            # (e.g. spatial, temporal, spatio-temporal)
+
+            # TODO: for now, assume spatial (one step at a time...)
+            sepSamples[dn][self.S_CENTROID_COL] = \
+                sepSamples[dn].apply(lambda x:
+                                     x[self.S_NODE_COL].centroid, axis=1)
 
         # separatedSamples: {destNode: pd.DataFrame, ...}
 
         # 4.) For each set of samples, make a Kriger object to handle
         # the math
         krigers = {dn: Kriger(sepSamples[dn], sourceIdCol,
-                          sourceDataCol, distFunction)
+                          sourceDataCol, self.S_CENTROID_COL, distFunction)
                    for dn in sepSamples}
 
         # Have each Kriger fit their variogram
         for k in krigers:
-            k.FitVariogram()
+            k.CalcSemivariogram()
+            k.FitSemivariogram(model)
+            k.CalcC()
         
         # 5.) Use each kriger to calculate weights
         weights = {}
         for dn in krigers:
             weights[dn] = krigers[dn].CalcWeights(dn)
+
+        # Now, each entry in weights corresponds to the set of
+        # source samples for that destination node
         
         # TODO
 

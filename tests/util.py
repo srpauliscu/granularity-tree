@@ -588,6 +588,9 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     # We can group by distance to get an average for each bin
     binAvgsDf = pairsDf[[DIST_COL, COV_COL]].groupby(DIST_COL).mean()
 
+    # Make sure to use the semivariogram
+    binAvgsDf[COV_COL] *= .5
+
     print(binAvgsDf)
 
     # Use the data to fit a curve
@@ -606,7 +609,7 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
 
     for i in range(numRows):
         for j in range(numRows):
-            cov = .5*model(pairsDf.iloc[i*numRows][DIST_COL], *params)
+            cov = model(pairsDf.iloc[i*numRows][DIST_COL], *params)
             C[i,j] = cov
             C[j,i] = cov
     
@@ -620,7 +623,7 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
         poiDist = distance(poi, row[CENTROID_COL])
 
         # Estimate covariance
-        D[i, 0] = .5*model(poiDist, *params)
+        D[i, 0] = model(poiDist, *params)
 
     # 3.) Use linear algebra to calculate weights
     print(C)
