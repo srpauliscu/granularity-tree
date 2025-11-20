@@ -78,7 +78,7 @@ class Kriger(object):
 
         # Function to calculate "distance" between nodes
         # (allows for flexible defintion of distance)
-        self.dist: Callable
+        self.dist = dist
 
         # The cross join of the samples
         self.samplePairs: pd.DataFrame
@@ -105,13 +105,13 @@ class Kriger(object):
         # Assume that the distance function floors the result for us
         self.samplePairs[self.NODE_DIST_COL] = \
             self.samplePairs.apply(lambda x: 
-                                   self.dist(x[self.centroidCol+'_1'], 
-                                             x[self.centroidCol+'_2']), 
+                                   self.dist(x[self.centroidCol+'_x'], 
+                                             x[self.centroidCol+'_y']), 
                                              axis=1)
         # 3.) Calculate the covariance (?) for each pair
         self.samplePairs[self.COV_COL] = \
             self.samplePairs.apply(lambda x: 
-                                   (x[self.dataCol+'_2'] - x[self.dataCol + '_1'])**2, 
+                                   (x[self.dataCol+'_y'] - x[self.dataCol + '_x'])**2, 
                                    axis=1)
         
         # 4.) Get average values for each distance bin
@@ -204,6 +204,8 @@ class Kriger(object):
         W = np.linalg.inv(self.C) @ D
 
         # Sanity check that the weights sum to 1
+        print("sum", np.sum(W[:numRows, 0]))
+        print(W[-1,0])
         assert math.isclose(np.sum(W[:numRows, 0]), 1)
 
         # Return the calculated weights
@@ -549,7 +551,7 @@ class Gator(object):
         sepSamples = {}
         for dn in allMatches:
             sourceIds = [sn.id for sn in allMatches[dn]]
-            sepSamples[dn] = sourceDf[sourceDf[sourceDataCol].isin(sourceIds)]
+            sepSamples[dn] = sourceDf[sourceDf[sourceIdCol].isin(sourceIds)]
 
             # We also need to add the node objects as a column so we can
             # access their centroids
@@ -574,7 +576,8 @@ class Gator(object):
                    for dn in sepSamples}
 
         # Have each Kriger fit their variogram
-        for k in krigers:
+        for dn in krigers:
+            k = krigers[dn]
             k.CalcSemivariogram()
             k.FitSemivariogram(model)
             k.CalcC()

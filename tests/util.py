@@ -28,6 +28,7 @@ TEST_GRAPH_NAME = 'testGraph'
 ZIP_TEST_FILE = Path("./tests/zips.csv")
 COUNTY_TEST_FILE = Path("./tests/counties.csv")
 STATE_TEST_FILE = Path("./tests/states.csv")
+REGION_TEST_FILE = Path("./tests/regions.csv")
 ADJ_TEST_FILE = Path("./tests/adjMat.csv")
 
 
@@ -98,7 +99,7 @@ def ResetForTest(sampleSize: int, weightModifier: float, testName: str, WeightCa
 ### Utility Functions for Test Case ###
 
 def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
-                  states: pd.DataFrame, adjMat: np.typing.NDArray):
+                  states: pd.DataFrame, regions: pd.DataFrame, adjMat: np.typing.NDArray):
 
 
     '''
@@ -108,7 +109,7 @@ def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
     # Columns: ID, Area, Population, Total EVs
 
     # Make a dict for labels and looping
-    dfs = {'ZIPS':zips, 'Counties': counties, 'States': states}
+    dfs = {'ZIPS':zips, 'Counties': counties, 'States': states, 'Regions': regions}
 
     for k0 in dfs:
 
@@ -145,10 +146,7 @@ def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
                     continue
 
 
-                # In case the test fails, print the column and frames
-                #print(k0, k1, c)
-                #print(df0[c].sum(), df1[c].sum())
-                print(c)
+                # Make sure totals match
                 assert math.isclose(df0[c].sum(), df1[c].sum())
     
     # Make sure the adjMat is symmetric
@@ -158,31 +156,33 @@ def SampleValidityCheck(zips: pd.DataFrame, counties: pd.DataFrame,
             assert adjMat[i, j] == adjMat[j, i]
 
 
-def GetSampleDfs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def GetSampleDfs() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     zips = pd.read_csv(ZIP_TEST_FILE)
     counties = pd.read_csv(COUNTY_TEST_FILE)
     states = pd.read_csv(STATE_TEST_FILE)
+    regions = pd.read_csv(REGION_TEST_FILE)
 
     # Make actual shape objects
     SHAPE_COL = 'shape'
     zips[SHAPE_COL] = zips[SHAPE_COL].apply(lambda x: shape(eval(x)))
     counties[SHAPE_COL] = counties[SHAPE_COL].apply(lambda x: shape(eval(x)))
     states[SHAPE_COL] = states[SHAPE_COL].apply(lambda x: shape(eval(x)))
+    regions[SHAPE_COL] = regions[SHAPE_COL].apply(lambda x: shape(eval(x)))
 
     # Calculate average EVs per area (?) for kriging tests
     AVG_COL = 'AvgEVs'
     AREA_COL = 'Area'
     EV_COL = 'TotalEVs'
 
-    zips[AVG_COL] = zips.apply(lambda x: x[EV_COL] / x[AREA_COL], axis=1)
-    counties[AVG_COL] = counties.apply(lambda x: x[EV_COL] / x[AREA_COL], axis=1)
-    states[AVG_COL] = states.apply(lambda x: x[EV_COL] / x[AREA_COL], axis=1)
+    zips[AVG_COL] = zips[EV_COL] / zips[AREA_COL]
+    counties[AVG_COL] = counties[EV_COL] / counties[AREA_COL]
+    states[AVG_COL] = states[EV_COL] / states[AREA_COL]
+    regions[AVG_COL] = regions[EV_COL] / states[AREA_COL]
 
 
-    return zips, counties, states
-
-
+    return zips, counties, states, regions
+    
 
 def GetSampleAdjMat() -> tuple[np.typing.NDArray, pd.DataFrame]:
 
@@ -194,14 +194,16 @@ def GetSampleAdjMat() -> tuple[np.typing.NDArray, pd.DataFrame]:
 
 
 def GenerateSampleGraph(zips: pd.DataFrame, counties: pd.DataFrame,
-                  states: pd.DataFrame, adjMat: np.typing.NDArray,
+                  states: pd.DataFrame, regions: pd.DataFrame,
+                  adjMat: np.typing.NDArray,
                   adjDf: pd.DataFrame) -> tuple[dict[str, Node], GranularityGraph]:
 
     # Make a blank graph
     graph = GranularityGraph('fakeEntitiesTest', Path('./logs/fakeEntitiesTest.log'))
 
     # Go through each dataframe and make nodes for each entity
-    dfs = {GEID.ZIP: zips, GEID.COUNTY: counties, GEID.STATE: states}
+    dfs = {GEID.ZIP: zips, GEID.COUNTY: counties, GEID.STATE: states, GEID.REGION: regions}
+
     allNodes = {}
     for k in dfs:
 
@@ -240,7 +242,8 @@ def GenerateSampleGraph(zips: pd.DataFrame, counties: pd.DataFrame,
             assert status == Status.SUCCESS
     
     # Make sure everything was added
-    assert len(graph) == zips.shape[0] + counties.shape[0] + states.shape[0]
+    assert len(graph) == zips.shape[0] + counties.shape[0] + states.shape[0] + regions.shape[0]
+
 
     return allNodes, graph
 
@@ -526,7 +529,7 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
                   dataCol: str, geoColumn: str,
                   poi: Point,
                   model: Callable = VariogramModel.EXPONENTIAL,
-                  binPercentage: float = .01):
+                  binPercentage: float = .05):
     
 
     # Use the samples to perform kriging to estimate the value at the poi
@@ -574,8 +577,8 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
             newRows.append(newRow)
 
     # Now, bin the distances
-    print(newRows)
     binSize = math.ceil(binPercentage * maxDist)
+    binSize = 5.
     for row in newRows:
         flooredDist = math.floor(row[DIST_COL] / binSize)
         row[DIST_COL] = flooredDist
@@ -583,15 +586,11 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     # Make it a df for maniuplation
     pairsDf = pd.DataFrame(data=newRows)
 
-    print(pairsDf)
-
     # We can group by distance to get an average for each bin
     binAvgsDf = pairsDf[[DIST_COL, COV_COL]].groupby(DIST_COL).mean()
 
     # Make sure to use the semivariogram
     binAvgsDf[COV_COL] *= .5
-
-    print(binAvgsDf)
 
     # Use the data to fit a curve
     params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
@@ -600,8 +599,6 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     x = [i for i in range(7)]
     y = [model(i, *params) for i in x ]
     
-
-
     # 2.) Use the SEMI-variogram to calculate matrix C and D
     numRows = samplesDf.shape[0]
     C = np.ones(shape=(numRows+1, numRows+1))
@@ -626,12 +623,12 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
         D[i, 0] = model(poiDist, *params)
 
     # 3.) Use linear algebra to calculate weights
-    print(C)
-    print(D)
 
     W = np.linalg.inv(C) @ D
 
     # 4.) Sanity check that the weights sum to 1
+    print("util sum", np.sum(W[:numRows, 0]))
+    print(W[-1,0])
     assert math.isclose(np.sum(W[:numRows,0]), 1)
 
     # 5.) Use the weights to estimate the value at the poi

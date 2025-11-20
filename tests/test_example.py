@@ -48,13 +48,13 @@ def testValidity():
     # Doesn't actually test any functionality
 
     # Get the nodes
-    zips, counties, states = GetSampleDfs()
+    zips, counties, states, regions = GetSampleDfs()
 
     # Form the adjMat from the CSV
     adjMat, _ = GetSampleAdjMat()
 
     # Just call the validity check function
-    SampleValidityCheck(zips, counties, states, adjMat)
+    SampleValidityCheck(zips, counties, states, regions, adjMat)
 
 @pytest.mark.basic
 def testGraphInstantiation():
@@ -64,11 +64,11 @@ def testGraphInstantiation():
     # in correctly
 
     # Get the info from the files
-    zips, counties, states = GetSampleDfs()
+    zips, counties, states, regions = GetSampleDfs()
     adjMat, adjDf = GetSampleAdjMat()
 
     # Make the graph
-    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, regions, adjMat, adjDf)
 
     # Separate ids by type for testing
     zipIds = zips['ID']
@@ -139,11 +139,11 @@ def testGraphInstantiation():
 def testGetMatches():
 
     # Get the info from the files
-    zips, counties, states = GetSampleDfs()
+    zips, counties, states, regions = GetSampleDfs()
     adjMat, adjDf = GetSampleAdjMat()
 
     # Make the graph
-    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, regions, adjMat, adjDf)
 
     # Make the answer key
     answerKey = MakeSampleMatchAnswerKey(allNodes, adjMat, adjDf)
@@ -175,11 +175,11 @@ def testGetMatches():
 def testFindMatches():
 
     # Get the info from the files
-    zips, counties, states = GetSampleDfs()
+    zips, counties, states, regions = GetSampleDfs()
     adjMat, adjDf = GetSampleAdjMat()
 
     # Make the graph
-    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, regions, adjMat, adjDf)
 
     # Make the answer key
     fullAnswerKey = MakeSampleMatchAnswerKey(allNodes, adjMat, adjDf)
@@ -188,6 +188,7 @@ def testFindMatches():
     zipIds = zips['ID']
     countyIds = counties['ID']
     stateIds = states['ID']
+    regionIds = regions['ID']
     types = {}
 
     for nid in allNodes:
@@ -197,10 +198,12 @@ def testFindMatches():
             types[nid] = GEID.COUNTY
         elif nid in stateIds.values:
             types[nid] = GEID.STATE
+        elif nid in regionIds.values:
+            types[nid] = GEID.REGION
     
     # Separate the answer key by type
     typedKey = {}
-    idTypes = [GEID.ZIP, GEID.COUNTY, GEID.STATE]
+    idTypes = [GEID.ZIP, GEID.COUNTY, GEID.STATE, GEID.REGION]
     for sn in fullAnswerKey:
         typedKey[sn] = {t: {} for t in idTypes}
         
@@ -236,14 +239,14 @@ def testFindMatches():
 def testEqualizeSumBasic():
 
     # Get the info from the files
-    zips, counties, states = GetSampleDfs()
+    zips, counties, states, regions = GetSampleDfs()
     adjMat, adjDf = GetSampleAdjMat()
 
     # Make sure the sample is valid
-    SampleValidityCheck(zips, counties, states, adjMat)
+    SampleValidityCheck(zips, counties, states, regions, adjMat)
 
     # Make the graph
-    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, regions, adjMat, adjDf)
 
     # Make the gator
     gator = Gator(graph, Path('./logs/testSampleGator.log'))
@@ -253,7 +256,7 @@ def testEqualizeSumBasic():
     # Easiest one first- counties to states
     idCol = 'ID'
     dataCol = 'TotalEVs'
-    geoCol = 'geo'
+    geoCol = 'shape'
     resDf = gator.SpatialEqualize(counties, states, GEID.COUNTY, GEID.STATE,
                            idCol, idCol, dataCol, geoCol, geoCol, AggMethod.SUM, EdgeType.AREA)
     
@@ -274,14 +277,14 @@ def testEqualizeSumBasic():
 def _testEqualizeSumHard():
 
     # Get the info from the files
-    zips, counties, states = GetSampleDfs()
+    zips, counties, states, regions = GetSampleDfs()
     adjMat, adjDf = GetSampleAdjMat()
 
     # Make sure the sample is valid
     SampleValidityCheck(zips, counties, states, adjMat)
 
     # Make the graph
-    allNodes, graph = GenerateSampleGraph(zips, counties, states, adjMat, adjDf)
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, regions, adjMat, adjDf)
 
     # Make the gator
     gator = Gator(graph, Path('./logs/testSampleGator.log'))
