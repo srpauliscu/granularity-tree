@@ -17,6 +17,29 @@ from typing import Callable
 
 from src.entities import *
 
+
+
+
+p0 = Point((0,0))
+p1 = Point((1,2))
+print(p0.x + p1.x)
+
+print(p0 == p0)
+
+
+quit()
+
+l = [i for i in range(20)]
+lf = [math.floor(i / 7.)*7. for i in l]
+
+print(lf)
+
+
+
+quit()
+
+
+
 testd = {
     'id': ['a','b','c','d'],
     'value': [1,3,4,5],

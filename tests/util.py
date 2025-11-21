@@ -11,6 +11,8 @@ from pathlib import Path
 import shutil
 from collections.abc import Callable
 import random
+from pprint import pprint
+from matplotlib import pyplot as plt
 
 # To reduce code duplication
 from src.connecticutGraph import LoadShapefile, AddLevel
@@ -580,8 +582,8 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     binSize = math.ceil(binPercentage * maxDist)
     binSize = 5.
     for row in newRows:
-        flooredDist = math.floor(row[DIST_COL] / binSize)
-        row[DIST_COL] = flooredDist
+        flooredDist = math.floor(row[DIST_COL] / binSize)*binSize
+        row[DIST_COL] = flooredDist+.5*binSize
     
     # Make it a df for maniuplation
     pairsDf = pd.DataFrame(data=newRows)
@@ -593,12 +595,17 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     binAvgsDf[COV_COL] *= .5
 
     # Use the data to fit a curve
+    print(binAvgsDf.index)
     params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
     params = list(params)
 
-    x = [i for i in range(7)]
-    y = [model(i, *params) for i in x ]
-    
+    x = [i+1 for i in range(70)]
+    y = [model(i, *params) for i in x]
+
+    #plt.scatter(binAvgsDf.index, binAvgsDf[COV_COL])
+    #plt.plot(x,y)
+    #plt.show()
+
     # 2.) Use the SEMI-variogram to calculate matrix C and D
     numRows = samplesDf.shape[0]
     C = np.ones(shape=(numRows+1, numRows+1))
@@ -620,6 +627,7 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
         poiDist = distance(poi, row[CENTROID_COL])
 
         # Estimate covariance
+        print(poiDist)
         D[i, 0] = model(poiDist, *params)
 
     # 3.) Use linear algebra to calculate weights
@@ -629,8 +637,11 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     # 4.) Sanity check that the weights sum to 1
     print("util sum", np.sum(W[:numRows, 0]))
     print(W[-1,0])
+    print(params)
     assert math.isclose(np.sum(W[:numRows,0]), 1)
+
+    print('hello')
 
     # 5.) Use the weights to estimate the value at the poi
     val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows,0])
-    return val
+    return val, C, D, W

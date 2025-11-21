@@ -8,6 +8,7 @@ import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy # For type hints
 from pathlib import Path
 from typing import Callable
+from pprint import pprint
 
 # For kriging
 from shapely import centroid, distance
@@ -87,7 +88,7 @@ class Kriger(object):
         self.sampleCovs: pd.DataFrame
 
         # Parameters for the function currently fit to the semivariogram
-        self.curParams: np.ndarray
+        self.curParams: list
         self.model: Callable
 
         # Lagrange parameter (used in error calc)
@@ -106,7 +107,8 @@ class Kriger(object):
         self.samplePairs[self.NODE_DIST_COL] = \
             self.samplePairs.apply(lambda x: 
                                    self.dist(x[self.centroidCol+'_x'], 
-                                             x[self.centroidCol+'_y']), 
+                                             x[self.centroidCol+'_y'],
+                                             binSize=5.), 
                                              axis=1)
         # 3.) Calculate the covariance (?) for each pair
         self.samplePairs[self.COV_COL] = \
@@ -136,7 +138,8 @@ class Kriger(object):
                                 self.sampleCovs[self.COV_COL])
         
         # Save the params and the model
-        self.curParams = params
+        print(self.sampleCovs.index)
+        self.curParams = list(params)
         self.model = model
 
         # Return the covariance from fitting the model
@@ -174,7 +177,7 @@ class Kriger(object):
         
 
 
-    def CalcWeights(self, poi: Node) -> np.ndarray:
+    def CalcWeights(self, poi: Node) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
         # Make sure that the C matrix has been constructed first
         if self.C is None:
@@ -198,18 +201,21 @@ class Kriger(object):
             D[curRow, 0] = self.model(poiDist, *self.curParams)
 
             # Increment counter
+            print(poiDist)
             curRow += 1
         
         # Use linear algebra to calculate weights
+        print(self.curParams)
         W = np.linalg.inv(self.C) @ D
 
         # Sanity check that the weights sum to 1
         print("sum", np.sum(W[:numRows, 0]))
         print(W[-1,0])
+        print(self.curParams)
         assert math.isclose(np.sum(W[:numRows, 0]), 1)
 
-        # Return the calculated weights
-        return W
+        # Return all matrices for testing purposes
+        return W, self.C, D
 
 
         
@@ -591,6 +597,8 @@ class Gator(object):
         # source samples for that destination node
         
         # TODO
+        for dn in krigers:
+            return weights[dn]
 
 
         

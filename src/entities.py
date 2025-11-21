@@ -3,6 +3,7 @@
 
 from enum import Enum, StrEnum
 import numpy as np
+import math
 
 
 # Global delimeter to denote different entities in an ID chain
@@ -61,7 +62,7 @@ class VariogramModel(Enum):
     Enumeration that defines currently accepted models for fitting
     the semivariogram for kriging.    
     """
-    TEST = lambda x: x+1
+    GAUSSIAN = lambda x,a,b,c: np.where(x <=.0001, 0, 1-a*np.exp(-(((x-b)**2)/(2.*c**2))))
     EXPONENTIAL = lambda x,a,b,c: a*np.exp(b*x) + c
 
 class GEID(StrEnum):

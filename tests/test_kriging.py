@@ -27,6 +27,23 @@ def testAreaValidity():
     # Just call the validty check function
     SampleValidityCheck(zips, counties, states, regions, adjMat)
 
+def distFunc(x,y,binSize=-1.):
+
+    #if binSize > 0:
+    #    return (math.floor(distance(x,y) / binSize)*binSize)+.5*binSize
+    #else:
+    #    return distance(x,y)
+    
+    if x == y:
+        if binSize > 0:
+            return .5*binSize
+        else:
+            return 0
+    else:
+        if binSize > 0:
+            return (math.floor(distance(x,y) / binSize)*binSize)+.5*binSize
+        else:
+            return distance(x,y)
 
 @pytest.mark.basic
 def testSinglePOI():
@@ -44,13 +61,17 @@ def testSinglePOI():
 
     # Pick the center of the region as the poi (arbitrarily)
     poi = regions.head(n=1)['shape'].item().centroid
+    
+    # Give it a slight offset
+    #poi = Point((poi.x+2.5, poi.y+5))
 
     # Use the manual kriging method to compute ground truth
     idCol = 'ID'
     dataCol = 'AvgEVs'
     geoCol = 'shape'
 
-    countyGt = ManualKriging(counties, idCol, dataCol, geoCol, poi)
+    #countyGt = ManualKriging(counties, idCol, dataCol, geoCol, poi)
+    countyGt, C, D, W = ManualKriging(counties, idCol, dataCol, geoCol, poi, VariogramModel.GAUSSIAN)
     #zipGt = ManualKriging(zips, idCol, dataCol, geoCol, poi)
 
     # Now, set up the example for the Gator
@@ -62,15 +83,14 @@ def testSinglePOI():
     gator = Gator(graph, Path('./logs/testSampleKrigingBasic.log'))
 
     # Using the gator, try to calculate the POI using each entity type as a base
-
-    # Temporary testing
-    distFunc = lambda x,y: math.floor(distance(x,y) / 5.)
-    val = gator.CalcKrigingWeights(counties, regions, GEID.COUNTY, GEID.REGION,
+    Wm, Cm, Dm = gator.CalcKrigingWeights(counties, regions, GEID.COUNTY, GEID.REGION,
                                    idCol, idCol, dataCol, geoCol, geoCol,
-                                   EdgeType.AREA, distFunc, VariogramModel.EXPONENTIAL)
+                                   EdgeType.AREA, distFunc, VariogramModel.GAUSSIAN)
 
-    assert False
-
+    # Despite using float math, all values should be identical
+    assert (W == Wm).all()
+    assert (C == Cm).all()
+    assert (D == Dm).all()
     
 
 
