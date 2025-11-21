@@ -61,9 +61,7 @@ def testSinglePOI():
 
     # Pick the center of the region as the poi (arbitrarily)
     poi = regions.head(n=1)['shape'].item().centroid
-    
-    # Give it a slight offset
-    #poi = Point((poi.x+2.5, poi.y+5))
+
 
     # Use the manual kriging method to compute ground truth
     idCol = 'ID'

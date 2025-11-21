@@ -635,9 +635,6 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     W = np.linalg.inv(C) @ D
 
     # 4.) Sanity check that the weights sum to 1
-    print("util sum", np.sum(W[:numRows, 0]))
-    print(W[-1,0])
-    print(params)
     assert math.isclose(np.sum(W[:numRows,0]), 1)
 
     print('hello')
