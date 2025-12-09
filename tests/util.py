@@ -19,7 +19,7 @@ from src.connecticutGraph import LoadShapefile, AddLevel
 
 # For kriging
 from shapely import centroid, distance
-from shapely.geometry import Point, shape
+from shapely.geometry import Point, shape, LineString
 from scipy.optimize import curve_fit
 
 from typing import Callable
@@ -642,3 +642,112 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     # 5.) Use the weights to estimate the value at the poi
     val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows,0])
     return val, C, D, W
+
+
+
+def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
+                       dataCol: str, geoCol: str,
+                       goi: Polygon | MultiPolygon,
+                       model: Callable = VariogramModel.EXPONENTIAL,
+                       binPercentage: float = .05,
+                       gridSizePercentage: float = .1):
+    
+    # Do block kriging for the geometry of interest (goi)
+
+    # Column names
+    CENTROID_COL = "centroid__"
+    DIST_COL = "dist__"
+    COV_COL = "covariance__"
+
+    # 1.) Estimate semivariogram
+    # This step is identical as OK
+
+    # First, extract centroids for all samples
+    CENTROID_COL = "centroid"
+    samplesDf[CENTROID_COL] = samplesDf[geoColumn].apply(centroid)
+
+    # Iterate over all pairs of sample points to calculate distances
+    newRows = []
+    maxDist = -1
+    for i, curSample in samplesDf.iterrows():
+        for j, compSample in samplesDf.iterrows():
+
+            # Add the ids
+            newRow = {'id1': curSample[idCol],
+                      'id2': compSample[idCol]}
+
+            # Distance for same point is zero
+            dist = -1
+            if i == j:
+                dist = 0
+            else:
+                dist = distance(curSample[CENTROID_COL], compSample[CENTROID_COL])
+            
+            # Reset max dist if needed
+            if dist > maxDist:
+                maxDist = dist
+            
+            # Add the distance to the new row
+            newRow[DIST_COL] = dist
+
+            # Calculate the covariance
+            newRow[COV_COL] = (compSample[dataCol] - curSample[dataCol])**2
+
+            # Add the new row to the list of all new rows
+            newRows.append(newRow)
+
+    # Now, bin the distances
+    binSize = math.ceil(binPercentage * maxDist)
+    binSize = 5.
+    for row in newRows:
+        flooredDist = math.floor(row[DIST_COL] / binSize)*binSize
+        row[DIST_COL] = flooredDist+.5*binSize
+    
+    # Make it a df for maniuplation
+    pairsDf = pd.DataFrame(data=newRows)
+
+    # We can group by distance to get an average for each bin
+    binAvgsDf = pairsDf[[DIST_COL, COV_COL]].groupby(DIST_COL).mean()
+
+    # Make sure to use the semivariogram
+    binAvgsDf[COV_COL] *= .5
+
+    # Use the data to fit a curve
+    print(binAvgsDf.index)
+    params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
+    params = list(params)
+
+    # 2.) Discretize the geometry of interest
+    # Somewhat arbitrarily, calculate the longest side and use
+    # a percentage of that when forming the grid
+
+    # Treat a polygon like a multipolygon to reduce code duplication
+    if isinstance(goi, Polygon):
+        goi = MultiPolygon([goi])
+
+    # Go through each polgyon separately
+    maxLen = -1
+    for p in goi.geoms:
+
+        # Grab the current exterior
+        curExt = p.exterior
+
+        # Iterate over each side of the polygon and calc length
+        for i in range(len(curExt.coords) - 1):
+            curLen = LineString((curExt.coords[i], curExt.coords[i+1])).length
+
+            # Record a new max if applicable
+            if curLen > maxLen:
+                maxLen = curLen
+    
+    # Calculate gride size
+    gridSize = gridSizePercentage * maxLen
+
+    # Form a grid using the geometry bounds
+    xmin, ymin, xmax, ymax = goi.bounds
+    
+
+
+
+
+    

@@ -9,7 +9,7 @@ import xxhash
 import math
 import geopandas as gpd
 from shapely import centroid, distance
-from shapely.geometry import Polygon, Point, shape, mapping
+from shapely.geometry import Polygon, Point, shape, mapping, LineString
 from scipy.optimize import curve_fit
 
 from matplotlib import pyplot as plt
@@ -18,6 +18,17 @@ from typing import Callable
 from src.entities import *
 
 
+
+
+p = Polygon(((0,0), (0,1), (2,1), (2,0)))
+e = p.exterior
+print(e)
+print(e.is_closed)
+
+for i in range(len(e.coords) - 1):
+    print(LineString((e.coords[i], e.coords[i+1])).length)
+
+quit()
 
 
 p0 = Point((0,0))
