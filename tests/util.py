@@ -19,7 +19,7 @@ from src.connecticutGraph import LoadShapefile, AddLevel
 
 # For kriging
 from shapely import centroid, distance
-from shapely.geometry import Point, shape, LineString
+from shapely.geometry import Point, shape, LineString, MultiPoint
 from scipy.optimize import curve_fit
 
 from typing import Callable
@@ -637,8 +637,6 @@ def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
     # 4.) Sanity check that the weights sum to 1
     assert math.isclose(np.sum(W[:numRows,0]), 1)
 
-    print('hello')
-
     # 5.) Use the weights to estimate the value at the poi
     val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows,0])
     return val, C, D, W
@@ -650,7 +648,7 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
                        goi: Polygon | MultiPolygon,
                        model: Callable = VariogramModel.EXPONENTIAL,
                        binPercentage: float = .05,
-                       gridSizePercentage: float = .1):
+                       numGridPoints: int = 5):
     
     # Do block kriging for the geometry of interest (goi)
 
@@ -664,7 +662,7 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
 
     # First, extract centroids for all samples
     CENTROID_COL = "centroid"
-    samplesDf[CENTROID_COL] = samplesDf[geoColumn].apply(centroid)
+    samplesDf[CENTROID_COL] = samplesDf[geoCol].apply(centroid)
 
     # Iterate over all pairs of sample points to calculate distances
     newRows = []
@@ -696,7 +694,10 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
             # Add the new row to the list of all new rows
             newRows.append(newRow)
 
-    # Now, bin the distances
+    # Save out the original, unbinned distances
+    pairsDf = pd.DataFrame(data=newRows)
+
+    # Now, bin the distances for variogram estimation
     binSize = math.ceil(binPercentage * maxDist)
     binSize = 5.
     for row in newRows:
@@ -704,47 +705,90 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
         row[DIST_COL] = flooredDist+.5*binSize
     
     # Make it a df for maniuplation
-    pairsDf = pd.DataFrame(data=newRows)
+    binnedPairsDf = pd.DataFrame(data=newRows)
 
     # We can group by distance to get an average for each bin
-    binAvgsDf = pairsDf[[DIST_COL, COV_COL]].groupby(DIST_COL).mean()
+    binAvgsDf = binnedPairsDf[[DIST_COL, COV_COL]].groupby(DIST_COL).mean()
 
     # Make sure to use the semivariogram
     binAvgsDf[COV_COL] *= .5
 
     # Use the data to fit a curve
-    print(binAvgsDf.index)
+    #print(binAvgsDf.index.to_numpy())
     params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
+
     params = list(params)
 
     # 2.) Discretize the geometry of interest
-    # Somewhat arbitrarily, calculate the longest side and use
-    # a percentage of that when forming the grid
-
-    # Treat a polygon like a multipolygon to reduce code duplication
-    if isinstance(goi, Polygon):
-        goi = MultiPolygon([goi])
-
-    # Go through each polgyon separately
-    maxLen = -1
-    for p in goi.geoms:
-
-        # Grab the current exterior
-        curExt = p.exterior
-
-        # Iterate over each side of the polygon and calc length
-        for i in range(len(curExt.coords) - 1):
-            curLen = LineString((curExt.coords[i], curExt.coords[i+1])).length
-
-            # Record a new max if applicable
-            if curLen > maxLen:
-                maxLen = curLen
-    
-    # Calculate gride size
-    gridSize = gridSizePercentage * maxLen
+    # Use the grid size as the number of dots per row/col
+    # Not perfect, but good enough
 
     # Form a grid using the geometry bounds
     xmin, ymin, xmax, ymax = goi.bounds
+
+    x, y = np.meshgrid(
+        np.arange(xmin, xmax, (xmax - xmin) / numGridPoints),
+        np.arange(ymin, ymax, (ymax - ymin) / numGridPoints))
+    
+    allPoints = MultiPoint(list(zip(x.flatten(), y.flatten())))
+
+    # Use only points inside the polygon
+    gridPoints = list(allPoints.intersection(goi).geoms)
+
+    # 3.) Use the semi-variogram to calculate matrix C and D
+    # C is exactly the same as in OK
+    numRows = samplesDf.shape[0]
+    C = np.ones(shape=(numRows+1, numRows+1))
+    D = np.ones(shape=(numRows+1, 1))
+
+    for i in range(numRows):
+        for j in range(numRows):
+            cov = model(pairsDf.iloc[i*numRows+j][DIST_COL], *params)
+            C[i,j] = cov
+            C[j,i] = cov
+    
+    # Make the last entry 0 for the langrange multiplier
+    C[-1, -1] = 0
+
+    # Iterate through each sample again for matrix D
+    for i, row in samplesDf.iterrows():
+
+        # We need to calculate covariance of current sample
+        # to each grid point, then average
+        curSum = 0
+        for p in gridPoints:
+
+            ''' 
+            IMPORTANT NOTE
+
+            For true block-to-block kriging, we should discretize both the goi
+            AND all source geometries.  For now, we can just do point-to-block
+            (or block-to-block where one block is represented by a centroid)
+            
+            '''
+
+            curDist = distance(p, row[CENTROID_COL])
+            curSum += model(curDist, *params)
+
+        D[i, 0] = curSum / len(gridPoints)
+    
+    # 4.) Use linear algebra to calculate weights
+    
+    W = np.linalg.inv(C) @ D
+
+    # 5.) Sanity check that the weights sum to 1
+    assert math.isclose(np.sum(W[:numRows, 0]), 1)
+
+    # 6.) Use the weights to estimate the avg val for the goi
+    val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows, 0])
+    return val, C, D, W
+
+
+
+
+
+
+
     
 
 

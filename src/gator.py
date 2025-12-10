@@ -12,7 +12,7 @@ from pprint import pprint
 
 # For kriging
 from shapely import centroid, distance
-from shapely.geometry import Point, shape
+from shapely.geometry import Point, shape, MultiPoint
 from scipy.optimize import curve_fit
 
 import math
@@ -63,7 +63,8 @@ def FormInterval(row: pd.Series, tsCol: str, unit: TID) -> pd.Interval:
 class Kriger(object):
 
     # Column names for relevant new columns
-    NODE_DIST_COL = "nodeDist__"
+    NODE_BINNED_DIST_COL = "nodeBinnedDist__"
+    NODE_ACT_DIST_COL = "nodeActDist__"
     COV_COL = "covariance__"
 
     def __init__(self, samples: pd.DataFrame, idCol: str,
@@ -104,12 +105,21 @@ class Kriger(object):
 
         # 2.) Calculate the distance between each pair of nodes
         # Assume that the distance function floors the result for us
-        self.samplePairs[self.NODE_DIST_COL] = \
+        # when a binSize is provided
+        self.samplePairs[self.NODE_BINNED_DIST_COL] = \
             self.samplePairs.apply(lambda x: 
                                    self.dist(x[self.centroidCol+'_x'], 
                                              x[self.centroidCol+'_y'],
                                              binSize=5.), 
                                              axis=1)
+        
+        # Also calculate the real distance, for constructing matrix C
+        self.samplePairs[self.NODE_ACT_DIST_COL] = \
+            self.samplePairs.apply(lambda x:
+                                   self.dist(x[self.centroidCol+'_x'],
+                                             x[self.centroidCol+'_y']),
+                                             axis=1)
+
         # 3.) Calculate the covariance (?) for each pair
         self.samplePairs[self.COV_COL] = \
             self.samplePairs.apply(lambda x: 
@@ -118,8 +128,8 @@ class Kriger(object):
         
         # 4.) Get average values for each distance bin
         self.sampleCovs = self.samplePairs[
-            [self.NODE_DIST_COL, self.COV_COL]]\
-                .groupby(self.NODE_DIST_COL).mean()
+            [self.NODE_BINNED_DIST_COL, self.COV_COL]]\
+                .groupby(self.NODE_BINNED_DIST_COL).mean()
         
         # Make sure to use the semivariogram
         self.sampleCovs[self.COV_COL] *= .5
@@ -166,7 +176,7 @@ class Kriger(object):
         # Populate C using the fit semivariogram
         for i in range(numRows):
             for j in range(numRows):
-                cov = self.model(self.samplePairs.iloc[i*numRows][self.NODE_DIST_COL], *self.curParams)
+                cov = self.model(self.samplePairs.iloc[i*numRows+j][self.NODE_ACT_DIST_COL], *self.curParams)
 
                 # Symmetric matrix assumes the value is isotropic
                 self.C[i,j] = cov
@@ -177,11 +187,27 @@ class Kriger(object):
         
 
 
-    def CalcWeights(self, poi: Node) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def CalcWeights(self, noi: Node, gridWidth: int = 5) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
         # Make sure that the C matrix has been constructed first
         if self.C is None:
             raise RuntimeError("Call CalcC first.")
+        
+        # For block kriging, first we discretize the geometry of interest (goi)
+        goi = noi.geometry
+
+        # Grab the vertices of the goi
+        xmin, ymin, xmax, ymax = goi.bounds
+
+        # Form a grid using the bounds
+        x, y = np.meshgrid(
+            np.arange(xmin, xmax, (xmax - xmin) / gridWidth),
+            np.arange(ymin, ymax, (ymax - ymin) / gridWidth)
+        )
+
+        # Use only points inside the polygon
+        allPoints = MultiPoint(list(zip(x.flatten(), y.flatten())))
+        gridPoints = list(allPoints.intersection(goi).geoms)
         
         # Calculate the D vector
         numRows = self.samples.shape[0]
@@ -194,32 +220,32 @@ class Kriger(object):
             # Grab the centroid
             curCentroid = row.__getattribute__(self.centroidCol)
 
-            # Calc the distance from this point to the poi
-            poiDist = self.dist(poi.centroid, curCentroid)
+            # We need to calculate covariance of current sample
+            # to each grid point, then average
+            curSum = 0
+            for p in gridPoints:
+                
+                # Calculate distance between current grid point
+                # and sample centroid
+                curDist = self.dist(p, curCentroid)
 
-            # Estimate the covariance
-            D[curRow, 0] = self.model(poiDist, *self.curParams)
+                # Use the semi-variogram to estimate covariance
+                curSum += self.model(curDist, *self.curParams)
+
+            # Calculate average covariance
+            D[curRow, 0] = curSum / len(gridPoints)
 
             # Increment counter
-            print(poiDist)
             curRow += 1
         
         # Use linear algebra to calculate weights
-        print(self.curParams)
         W = np.linalg.inv(self.C) @ D
 
         # Sanity check that the weights sum to 1
-        print("sum", np.sum(W[:numRows, 0]))
-        print(W[-1,0])
-        print(self.curParams)
         assert math.isclose(np.sum(W[:numRows, 0]), 1)
 
         # Return all matrices for testing purposes
         return W, self.C, D
-
-
-        
-
 
 
 class Gator(object):

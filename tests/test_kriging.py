@@ -46,9 +46,9 @@ def distFunc(x,y,binSize=-1.):
             return distance(x,y)
 
 @pytest.mark.basic
-def testSinglePOI():
+def testSinglePOIWeights():
 
-    # Simple test that only estimates one POI
+    # Simple test that only calculate weights for one NOI
 
     # Get the nodes
     zips, counties, states, regions = GetSampleDfs()
@@ -59,9 +59,8 @@ def testSinglePOI():
     # Do a validity check
     SampleValidityCheck(zips, counties, states, regions, adjMat)
 
-    # Pick the center of the region as the poi (arbitrarily)
-    poi = regions.head(n=1)['shape'].item().centroid
-
+    # Use the region as the area of interest
+    goi = regions.head(n=1)['shape'].item()#.centroid
 
     # Use the manual kriging method to compute ground truth
     idCol = 'ID'
@@ -69,7 +68,10 @@ def testSinglePOI():
     geoCol = 'shape'
 
     #countyGt = ManualKriging(counties, idCol, dataCol, geoCol, poi)
-    countyGt, C, D, W = ManualKriging(counties, idCol, dataCol, geoCol, poi, VariogramModel.GAUSSIAN)
+    countyGt, C, D, W = ManualBlockKriging(counties, idCol,
+                                           dataCol, geoCol,
+                                           goi, VariogramModel.GAUSSIAN)
+    
     #zipGt = ManualKriging(zips, idCol, dataCol, geoCol, poi)
 
     # Now, set up the example for the Gator
@@ -91,6 +93,55 @@ def testSinglePOI():
     assert (D == Dm).all()
     
 
+
+def testRegionKriging():
+
+    '''
+    Use ZIPS, counties, and states as origins
+    for kriging to the region level
+
+    This avoids partially overlapping entities,
+    for a simpler test.
+    '''
+
+    # Get the nodes
+    zips, counties, states, regions = GetSampleDfs()
+
+    # Form the adjMat from the CSV
+    adjMat, adjDf = GetSampleAdjMat()
+
+    # Do a validity check
+    SampleValidityCheck(zips, counties, states, regions, adjMat)
+
+    # Use the region as the area of interest
+    goi = regions.head(n=1)['shape'].item()
+
+    # Use the manual kriging method to compute ground truth
+    # for each source type
+    idCol = 'ID'
+    dataCol = 'AvgEVs'
+    geoCol = 'shape'
+
+    zipGt, _, _, _  = ManualBlockKriging(zips, idCol,
+                                         dataCol, geoCol,
+                                         goi, VariogramModel.GAUSSIAN)
+    
+    countyGt, _, _, _ = ManualBlockKriging(counties, idCol,
+                                           dataCol, geoCol,
+                                           goi, VariogramModel.GAUSSIAN)
+    '''
+    stateGt, _, _, _ = ManualBlockKriging(states, idCol,
+                                          dataCol, geoCol,
+                                          goi, VariogramModel.GAUSSIAN)
+    '''
+    
+    print('\n\n')
+    print(zipGt)
+    print(countyGt)
+    #print(stateGt)
+    print(1260./2525.)
+
+    assert False
 
 
 
