@@ -82,16 +82,19 @@ def testSinglePOIWeights():
     # Make the gator
     gator = Gator(graph, Path('./logs/testSampleKrigingBasic.log'))
 
-    # Using the gator, try to calculate the POI using each entity type as a base
-    Wm, Cm, Dm = gator.CalcKrigingWeights(counties, regions, GEID.COUNTY, GEID.REGION,
+    # Using the gator, try to calculate the POI weights using each entity type as a base
+    _, matrices  = gator.CalcKrigingWeights(counties, regions, GEID.COUNTY, GEID.REGION,
                                    idCol, idCol, dataCol, geoCol, geoCol,
                                    EdgeType.AREA, distFunc, VariogramModel.GAUSSIAN)
+    
+    # Unpack the matrices for the singular POI
+    assert len(matrices) == 1
+    Wm, Cm, Dm = matrices[list(matrices.keys())[0]]
 
     # Despite using float math, all values should be identical
     assert (W == Wm).all()
     assert (C == Cm).all()
     assert (D == Dm).all()
-    
 
 
 def testRegionKriging():
@@ -134,15 +137,57 @@ def testRegionKriging():
                                           dataCol, geoCol,
                                           goi, VariogramModel.GAUSSIAN)
     '''
+
+    # Use a gator to do the kriging
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, regions, adjMat, adjDf)
+    gator = Gator(graph, Path("./logs/testRegionKriging.log"))
+
+    zipGatorDf = gator.SpatialKriging(zips, regions, GEID.ZIP, GEID.REGION,
+                                      idCol, idCol, dataCol, geoCol, geoCol,
+                                      EdgeType.AREA, distFunc,
+                                      VariogramModel.GAUSSIAN)
     
-    print('\n\n')
-    print(zipGt)
-    print(countyGt)
-    #print(stateGt)
-    print(1260./2525.)
+    countyGatorDf = gator.SpatialKriging(counties, regions, GEID.COUNTY, GEID.REGION,
+                                         idCol, idCol, dataCol, geoCol, geoCol,
+                                         EdgeType.AREA, distFunc,
+                                         VariogramModel.GAUSSIAN)
+    
+    # Since we have just one GOI here, pull out the numbers to compare
+    zipGatorVal = zipGatorDf.head(n=1)[dataCol + '_est'].item()
+    countyGatorVal = countyGatorDf.head(n=1)[dataCol + '_est'].item()
 
+    assert math.isclose(zipGatorVal, zipGt)
+    assert math.isclose(countyGatorVal, countyGt)
+
+
+def testStateKriging():
+
+    '''
+    Use ZIPS and counties as origins
+    for kriging to the state level
+    '''
+
+    # Get the nodes
+    zips, counties, states, regions = GetSampleDfs()
+
+    # Form the adjMat from the CSV
+    adjMat, adjDf = GetSampleAdjMat()
+
+    # Do a validity check
+    SampleValidityCheck(zips, counties, states, regions, adjMat)
+
+    # Relevant column names
+    idCol = 'ID'
+    dataCol = 'AvgEVs'
+    geoCol = 'shape'
+
+    # Do the manual kriging for each state separately
+    print(states)
+
+    # Dict that holds what counties are for what states
+    
+    
     assert False
-
 
 
 

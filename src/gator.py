@@ -496,6 +496,52 @@ class Gator(object):
         
         return nodes1, nodes2
     
+
+    def SpatialKriging(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
+                       sourceType: GEID, destType: GEID,
+                       sourceIdCol: str, destIdCol: str,
+                       sourceDataCol: str,
+                       sourceGeoCol: str, destGeoCol: str,
+                       edgeType: EdgeType,
+                       distFunction: Callable,
+                       model: Callable,
+                       ignoreMissing: bool = False,
+                       ignoreIncomplete: bool = False) -> pd.DataFrame:
+        
+        # First, calculate the weights
+        samples, matrices = self.CalcKrigingWeights(sourceDf, destDf,
+                                                   sourceType, destType,
+                                                   sourceIdCol, destIdCol,
+                                                   sourceDataCol,
+                                                   sourceGeoCol, destGeoCol,
+                                                   edgeType,
+                                                   distFunction,
+                                                   model,
+                                                   ignoreMissing,
+                                                   ignoreIncomplete)
+        
+        # Kriging will always be a summation of the value factors
+        allNewRows = []
+        for dn in samples:
+            curSamples = samples[dn]
+
+            # Calculate value factors
+            curSamples[self.VALUE_FACTOR_COL] = \
+                curSamples[sourceDataCol] * curSamples[self.FACTOR_COL]
+            
+            # Do the summation
+            estimatedVal = curSamples[self.VALUE_FACTOR_COL].sum()
+
+            # Add a new row to the ouput
+            newRow = {sourceIdCol: dn.id,
+                      sourceDataCol +"_est": estimatedVal
+                      }
+            allNewRows.append(newRow)
+            
+        return pd.DataFrame(data = allNewRows)
+        
+
+
     def CalcKrigingWeights(self, sourceDf: pd.DataFrame, destDf: pd.DataFrame,
                            sourceType: GEID, destType: GEID,
                            sourceIdCol: str, destIdCol: str,
@@ -505,7 +551,8 @@ class Gator(object):
                            distFunction: Callable,
                            model: Callable,
                            ignoreMissing: bool = False,
-                           ignoreInomplete: bool = False) -> pd.DataFrame:
+                           ignoreIncomplete: bool = False) \
+                            -> tuple[dict[Node, pd.DataFrame], dict[Node, tuple]]:
         
         '''
         Use kriging to calculate the linear weights for each destination
@@ -621,10 +668,27 @@ class Gator(object):
 
         # Now, each entry in weights corresponds to the set of
         # source samples for that destination node
-        
-        # TODO
-        for dn in krigers:
-            return weights[dn]
+
+        # weights[dn] = (W, C, D)
+
+        for dn in sepSamples:
+
+            W = weights[dn][0]
+            curSamples = sepSamples[dn]
+
+            # Sanity check
+            # Account for lagrange
+            assert len(W) - 1 == curSamples.shape[0]
+
+            # Now, concatenate the weights into the sample data,
+            # dropping the lagrange
+            Wdf = pd.DataFrame(W[:len(W) - 1, 0], dtype=float, columns=[self.FACTOR_COL])
+            curSamples = pd.concat([curSamples, Wdf], axis=1)
+
+            # Make sure the new dataframe is saved
+            sepSamples[dn] = curSamples
+
+        return sepSamples, weights
 
 
         
