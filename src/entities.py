@@ -63,7 +63,10 @@ class VariogramModel(Enum):
     the semivariogram for kriging.    
     """
     GAUSSIAN = lambda x,a,b,c: np.where(x <=.0001, 0, 1-a*np.exp(-(((x-b)**2)/(2.*c**2))))
-    EXPONENTIAL = lambda x,a,b,c: a*np.exp(b*x) + c
+    EXPONENTIAL = lambda x,a,b,c: np.where(x <= .0001, 0, a*np.exp(b*x) + c)
+    LINEAR = lambda x,a,b,c: np.where(x <= .0001, 0, np.where(x <= a, c + b*(x / a), c + b))
+    SPHERICAL = lambda x,a,b,c: np.where(x <= .0001, 0, np.where(x <= a, c + b*((3*x)/(2*a) - .5*((x**3)/(a**3))), c + b))
+
 
 class GEID(StrEnum):
 

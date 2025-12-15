@@ -182,12 +182,48 @@ def testStateKriging():
     geoCol = 'shape'
 
     # Do the manual kriging for each state separately
-    print(states)
 
-    # Dict that holds what counties are for what states
+    # Dict that holds what counties overlap with what states
+    scd = {"s0": [f"c{i}" for i in [0,1,2,3]],
+           "s1": ["c4", "c5"],
+           "s2": [f"c{i}" for i in [6,7,8]],
+           "s3": [f"c{i}" for i in [9,10,11]]}
     
+    # Separate out the samples for each state
+    stateResults = {}
+    for stateId in scd:
+        countyIds = scd[stateId]
+
+        # Filter by county name
+        # NOTE: there are too few counties to have separate, accurate
+        # models for each state.  For now, use all counties for each state
+        #curSamples = counties[counties[idCol].isin(countyIds)]
+        curSamples = counties
+
+
+        # Grab the geometry for the state
+        goi = Polygon(states[states[idCol] == stateId][geoCol].item())
+
+        # Do the kriging
+        val, C, D, W = ManualBlockKriging(curSamples, idCol, dataCol,
+                                          geoCol, goi, VariogramModel.LINEAR)
+        
+        # Save the result
+        print(val)
+        stateResults[stateId] = val
     
     assert False
+    # Now, use a gator
+    allNodes, graph = GenerateSampleGraph(zips, counties, states, regions, adjMat, adjDf)
+    gator = Gator(graph, Path('./logs/testStateKriging.log'))
 
+    for stateId in scd:
+        curSamples = counties
+
+        #val, matrices = gator.SpatialKriging()
+
+
+    
+    
 
 
