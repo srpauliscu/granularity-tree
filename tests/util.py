@@ -5,6 +5,7 @@
 # Import block
 #from src.entities import *
 import pandas as pd
+import geopandas as gpd
 #from src.kGraph import *
 from src.gator import *
 from pathlib import Path
@@ -717,6 +718,11 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
     #print(binAvgsDf.index.to_numpy())
     params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
 
+
+    #plt.scatter(binAvgsDf.index, binAvgsDf[COV_COL])
+
+    #plt.show()
+
     params = list(params)
 
     # 2.) Discretize the geometry of interest
@@ -781,7 +787,121 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
 
     # 6.) Use the weights to estimate the avg val for the goi
     val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows, 0])
+    print(params)
     return val, C, D, W
+
+
+def GenCircleData(geoCol, dataCol, variogram, a, b, c,
+                  startPoint, startVal, rStddev, tStddev) -> gpd.GeoDataFrame:
+
+    # Initialize loop variables
+    curRad = np.random.normal(0, rStddev)
+    curAngle = 0
+    allRows = []
+
+    while curAngle <= 2*np.pi:
+
+        # Generate a new point
+        x = startPoint.x + curRad * np.cos(curAngle)
+        y = startPoint.y + curRad * np.sin(curAngle)
+
+        newPoint = Point((x,y))
+
+        # The distance from the origin is just the radius,
+        # so use that as input to the variogram
+        variance = .5*variogram(np.abs(curRad), a, b, c)
+
+        # Use that to generate a new value based on the origin point
+        newVal = np.random.normal(startVal, np.sqrt(variance))
+
+        # Save it as a new row
+        newRow = {'geometry': newPoint,
+                  'value': newVal}
+        allRows.append(newRow)
+
+        # Generate a new point
+        curRad = np.random.uniform(-200, 200)#np.random.normal(0,rStddev)
+        curAngle += np.abs(np.random.normal(0,tStddev))*np.pi
+    
+    # Make a dataframe
+    circle = gpd.GeoDataFrame(data=allRows)
+
+    return circle
+
+
+def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
+    
+    # Define a variogram from which to generate variances
+    variogram = VariogramModel.EXPONENTIAL
+    a = 1
+    b = -.065
+    c = 5
+
+    # Define a starting point
+    startPoint = Point((0,0))
+    startVal = 50
+
+    '''Summary
+    
+    Take a random walk in a "circle" around starting point, generating values
+    for each of the selected points.
+
+    Then, do the same (recursively) for each of the new points.  We only need
+    to do this twice to generate sufficiently many points.
+    '''
+
+    # Radius and angle standard deviations
+    rStddev = 40#15
+    tStddev = .1
+
+    firstCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
+                                startPoint, startVal, rStddev, tStddev)
+
+    # Now, for each point, do it again
+    newCircles = []
+    for index, row in firstCircle.iterrows():
+
+        # Grab the point
+        curP = row[geoCol]
+        curV = row[dataCol]
+
+        # Generate a new circle of data
+        #newCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
+        #                          curP, curV, rStddev*2, tStddev)
+        newCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
+                                  startPoint, startVal, rStddev*2, tStddev)
+        # Save the new circle
+        newCircles.append(newCircle)
+
+
+    # Concatenate everything into one dataframe
+    circles = [firstCircle]
+    circles.extend(newCircles)
+    allCircles = gpd.GeoDataFrame(pd.concat(circles).reset_index()).drop(['index'], axis=1)
+    # Give it a proper id column
+    allCircles[idCol] = allCircles.apply(lambda r: f"g{r.name}", axis=1)
+
+    # Get bounds for a geometry
+    allCircles['x'] = allCircles.apply(lambda r: r[geoCol].x, axis=1)
+    allCircles['y'] = allCircles.apply(lambda r: r[geoCol].y, axis=1)
+
+    xmin = allCircles['x'].min()
+    ymin = allCircles['y'].min()
+    xmax = allCircles['x'].max()
+    ymax = allCircles['y'].max()
+
+    # Make a bounding box for the whole thing
+    boundingBox = Polygon(((xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)))
+
+    return allCircles, boundingBox
+
+
+        
+
+
+
+
+
 
 
 

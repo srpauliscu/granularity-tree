@@ -223,7 +223,43 @@ def testStateKriging():
         #val, matrices = gator.SpatialKriging()
 
 
+def testDataGeneration():
+
+    # Set a seed for repeatable results
+    np.random.seed(42)
+
+    # Generate some fake test data
+    idCol = 'id'
+    dataCol = 'value'
+    geoCol = 'geometry'
+
+    allSamples, bbox = GenSyntheticData(idCol, dataCol, geoCol)
+
+    # Pick some GOIs
+    xmin, ymin, xmax, ymax = bbox.bounds
+    xmin+=10
+    ymin+=10
+    xmax+=10
+    ymax+=10
+
+    gois = {'g0': Polygon(((xmin/10., ymin/10.), (xmin/10., ymax/10.),
+                           (xmax/10., ymax/10.), (xmax/10., ymin/10.)))}
+
+    # Do the manual kriging
+    manualResults = {}
+    for k in gois:
+        goi = gois[k]
+
+        val, C, D, W = ManualBlockKriging(allSamples, idCol, dataCol,
+                                          geoCol, goi, VariogramModel.EXPONENTIAL)
+        
+        print(val)
+        assert(False)
     
+
+
+
+
     
 
 
