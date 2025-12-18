@@ -226,7 +226,7 @@ def testStateKriging():
 def testDataGeneration():
 
     # Set a seed for repeatable results
-    np.random.seed(42)
+    #np.random.seed(42)
 
     # Generate some fake test data
     idCol = 'id'
@@ -237,13 +237,19 @@ def testDataGeneration():
 
     # Pick some GOIs
     xmin, ymin, xmax, ymax = bbox.bounds
-    xmin+=10
-    ymin+=10
-    xmax+=10
-    ymax+=10
+    xmin+=50
+    ymin+=50
+    xmax+=50
+    ymax+=50
+    
 
     gois = {'g0': Polygon(((xmin/10., ymin/10.), (xmin/10., ymax/10.),
                            (xmax/10., ymax/10.), (xmax/10., ymin/10.)))}
+    
+    #allSamples.plot()
+    #plt.show()
+
+    #assert False
 
     # Do the manual kriging
     manualResults = {}
@@ -252,6 +258,8 @@ def testDataGeneration():
 
         val, C, D, W = ManualBlockKriging(allSamples, idCol, dataCol,
                                           geoCol, goi, VariogramModel.EXPONENTIAL)
+        
+        plt.show()
         
         print(val)
         assert(False)

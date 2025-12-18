@@ -703,7 +703,7 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
     binSize = 5.
     for row in newRows:
         flooredDist = math.floor(row[DIST_COL] / binSize)*binSize
-        row[DIST_COL] = flooredDist+.5*binSize
+        row[DIST_COL] = flooredDist#+.5*binSize
     
     # Make it a df for maniuplation
     binnedPairsDf = pd.DataFrame(data=newRows)
@@ -718,8 +718,12 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
     #print(binAvgsDf.index.to_numpy())
     params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
 
+    x = [i/100.+1 for i in range(10000)]
+    y = [model(i, *params) for i in x]
+    plt.scatter(x,y, c='red')
 
-    #plt.scatter(binAvgsDf.index, binAvgsDf[COV_COL])
+
+    plt.scatter(binAvgsDf.index, binAvgsDf[COV_COL])
 
     #plt.show()
 
@@ -795,7 +799,7 @@ def GenCircleData(geoCol, dataCol, variogram, a, b, c,
                   startPoint, startVal, rStddev, tStddev) -> gpd.GeoDataFrame:
 
     # Initialize loop variables
-    curRad = np.random.normal(0, rStddev)
+    curRad = np.abs(np.random.normal(0, rStddev))
     curAngle = 0
     allRows = []
 
@@ -809,10 +813,11 @@ def GenCircleData(geoCol, dataCol, variogram, a, b, c,
 
         # The distance from the origin is just the radius,
         # so use that as input to the variogram
-        variance = .5*variogram(np.abs(curRad), a, b, c)
+        variance = 2*variogram(curRad, a, b, c)
 
         # Use that to generate a new value based on the origin point
         newVal = np.random.normal(startVal, np.sqrt(variance))
+        #print(newVal)
 
         # Save it as a new row
         newRow = {'geometry': newPoint,
@@ -820,7 +825,7 @@ def GenCircleData(geoCol, dataCol, variogram, a, b, c,
         allRows.append(newRow)
 
         # Generate a new point
-        curRad = np.random.uniform(-200, 200)#np.random.normal(0,rStddev)
+        curRad = np.random.uniform(1, 50)#np.random.normal(0,rStddev)
         curAngle += np.abs(np.random.normal(0,tStddev))*np.pi
     
     # Make a dataframe
@@ -833,9 +838,9 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
     
     # Define a variogram from which to generate variances
     variogram = VariogramModel.EXPONENTIAL
-    a = 1
-    b = -.065
-    c = 5
+    a = 25
+    b = 2
+    c = 1
 
     # Define a starting point
     startPoint = Point((0,0))
@@ -852,7 +857,7 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
 
     # Radius and angle standard deviations
     rStddev = 40#15
-    tStddev = .1
+    tStddev = .01
 
     firstCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
                                 startPoint, startVal, rStddev, tStddev)
@@ -860,16 +865,17 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
     # Now, for each point, do it again
     newCircles = []
     for index, row in firstCircle.iterrows():
+        break
 
         # Grab the point
         curP = row[geoCol]
         curV = row[dataCol]
 
         # Generate a new circle of data
-        #newCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
-        #                          curP, curV, rStddev*2, tStddev)
         newCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
-                                  startPoint, startVal, rStddev*2, tStddev)
+                                  curP, curV, rStddev*2, tStddev)
+        #newCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
+        #                          startPoint, startVal, rStddev*2, tStddev)
         # Save the new circle
         newCircles.append(newCircle)
 
@@ -878,6 +884,7 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
     circles = [firstCircle]
     circles.extend(newCircles)
     allCircles = gpd.GeoDataFrame(pd.concat(circles).reset_index()).drop(['index'], axis=1)
+
     # Give it a proper id column
     allCircles[idCol] = allCircles.apply(lambda r: f"g{r.name}", axis=1)
 
@@ -892,6 +899,11 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
 
     # Make a bounding box for the whole thing
     boundingBox = Polygon(((xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)))
+
+    # Plot the variogram for comparison
+    x = [i/100.+1 for i in range(10000)]
+    y = [variogram(i, a, b, c) for i in x]
+    plt.scatter(x, y)
 
     return allCircles, boundingBox
 
