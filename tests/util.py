@@ -792,7 +792,7 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
     return val, C, D, W
 
 
-def GenCircleData(geoCol, dataCol, variogram, a, b, c,
+def GenCircleData(geoCol, dataCol, areaCol, variogram, params,
                   startPoint, startVal, rStddev, tStddev) -> gpd.GeoDataFrame:
 
     # Initialize loop variables
@@ -810,15 +810,21 @@ def GenCircleData(geoCol, dataCol, variogram, a, b, c,
 
         # The distance from the origin is just the radius,
         # so use that as input to the variogram
-        variance = 2*variogram(curRad, a, b, c)
+        variance = 2*variogram(curRad, *params)
 
         # Use that to generate a new value based on the origin point
         newVal = np.random.normal(startVal, np.sqrt(variance))
         #print(newVal)
 
+        # Generate a random area
+        # This will cause overlaps, but this shouldn't matter for kriging
+        newRad = np.random.uniform(1,25)
+        newArea = np.pi*newRad**2
+
         # Save it as a new row
-        newRow = {'geometry': newPoint,
-                  'value': newVal}
+        newRow = {geoCol: newPoint.buffer(newRad),
+                  dataCol: newVal,
+                  areaCol: newArea}
         allRows.append(newRow)
 
         # Generate a new point
@@ -831,17 +837,14 @@ def GenCircleData(geoCol, dataCol, variogram, a, b, c,
     return circle
 
 
-def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
+def GenSyntheticData(idCol: str, dataCol: str, geoCol: str, areaCol: str, startVal: float, startPoint: Point,
+                     variogram: Callable, params: list, idPrefix: str = ''):
     
     # Define a variogram from which to generate variances
     variogram = VariogramModel.EXPONENTIAL
     a = 25
     b = 1
     c = 0.5
-
-    # Define a starting point
-    startPoint = Point((0,0))
-    startVal = 50
 
     '''Summary
     
@@ -856,7 +859,7 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
     rStddev = 40#15
     tStddev = .01
 
-    firstCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
+    firstCircle = GenCircleData(geoCol, dataCol, areaCol, variogram, params,
                                 startPoint, startVal, rStddev, tStddev)
 
     # Now, for each point, do it again
@@ -874,9 +877,9 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
         curV = row[dataCol]
 
         # Generate a new circle of data
-        newCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
+        newCircle = GenCircleData(geoCol, dataCol, variogram, params,
                                   curP, curV, rStddev*2, tStddev)
-        #newCircle = GenCircleData(geoCol, dataCol, variogram, a, b, c,
+        #newCircle = GenCircleData(geoCol, dataCol, variogram, params,
         #                          startPoint, startVal, rStddev*2, tStddev)
         # Save the new circle
         newCircles.append(newCircle)
@@ -889,16 +892,18 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
     allCircles = gpd.GeoDataFrame(pd.concat(circles).reset_index()).drop(['index'], axis=1)
 
     # Give it a proper id column
-    allCircles[idCol] = allCircles.apply(lambda r: f"g{r.name}", axis=1)
+    allCircles[idCol] = allCircles.apply(lambda r: f"{idPrefix}g{r.name}", axis=1)
 
     # Get bounds for a geometry
-    allCircles['x'] = allCircles.apply(lambda r: r[geoCol].x, axis=1)
-    allCircles['y'] = allCircles.apply(lambda r: r[geoCol].y, axis=1)
+    allCircles['xmin'] = allCircles.apply(lambda r: r[geoCol].bounds[0], axis=1)
+    allCircles['ymin'] = allCircles.apply(lambda r: r[geoCol].bounds[1], axis=1)
+    allCircles['xmax'] = allCircles.apply(lambda r: r[geoCol].bounds[2], axis=1)
+    allCircles['ymax'] = allCircles.apply(lambda r: r[geoCol].bounds[3], axis=1)
 
-    xmin = allCircles['x'].min()
-    ymin = allCircles['y'].min()
-    xmax = allCircles['x'].max()
-    ymax = allCircles['y'].max()
+    xmin = allCircles['xmin'].min()
+    ymin = allCircles['ymin'].min()
+    xmax = allCircles['xmax'].max()
+    ymax = allCircles['ymax'].max()
 
     # Make a bounding box for the whole thing
     boundingBox = Polygon(((xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)))
