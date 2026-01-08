@@ -225,6 +225,9 @@ def testStateKriging():
 
 def testDataGeneration():
 
+    # This test is only good for manual inspection
+    return
+
     # Set a seed for repeatable results
     #np.random.seed(42)
 

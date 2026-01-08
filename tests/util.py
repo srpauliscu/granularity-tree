@@ -718,16 +718,13 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
     #print(binAvgsDf.index.to_numpy())
     params, cov = curve_fit(model, binAvgsDf.index, binAvgsDf[COV_COL])
 
+    params = list(params)
+
+    # Plot the curve and covariances for comparison
     x = [i/100.+1 for i in range(10000)]
     y = [model(i, *params) for i in x]
     plt.scatter(x,y, c='red')
-
-
     plt.scatter(binAvgsDf.index, binAvgsDf[COV_COL])
-
-    #plt.show()
-
-    params = list(params)
 
     # 2.) Discretize the geometry of interest
     # Use the grid size as the number of dots per row/col
@@ -839,8 +836,8 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
     # Define a variogram from which to generate variances
     variogram = VariogramModel.EXPONENTIAL
     a = 25
-    b = 2
-    c = 1
+    b = 1
+    c = 0.5
 
     # Define a starting point
     startPoint = Point((0,0))
@@ -865,7 +862,12 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
     # Now, for each point, do it again
     newCircles = []
     for index, row in firstCircle.iterrows():
+
         break
+
+        # Limit the data size for reasonable runtimes
+        if len(newCircles) >= 2:
+            break
 
         # Grab the point
         curP = row[geoCol]
@@ -878,6 +880,7 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
         #                          startPoint, startVal, rStddev*2, tStddev)
         # Save the new circle
         newCircles.append(newCircle)
+
 
 
     # Concatenate everything into one dataframe
@@ -902,8 +905,8 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str):
 
     # Plot the variogram for comparison
     x = [i/100.+1 for i in range(10000)]
-    y = [variogram(i, a, b, c) for i in x]
-    plt.scatter(x, y)
+    y = [2*variogram(i, a, b, c) for i in x]
+    plt.scatter(x, y, c='orange')
 
     return allCircles, boundingBox
 

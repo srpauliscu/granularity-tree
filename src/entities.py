@@ -67,7 +67,6 @@ class VariogramModel(Enum):
     LINEAR = lambda x,a,b,c: np.where(x <= .00001, 0, np.where(x <= a, c + b*(x / a), c + b))
     SPHERICAL = lambda x,a,b,c: np.where(x <= .00001, 0, np.where(x <= a, c + b*((3*x)/(2*a) - .5*((x**3)/(a**3))), c + b))
 
-
 class GEID(StrEnum):
 
     """
