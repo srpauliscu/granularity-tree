@@ -527,6 +527,24 @@ def GenerateSTSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
 
     return allSamplesDf, allAnswerKeysDf, countyGdf, gator
 
+# Distance function that accounts for binning
+def distFunc(x,y,binSize=-1.):
+
+    #if binSize > 0:
+    #    return (math.floor(distance(x,y) / binSize)*binSize)+.5*binSize
+    #else:
+    #    return distance(x,y)
+    
+    if x == y:
+        if binSize > 0:
+            return .5*binSize
+        else:
+            return 0
+    else:
+        if binSize > 0:
+            return (math.floor(distance(x,y) / binSize)*binSize)+.5*binSize
+        else:
+            return distance(x,y)
 
 def ManualKriging(samplesDf: pd.DataFrame, idCol: str,
                   dataCol: str, geoColumn: str,
@@ -703,7 +721,7 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
     binSize = 5.
     for row in newRows:
         flooredDist = math.floor(row[DIST_COL] / binSize)*binSize
-        row[DIST_COL] = flooredDist#+.5*binSize
+        row[DIST_COL] = flooredDist+.5*binSize
     
     # Make it a df for maniuplation
     binnedPairsDf = pd.DataFrame(data=newRows)

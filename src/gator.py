@@ -148,9 +148,11 @@ class Kriger(object):
                                 self.sampleCovs[self.COV_COL])
         
         # Save the params and the model
-        print(self.sampleCovs.index)
+        #print(self.sampleCovs.index)
         self.curParams = list(params)
         self.model = model
+
+        print(self.curParams)
 
         # Return the covariance from fitting the model
         # in case we want to use it for error calcs
@@ -520,6 +522,7 @@ class Gator(object):
                                                    ignoreMissing,
                                                    ignoreIncomplete)
         
+        
         # Kriging will always be a summation of the value factors
         allNewRows = []
         for dn in samples:
@@ -625,12 +628,17 @@ class Gator(object):
         
         # allMatches: {destNode: [sourceNode1, sourceNode2, ...], ...}
 
+        #pprint(allMatches)
+        #assert False
+
         # 3.) For each destNode, we need to separate the corresponding
         # samples from the full dataframe
         sepSamples = {}
         for dn in allMatches:
             sourceIds = [sn.id for sn in allMatches[dn]]
-            sepSamples[dn] = sourceDf[sourceDf[sourceIdCol].isin(sourceIds)]
+
+            # Make sure to add in a copy to avoid the SettingWithCopyWarning from pandas
+            sepSamples[dn] = sourceDf[sourceDf[sourceIdCol].isin(sourceIds)].copy()
 
             # We also need to add the node objects as a column so we can
             # access their centroids
@@ -646,11 +654,13 @@ class Gator(object):
                 sepSamples[dn].apply(lambda x:
                                      x[self.S_NODE_COL].centroid, axis=1)
 
+
         # separatedSamples: {destNode: pd.DataFrame, ...}
+
 
         # 4.) For each set of samples, make a Kriger object to handle
         # the math
-        krigers = {dn: Kriger(sepSamples[dn], sourceIdCol,
+        krigers = {dn: Kriger(sepSamples[dn].reset_index(), sourceIdCol,
                           sourceDataCol, self.S_CENTROID_COL, distFunction)
                    for dn in sepSamples}
 
@@ -680,10 +690,9 @@ class Gator(object):
             # Account for lagrange
             assert len(W) - 1 == curSamples.shape[0]
 
-            # Now, concatenate the weights into the sample data,
+            # Now, add the weights into the sample data as a new column,
             # dropping the lagrange
-            Wdf = pd.DataFrame(W[:len(W) - 1, 0], dtype=float, columns=[self.FACTOR_COL])
-            curSamples = pd.concat([curSamples, Wdf], axis=1)
+            curSamples[self.FACTOR_COL] = W[:len(W) - 1, 0]
 
             # Make sure the new dataframe is saved
             sepSamples[dn] = curSamples
@@ -852,7 +861,9 @@ class Gator(object):
                 destGeoCol: str,
                 method: AggMethod | DeAggMethod,
                 edgeType: EdgeType, ignoreMissing: bool = False,
-                ignoreIncomplete: bool = False) -> pd.DataFrame:
+                ignoreIncomplete: bool = False,
+                distFunction: Callable = None,
+                model: Callable = None) -> pd.DataFrame:
 
         """
         Attempt to make the data in sourceDf match the granularity of destDf via 'edgeType'
@@ -884,7 +895,31 @@ class Gator(object):
         # If kriging, calculate weights using the data
         if method == AggMethod.KRIGING or method == DeAggMethod.KRIGING:
 
-            pass
+            # Make sure a dist function and model were passed in
+            if distFunction is None:
+                msg = "A distance function must be passed in when kriging is selected."
+                self.logger.error(msg)
+                raise RuntimeError(msg)
+            
+            if model is None:
+                msg = "A model must be passed in when kriging is selected."
+                self.logger.error(msg)
+                raise RuntimeError(msg)
+
+            # Just call the appropriate function
+            resDf = self.SpatialKriging(sourceDf, destDf, sourceType, destType,
+                                        sourceIdCol, destIdCol, sourceDataCol,
+                                        sourceGeoCol, destGeoCol, edgeType,
+                                        distFunction, model)
+            
+            # TODO: For now, just return the results.  We probably
+            # want error calculation later though.
+            
+            # Clean up first
+            if not self.DEBUG:
+                sourceDf = sourceDf.reset_index()
+            
+            return resDf
         
         else:
             # Use the graph to calculate the factors and valueFactors

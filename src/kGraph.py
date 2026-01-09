@@ -5,6 +5,7 @@ import numpy as np
 import logging
 import json
 from pathlib import Path
+from pprint import pprint
 
 from entities import *
 
@@ -305,6 +306,10 @@ class GranularityGraph(object):
                 # Need to convert the Polgyon to a dict for serialization
                 resDict['indexMap'][self.indexMap[node]]['geometry'] = \
                     mapping(resDict['indexMap'][self.indexMap[node]]['geometry'])
+                
+                # We also need to convert the centroid
+                resDict['indexMap'][self.indexMap[node]]['centroid'] = \
+                    mapping(resDict['indexMap'][self.indexMap[node]]['centroid'])
 
             # Make the folder, if needed
             saveDir = parentDir / Path(self.name)
@@ -328,6 +333,8 @@ class GranularityGraph(object):
 
             # Put the filenames in the final file
             resDict['graphFilenames'] = graphFiles
+
+            pprint(resDict)
 
             # Dump the dict to a json
             with open(saveDir / Path('main.json'), "w") as f:

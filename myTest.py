@@ -19,6 +19,30 @@ from src.entities import *
 
 
 
+a = np.zeros((10,1))
+
+print(a[:len(a)-1, 0])
+
+
+quit()
+
+td = {'a': [1,2,3], 'b': [4,5,6]}
+tdf = pd.DataFrame(td)
+
+print(tdf)
+
+tdf['c'] = 1
+
+print(tdf)
+
+
+
+
+
+
+
+quit()
+
 
 p = Polygon(((0,0), (0,1), (2,1), (2,0)))
 mp = MultiPoint(((1,1),(-1,1),(1.5,.5)))

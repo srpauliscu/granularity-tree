@@ -27,24 +27,6 @@ def testAreaValidity():
     # Just call the validty check function
     SampleValidityCheck(zips, counties, states, regions, adjMat)
 
-def distFunc(x,y,binSize=-1.):
-
-    #if binSize > 0:
-    #    return (math.floor(distance(x,y) / binSize)*binSize)+.5*binSize
-    #else:
-    #    return distance(x,y)
-    
-    if x == y:
-        if binSize > 0:
-            return .5*binSize
-        else:
-            return 0
-    else:
-        if binSize > 0:
-            return (math.floor(distance(x,y) / binSize)*binSize)+.5*binSize
-        else:
-            return distance(x,y)
-
 @pytest.mark.basic
 def testSinglePOIWeights():
 
@@ -239,9 +221,11 @@ def testDataGeneration():
     idCol = 'id'
     dataCol = 'value'
     geoCol = 'geometry'
+    areaCol = 'area'
 
-    allSamples, bbox = GenSyntheticData(idCol, dataCol, geoCol, 50, Point(0,0))
-
+    allSamples, bbox = GenSyntheticData(idCol, dataCol, geoCol, areaCol, 50, Point(0,0),
+                                        VariogramModel.EXPONENTIAL, [25, 2, 1])
+    
     # Pick some GOIs
     xmin, ymin, xmax, ymax = bbox.bounds
     xmin+=50
@@ -266,10 +250,9 @@ def testDataGeneration():
         val, C, D, W = ManualBlockKriging(allSamples, idCol, dataCol,
                                           geoCol, goi, VariogramModel.EXPONENTIAL)
         
-        plt.show()
+        #plt.show()
         
         print(val)
-        assert(False)
     
 
 def testSimulatedData():
@@ -278,16 +261,18 @@ def testSimulatedData():
     # to run test kriging on
 
     # Set a seed for repeatable tests
-    np.random.seed(42)
+    #np.random.seed(42)
 
     # Generate some fake test data
     idCol = 'id'
     dataCol = 'value'
     geoCol = 'geometry'
     areaCol = 'area'
+    stateIdCol = 'stateId'
 
     # Generate 4 'states' with 'counties' inside them
     allStates = []
+    stateGeos = {}
     allCountiesDf = None
     startingPoints = [Point(50,50), Point(50,100), Point(100,100), Point(100,50)]
     for i in range(4):
@@ -309,6 +294,12 @@ def testSimulatedData():
                     dataCol: startVal,
                     geoCol: stateBbox}
         
+        # Save the geometry separately for later
+        stateGeos[newStateId] = stateBbox
+        
+        # Also add the state ID as a column for easy filtering later
+        countyVals[stateIdCol] = newStateId
+        
         # Append the new data to the appropriate structures
         if allCountiesDf is None:
             allCountiesDf = countyVals
@@ -318,39 +309,92 @@ def testSimulatedData():
         allStates.append(newState)
 
     # Form the states into a dataframe
-    allStatesDf = gpd.GeoDataFrame(data=[allStates])
+    allStatesDf = gpd.GeoDataFrame(data=allStates)
 
+    # Make an empty graph
+    graph = GranularityGraph('simulatedDataTest', Path('./logs/simulatedDataTest.log'))
 
     # Now, we need node objects for everything
     # Start with states
     stateNodes = {}
     for index, row in allStatesDf.iterrows():
 
+
         # Make the node object        
         newNode = Node(row[idCol], {EdgeType.AREA: row[geoCol].area}, GEID.STATE, row[geoCol])
 
-        # TODO: Checkpoint
+        # Save the node object
+        stateNodes[row[idCol]] = newNode
 
 
-
-    countyNodes = {}
+    # Form the county nodes and add each to the graph
     for index, row in allCountiesDf.iterrows():
 
         # Get the id
-        curId = row[idCol]
+        curCountyId = row[idCol]
 
         # Make the node object
-        newNode = Node(curId, {EdgeType.AREA: row[areaCol]}, GEID.COUNTY, row[geoCol])
+        newNode = Node(curCountyId, {EdgeType.AREA: row[areaCol]}, GEID.COUNTY, row[geoCol])
 
+        # Grab the matching state node
+        stateId = curCountyId[:2]
+        stateNode = stateNodes[stateId]
 
-
-
-
-    print(allCountiesDf)
-
-        
+        # Add the pair to the graph, using (arbitrarily) the 
+        # county area as the weight
+        status = graph.AddNodes(stateNode, newNode, EdgeType.AREA, row[areaCol])
+        assert status == Status.SUCCESS
     
-    assert False
+    # Make sure everything was added
+    assert len(graph) == allStatesDf.shape[0] + allCountiesDf.shape[0]
+
+    # TODO: Remove this
+    # For quick testing, just do one state
+
+    # Have the manual kriger calculate results for each state
+    stateGroups = allCountiesDf.groupby(stateIdCol)
+    groundTruths = {}
+    for stateId, counties in stateGroups:
+
+        # We need to reset the index so that the matrices are set up correctly
+        counties = counties.reset_index().drop(columns=['index'])
+
+        # Manual kriging
+        curCountyGt, _, _, _ = ManualBlockKriging(counties, idCol,
+                                                  dataCol, geoCol,
+                                                  stateGeos[stateId], VariogramModel.EXPONENTIAL)
+        
+        # Save out the group truth
+        groundTruths[stateId] = curCountyGt
+    
+
+
+    # Now, have a gator do the kriging
+    gator = Gator(graph, Path("./logs/testSimulatedData.log"))
+
+    resDf = gator.SpatialEqualize(allCountiesDf, allStatesDf, GEID.COUNTY, GEID.STATE,
+                                  idCol, idCol, dataCol, geoCol, geoCol, AggMethod.KRIGING,
+                                  EdgeType.AREA, distFunction=distFunc, model=VariogramModel.EXPONENTIAL)
+    
+    # Compare the results to each other
+    for sid in groundTruths:
+        gt = groundTruths[sid]
+        res = resDf[resDf[idCol] == sid]['value_est'].item()
+
+        assert math.isclose(gt, res)
+
+        # We can also check if it's close to the original value
+        # but with more leniency (10% error)
+        ov = int(sid[-1])*.15 + .1
+        assert math.isclose(gt, ov, rel_tol=.20)
+
+    
+    print(groundTruths)
+    print(resDf)
+    
+
+
+
 
 
 
