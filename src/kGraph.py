@@ -334,8 +334,6 @@ class GranularityGraph(object):
             # Put the filenames in the final file
             resDict['graphFilenames'] = graphFiles
 
-            pprint(resDict)
-
             # Dump the dict to a json
             with open(saveDir / Path('main.json'), "w") as f:
                 json.dump(resDict, f)

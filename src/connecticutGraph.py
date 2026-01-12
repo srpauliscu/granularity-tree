@@ -32,9 +32,40 @@ def LoadShapefile(parentDir: Path, name: str) -> gpd.GeoDataFrame:
     
     raise RuntimeError(f"Files not found in {str(shapeFileFolder)}")
 
-def CityIdConverter(row, cityDict: dict):
+def StateAcToFips(row, stateDict: dict, col: str):
 
-    cityName = row['Primary Customer City'].lower()
+    # Account for an empty cell
+    try:
+        retVal = stateDict[row[col]]
+    except:
+        return ""
+    return retVal
+
+def CityTupleIdConverter(row, cityDict: dict, cityCol: str, stateFipsCol: str):
+
+    # Account for empty cell
+    try:
+        cityName = row[cityCol].lower()
+    except AttributeError as e:
+        # Empty cell
+        return ""
+
+    if (cityName, row[stateFipsCol]) in cityDict:
+        return cityDict[(cityName, row[stateFipsCol])]
+    else:
+        return ""
+
+
+
+def CityIdConverter(row, cityDict: dict, col: str):
+
+    # Account for empty cell
+    try:
+        cityName = row[col].lower()
+    except AttributeError as e:
+        # Empty cell
+        return ""
+
     if cityName in cityDict:
         return cityDict[cityName]
     else:
@@ -50,6 +81,10 @@ def ZctaIdConverter(row, zctaDict: dict):
     elif str(zcta) in zctaDict:
         return zctaDict[str(zcta)]
     
+    # Add a leading 0
+    elif f"0{zcta}" in zctaDict:
+        return zctaDict[f"0{zcta}"]
+    
     else:
         return ""
 
@@ -58,6 +93,15 @@ def ZipZctaConverter(row, ztzDict: dict):
     z = row['zip']
     if z in ztzDict:
         return ztzDict[z]
+    
+    # Account for differing data types
+    elif str(z) in ztzDict:
+        return ztzDict[str(z)]
+    
+    # Add in a leading 0
+    elif f"0{z}" in ztzDict:
+        return ztzDict[f"0{z}"]
+    
     else:
         # Assume the zip == zcta
         return z
@@ -92,8 +136,8 @@ def cMain(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
 
     # Load the data
-    evRegsGdf = gpd.read_file('./data/spatial/Electric_Vehicle_Registration_Data.csv')
-    ratesGdf = gpd.read_file('./data/spatial/iou_zipcodes_2023.csv')
+    evRegsGdf = gpd.read_file('./evaluation/spatial/ev_registration.csv')
+    ratesGdf = gpd.read_file('./evaluation/spatial/iou_zipcodes_2023.csv')
     ratesGdf = ratesGdf[ratesGdf['state'] == 'CT']
 
     # Do the conversion from zip to zcta
@@ -120,7 +164,7 @@ def cMain(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     ratesGdf = ratesGdf[ratesGdf['GISJOIN'] != ""]
 
     # Converty city name to GISJOIN ID
-    evRegsGdf['GISJOIN'] = evRegsGdf.apply(CityIdConverter, args=(cityDictLower,), axis=1)
+    evRegsGdf['GISJOIN'] = evRegsGdf.apply(CityIdConverter, args=(cityDictLower, 'Primary Customer City'), axis=1)
 
     # Remove cities that we didn't have
     evRegsGdf = evRegsGdf[evRegsGdf['GISJOIN'] != ""]
@@ -158,8 +202,9 @@ def cMain(load: bool = True, overwrite: bool = True, relTol: float = .00001):
     evRegsGdf['Vehicle Year'] = evRegsGdf['Vehicle Year'].astype(np.float64)
 
     resDf = gator.SpatialEqualize(evRegsGdf, ratesGdf, GEID.CITY, GEID.ZCTA,
-                           'GISJOIN', 'GISJOIN', 'Vehicle Year', AggMethod.COUNT,
-                           EdgeType.AREA, ignoreIncomplete=True, ignoreMissing=True)
+                           'GISJOIN', 'GISJOIN', 'Vehicle Year', None, None,
+                           AggMethod.COUNT, EdgeType.AREA, ignoreIncomplete=True,
+                           ignoreMissing=True)
     
     print(resDf['Vehicle Year'].sum())
     print(evRegsGdf.shape)

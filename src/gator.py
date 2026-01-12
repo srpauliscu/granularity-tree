@@ -472,7 +472,7 @@ class Gator(object):
 
     def MakeNodeObjects(self, ids1: pd.DataFrame, ids2: pd.DataFrame,
                         id1IdCol: str, id2IdCol: str,
-                        id1GeoCol: str, id2GeoCol: str,
+                        id1GeoCol: str | None, id2GeoCol: str | None,
                         entityType1: GEID | TID, entityType2: GEID | TID) -> tuple[list[Node], list[Node]]:
         
         """
@@ -485,17 +485,30 @@ class Gator(object):
 
         nodes1 = []
         for row in ids1.itertuples():
-            nodes1.append(Node(row.__getattribute__(id1IdCol),
-                               None, entityType1,
-                               row.__getattribute__(id1GeoCol)))
+
+            # Don't include geometry if not provided
+            if id1GeoCol is None:
+                nodes1.append(Node(row.__getattribute__(id1IdCol),
+                                None, entityType1, None))
+            else:
+
+                nodes1.append(Node(row.__getattribute__(id1IdCol),
+                                None, entityType1,
+                                row.__getattribute__(id1GeoCol)))
         
 
         nodes2 = []
         for row in ids2.itertuples():
-            nodes2.append(Node(row.__getattribute__(id2IdCol),
-                               None, entityType2,
-                               row.__getattribute__(id2GeoCol)))
-        
+
+            # Don't include geometry if not provided
+            if id2GeoCol is None:
+                nodes2.append(Node(row.__getattribute__(id2IdCol),
+                                None, entityType2, None))             
+            else:
+                nodes2.append(Node(row.__getattribute__(id2IdCol),
+                                None, entityType2,
+                                row.__getattribute__(id2GeoCol)))
+            
         return nodes1, nodes2
     
 
