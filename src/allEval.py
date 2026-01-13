@@ -2,6 +2,10 @@
 from pathlib import Path
 
 import numpy as np
+import time
+
+# Get functions for loading the NTDAS data for CS 3
+import ntdas
 
 from gator import *
 
@@ -352,7 +356,10 @@ def TemporalEval(dirPath: Path):
     resDf.plot(y=dataCol)
     plt.show()
 
-def STEval(dirPath: Path):
+def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
+           loadGraph: bool = True, graphsDir: Path = Path("./graphs"),
+           loadResults: bool = True, resFile: Path = Path("./evaluation/st/results.csv")
+           ):
 
     ''' Outline
     Scenario: Planning new bus routes and we want to know traffic trends.
@@ -365,11 +372,124 @@ def STEval(dirPath: Path):
 
     Procedure: Scale by temporal overlap, minutes -> hours
     '''
+    
+    # Generate a logger for this evaluation
+    logger = logging.getLogger('STEval')
+    logging.basicConfig(filename="./logs/stEval.log", encoding='utf-8', level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    logger.info("\n\n")
 
-    pass
+    # Grab the data
+    # NOTE: Caching is difficult because data types would get messed up
+    vehicleDf, roadDf = ntdas.LoadData(dataDir, numRows=-1)
+
+    # Let's start with specific dates of data
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+    vehicleDf = vehicleDf[vehicleDf[ntdas.TIMESTAMP_COL] < dateCutoff]
+
+    # We only want Denver ZIP codes for the roads
+    roadDf = roadDf[roadDf['zip'].isin(ntdas.DENVER_ZIPS)]
+
+    # Take out rows with a travel time of 0 minutes
+    vehicleDf = vehicleDf[vehicleDf[ntdas.TRAVEL_TIME_COL] > 0]
+
+    # We need to calculate an end timestamp for each measurement
+    vehicleDf[ntdas.INTERVAL_COL] = vehicleDf.apply(ntdas.CalcInterval, axis=1)
+
+    # Calculate ratio of speed to reference speed
+    vehicleDf[ntdas.SPEED_RATIO_COL] = vehicleDf[ntdas.SPEED_COL] / vehicleDf[ntdas.REFERENCE_COL]
+
+    # We need to convert from ZIP to ZCTA
+    zctaGdf = LoadShapefile(shapefileDir, 'zcta')
+
+    ztzGdf = gpd.read_file("./data/zipToZcta.csv")
+
+    # For now, only use CO data
+    ztzGdf = ztzGdf[ztzGdf['STATE'] == 'CO']
+
+    ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
+
+    # Do the actual conversion
+    roadDf[ntdas.ZCTA_COL] = roadDf.apply(ZipZctaConverter, args=(ztzDict,), axis=1)
+
+    # Convert from ZCTA to GISJOIN
+    zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
+    roadDf['GISJOIN'] = roadDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
+
+    # Remove rows with ZIPS we didn't have
+    roadDf = roadDf[roadDf['GISJOIN'] != ""]
+
+    # Get the school districts now
+    sdGdf = LoadShapefile(shapefileDir, 'school')
+
+    # We only need CO school districs
+    sdGdf = sdGdf[sdGdf['STATEFP'] == ntdas.CO_FIPS]
+
+    # Now, setup a graph
+    msg = "Constructing graph..."
+    print(msg)
+    logger.info(msg)
+
+    graph = GranularityGraph('STEvalGraph', Path('./logs/STEvalGraph.log'))
+
+    # Try and load it first
+    if loadGraph:
+        graph.LoadGraph(graphsDir)
+    else:
+        msg = "Adding school district-ZCTA layer..."
+        print(msg)
+        logger.info(msg)
+        graph = AddLevel(graph, sdGdf, zctaGdf,
+                         n1Type=GEID.SD, n2Type=GEID.ZCTA)
+        
+        # Save it out
+        graph.SaveGraph(graphsDir)
+    
+    # Check if we have an existing result file first
+    if loadResults and resFile.exists():
+        resDf = pd.read_csv(resFile)
+
+        # Make the interval column timestamps
+        resDf[ntdas.INTERVAL_COL] = pd.to_datetime(resDf[ntdas.INTERVAL_COL])
+
+        # Reform the multiindex
+        resDf = resDf.set_index(['GISJOIN', ntdas.INTERVAL_COL])
+    
+    # Otherwise, do the work
+    else:
+
+        # Get a gator object
+        gator = Gator(graph, Path('./logs/STEvalGator.log'))
+
+        # Before aggregation, we need to do a join
+        # to assign ZCTAs to each vehicle reading
+        joinedDf = pd.merge(vehicleDf, roadDf, on='tmc', how='inner')
+
+        # Drop NANs
+        joinedDf = joinedDf.dropna(subset=[ntdas.SPEED_RATIO_COL])
+
+        # Do the scaling
+        st = time.time()
+        resDf = gator.SpatioTemporalEqualize(joinedDf, sdGdf,
+                                             TID.HOUR, GEID.ZCTA, GEID.SD,
+                                             'GISJOIN', 'GISJOIN', ntdas.INTERVAL_COL,
+                                             None, ntdas.SPEED_RATIO_COL, None, None,
+                                             AggMethod.MEAN, AggMethod.MEAN, EdgeType.AREA,
+                                             True, True)
+        
+        print(f"Runtime: {time.time() - st}")
+
+        # Fix the ordering of the multiindex
+        resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
+
+
+    print(resDf)
+        
 
 
 if __name__ == "__main__":
     #SpatialEval(Path('./evaluation/spatial'))
 
-    TemporalEval(Path('./evaluation/temporal'))
+    #TemporalEval(Path('./evaluation/temporal'))
+
+    STEval(Path('./data/ntdas'), loadResults=False)
