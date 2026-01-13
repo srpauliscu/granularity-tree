@@ -1089,7 +1089,7 @@ class Gator(object):
                         # Special case: endTs is exactly on an interval
                         overlap = min(origSize, ((intervalStartTs + ONE_UNIT) - intervalStartTs).total_seconds())
                     else:
-                        overlap = min(origSize, (endTs - endTs.to_period(destType.value).to_timestamp()).total_seconds())
+                        overlap = min(origSize, (endTs - endTs.to_period(destType.value).to_timestamp().tz_localize(endTs.tz)).total_seconds())
 
                 elif curTimeCounter == intervalStartTs:
                     # We're in the first unit

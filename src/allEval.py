@@ -5,6 +5,8 @@ import numpy as np
 
 from gator import *
 
+import pytz
+
 # Import functions for graph creation from shapefiles
 from connecticutGraph import *
 
@@ -69,19 +71,28 @@ STATE_AC_TO_FIPS = {
 
 }
 
-def SetupGraph():
-    pass
 
+# pytz has no PDT or PST timezones, so we
+# need to map them to the canonical names
+
+# Might as well map everything for consistency
+US_TIMEZONE_DICT = {
+
+    'PDT': ('US/Pacific', True),
+    'PST': ('US/Pacific', False),
+
+    'MDT': ('US/Mountain', True),
+    'MST': ('US/Mountain', False),
+
+    'EDT': ('US/Eastern', True),
+    'EST': ('US/Eastern', False),
+
+    'UTC': ('UTC', False)
+
+}
 
 
 def SpatialEval(dirPath: Path, loadGraph: bool = True):
-
-    # Generate a logger for this evaluation
-    logger = logging.getLogger('SpatialEval')
-    logging.basicConfig(filename="./logs/spatialEval.log", encoding='utf-8', level=logging.DEBUG,
-                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-    logger.info("\n\n")
-
 
     ''' Outline
     Want: EV registration vs. utility rates
@@ -90,6 +101,13 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
 
     Procedure: Scale by areal overlap, city -> ZIP
     '''
+
+    # Generate a logger for this evaluation
+    logger = logging.getLogger('SpatialEval')
+    logging.basicConfig(filename="./logs/spatialEval.log", encoding='utf-8', level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    logger.info("\n\n")
+
 
     # Important paths
     sfDir = Path("./data/tiger")
@@ -242,7 +260,116 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
     plt.show()
 
 
+def ConvertToDt(row, tsCol: str, tzCol: str):
+
+    # Grab the timezone
+    tz = row[tzCol]
+
+    # Get the corresponding name and DST flag
+    tzName, dst = US_TIMEZONE_DICT[tz]
+
+    # Use to_datetime and tz_localize
+    try:
+        return pd.to_datetime(row[tsCol]).tz_localize(tzName, ambiguous=dst, nonexistent='shift_forward').tz_convert('UTC')
+    except:
+        return 0
+    #return pd.to_datetime(row[tsCol]).tz_localize('UTC').tz_convert(tz)
+
+def FormInterval(row, startTsCol: str, endTsCol: str):
+        
+        # Grab the timestamps
+        ts0 = row[startTsCol]
+        ts1 = row[endTsCol]
+
+        # Check for invalid timestamps
+        if ts1 < ts0:
+            print(ts0)
+            print(ts1)
+
+            # Just swap them?
+            temp = ts0
+            ts0 = ts1
+            ts1 = temp
+        
+        # Check for invalid timestamps
+        return pd.Interval(ts0, ts1)
+
+def TemporalEval(dirPath: Path):
+
+    ''' Outline
+    Want: Total power draw per hour for chargers
+    Have: Charging sessions in minute intervals
+    Need: Convert from minute intervals to hourly sums
+
+    Procedure: Scale by temporal overlap, minutes -> hours
+    '''
+
+    # Generate a logger for this evaluation
+    logger = logging.getLogger('TemporalEval')
+    logging.basicConfig(filename="./logs/temporalEval.log", encoding='utf-8', level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    logger.info("\n\n")
+
+    # Load the data
+    dataDf = pd.read_csv(dirPath / 'EVChargingStationUsage.csv')
+
+    # Rename the columns to remove all special characters
+    # so itertuples works
+    fixedCols = {c: c.replace(' ', '').replace('(','').replace(')','').replace(':','') 
+                 for c in dataDf.columns}
+    
+    dataDf = dataDf.rename(columns=fixedCols)
+
+    # For testing
+    #dataDf = pd.concat([dataDf.head(n=500), dataDf.tail(n=500)])
+    #dataDf = dataDf.tail(n=500)
+
+    # First, convert to actual timestamps
+    startTsCol = 'StartDate'
+    startTzCol = 'StartTimeZone'
+    endTsCol = 'EndDate'
+    endTzCol = 'EndTimeZone'
+
+    dataDf[startTsCol] = dataDf.apply(ConvertToDt, args=(startTsCol, startTzCol), axis=1)
+    dataDf[endTsCol] = dataDf.apply(ConvertToDt, args=(endTsCol, endTzCol), axis=1)
+
+    # Remove invalid rows
+    dataDf = dataDf[(dataDf[startTsCol] != 0) & (dataDf[endTsCol] != 0)]
+
+    # Make an actual Interval object
+    intervalCol = 'TIME_INTERVAL'
+
+    dataDf[intervalCol] = dataDf.apply(FormInterval, args=(startTsCol, endTsCol), axis=1)
+
+    # Get a gator object
+    gator = Gator(None, Path('./logs/temporalEvalGator.log'))
+
+    # Aggregate to the hour level
+    dataCol = 'EnergykWh'
+    resDf = gator.TemporalEqualize(dataDf, TID.DAY, intervalCol,
+                                   dataCol, AggMethod.SUM)
+
+    resDf.plot(y=dataCol)
+    plt.show()
+
+def STEval(dirPath: Path):
+
+    ''' Outline
+    Scenario: Planning new bus routes and we want to know traffic trends.
+
+    Want: Traffic density by school district (avg speed reduction per hour per district)
+    Have: Average speed data for vehicles during travel at individual TSs where location
+    is given by ZIP code
+    
+    Need: Avg speed reduction per hour, group by school district via areal overlap
+
+    Procedure: Scale by temporal overlap, minutes -> hours
+    '''
+
+    pass
 
 
 if __name__ == "__main__":
-    SpatialEval(Path('./evaluation/spatial'))
+    #SpatialEval(Path('./evaluation/spatial'))
+
+    TemporalEval(Path('./evaluation/temporal'))
