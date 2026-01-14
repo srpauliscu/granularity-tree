@@ -3,6 +3,8 @@ from pathlib import Path
 
 import numpy as np
 import time
+import matplotlib
+import matplotlib.pyplot as plt
 
 # Get functions for loading the NTDAS data for CS 3
 import ntdas
@@ -13,6 +15,8 @@ import pytz
 
 # Import functions for graph creation from shapefiles
 from connecticutGraph import *
+
+matplotlib.use('qt5agg')
 
 
 STATE_AC_TO_FIPS = {
@@ -95,6 +99,21 @@ US_TIMEZONE_DICT = {
 
 }
 
+# Distance function that accounts for binning
+def distFunc(x: Point, y: Point, binSize=-1.):
+
+    if x == y:
+        if binSize > 0:
+            # Return the midway point of the bin
+            return .5*binSize
+        else:
+            return 0
+    else:
+        if binSize > 0:
+            return (math.floor(distance(x,y) / binSize)*binSize)+.5*binSize
+        else:
+            return distance(x,y)
+
 
 def SpatialEval(dirPath: Path, loadGraph: bool = True):
 
@@ -129,8 +148,8 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
     regsDf = regsDf[regsDf['STATEFIPS'] != '']
 
     # Only use one state for now
-    regsDf = regsDf[regsDf['Primary Customer State'] == 'CT']
-    iouRatesDf = iouRatesDf[iouRatesDf['state'] == 'CT']
+    regsDf = regsDf[regsDf['Primary Customer State'] == 'CT'].head(n=1000)
+    iouRatesDf = iouRatesDf[iouRatesDf['state'] == 'CT'].head(n=1000)
 
     # We are only doing American locations, so drop BC and ON from the list
     regsDf = regsDf[(regsDf['Primary Customer State'] != 'BC') & 
@@ -235,12 +254,13 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
     # Make the data column a float for mathmatical operations
     regsDf['Vehicle Year'] = regsDf['Vehicle Year'].astype(np.float64)
 
+    #print(cityGdf)
+
     resDf = gator.SpatialEqualize(regsDf, iouRatesDf, GEID.CITY, GEID.ZCTA,
                                   'GISJOIN', 'GISJOIN', 'Vehicle Year', None, None,
                                   AggMethod.COUNT, EdgeType.AREA, ignoreMissing=True,
                                   ignoreIncomplete=True)
 
-    
     # Now, I have the approx. number of EVs registered
     # in each ZCTA.  Rename for clarity
     resDf = resDf.rename(columns={'Vehicle Year': 'Number of EVs'})
@@ -491,12 +511,102 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
 
     print(resDf)
-        
 
+def EmissionsPC(dataDir: Path):
+
+
+    ''' Outline
+    Scenario: Proof that EVs reduce overall, macro-level emissions, for a given state.
+    This is useful when determining what states benefit most from EVs as each state
+    has a different energy production profile (some are greener than others).
+
+    Want: Average emissions per vehicle mile traveled compared against
+    number of registered EVs, for each county.
+
+    Have: Total emissions and total vehicle miles traveled by city,
+    and registered EVs per city.
+    
+    Need:
+        1.) Calculate emissions/vehicle mile traveled for all cities (manual)
+        2.) Estimate county level emissions/vehicle (via graph)
+        3.) Calculate total county EV registrations (via graph, simple sum)
+        4.) Join them and plot.
+
+    NOTE: We can use the county data that is provided as a comparison of accuracy
+    between kriging and areal overlap for avg emissions/vehicle.
+
+    Emissions data from: https://catalog.data.gov/dataset/city-and-county-energy-profiles-60fbd
+
+    '''
+
+    # Read in the emissions data
+    # We only need the 'City' and 'County' sheets
+    allEmissions = pd.read_excel(dataDir / 'cityAndCountyEmissions.xlsb',
+                                 sheet_name=['City', 'County'], nrows=10)
+    cityEmissions = allEmissions['City']
+    countyEmissions = allEmissions['County']
+    
+
+    
+    # Remove unneeded columns for ease-of-use
+    # Do by index because the column names are poorly done
+
+    # List of Excel column names of interest
+    cityCols = {
+        'A': 'StateId',
+        'B': 'StateAbbr',
+        'C': 'CityStateName',
+        'D': 'CityId',
+        'AT': 'VehicleMilesTraveled',
+        'AU': 'VehicleMilesTraveledPerCapita',
+        'FA': 'ResidentialElectricityEmissions',
+        'FB': 'ResidentialNaturalGasEmissions',
+        'FC': 'CommericalElectricityEmissions',
+        'FD': 'CommercialNaturalGasEmissions',
+        'FE': 'IndustryElectricityEmissions',
+        'FF': 'IndustryNaturalGasEmissions',
+        'FG': 'OnRoadTransportationGasEmissions',
+        'FH': 'OnRoadTransportationDieselEmissions'
+        }
+    
+    # Use the ascii values to calculate appropriate column index
+    colIndices = [ord(col) - 64 - 1 if len(col) == 1 else
+                  ((ord(col[0]) - 64)*26 + ord(col[1]) - 64) - 1
+                  for col in cityCols]
+    colNames = [cityEmissions.columns[i] for i in colIndices]
+
+    # Extract only those relevant columns
+    cityEmissions = cityEmissions[colNames]
+    print(cityEmissions)
+
+    # Do the same thing for the counties
+    countyCols = {
+        'A': 'StateId',
+        'B': 'StateAbbr',
+        'C': 'CountyStateName',
+        'D': 'CountyId',
+        'AT': 'VehicleMilesTraveled',
+        'AU': 'VehicleMilesTraveledPerCapita',
+        'FA': 'ResidentialElectricityEmissions',
+        'FB': 'ResidentialNaturalGasEmissions',
+        'FC': 'CommericalElectricityEmissions',
+        'FD': 'CommercialNaturalGasEmissions',
+        'FE': 'IndustryElectricityEmissions',
+        'FF': 'IndustryNaturalGasEmissions',
+        'FG': 'OnRoadTransportationGasEmissions',
+        'FH': 'OnRoadTransportationDieselEmissions'
+        }
+    
+    
+    
+  
 
 if __name__ == "__main__":
-    #SpatialEval(Path('./evaluation/spatial'))
+    
+    #SpatialEval(Path('./evaluation/spatial'), loadGraph=True)
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+
+    EmissionsPC(Path('./evaluation/emissions'))

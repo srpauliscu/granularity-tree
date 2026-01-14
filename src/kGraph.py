@@ -9,6 +9,7 @@ from pprint import pprint
 
 from entities import *
 
+from shapely import distance
 from shapely.geometry import Polygon, MultiPolygon, mapping, shape
 
 class Node(object):
@@ -67,6 +68,20 @@ class Node(object):
 
         # ID match should be enough, but use entityType as reassurance
         return self.id == value.id and self.entityType == value.entityType
+    
+    def IsNeighbor(self, n: 'Node') -> bool:
+
+        """
+        Determine if two nodes neighbor each other.
+        
+        """
+
+        # Use the centroids
+        return distance(self.centroid, n.centroid) <= 2*math.sqrt(self.geometry.area)
+
+        # Use the geometries
+        # NOTE: This is really slow
+        #return self.geometry.touches(n.geometry)
     
 
 class GranularityGraph(object):
@@ -433,6 +448,20 @@ class GranularityGraph(object):
                 output[dn] = weight
 
         return output
+    
+    def GetNeighbors(self, source: Node, destNodes: list[Node]) -> list[Node]:
+
+        """
+        Check destNodes for NEIGHBORING geometries and return them.
+
+        """
+
+        output = []
+        for dn in destNodes:
+            if source.IsNeighbor(dn):
+                output.append(dn)
+        return output
+
 
     def FindMatches(self, source: Node, destType: GEID | TID, edgeType: EdgeType) -> dict[Node, float]:
 

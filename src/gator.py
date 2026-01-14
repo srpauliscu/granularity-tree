@@ -110,7 +110,7 @@ class Kriger(object):
             self.samplePairs.apply(lambda x: 
                                    self.dist(x[self.centroidCol+'_x'], 
                                              x[self.centroidCol+'_y'],
-                                             binSize=5.), 
+                                             binSize=1000.), 
                                              axis=1)
         
         # Also calculate the real distance, for constructing matrix C
@@ -143,6 +143,7 @@ class Kriger(object):
             raise RuntimeError("You must call CalcSemivariogram before FitSemivariogram.")
 
         # Use the averaged covariances to fit the given model
+        print(self.sampleCovs)
         params, cov = curve_fit(model,
                                 self.sampleCovs.index,
                                 self.sampleCovs[self.COV_COL])
@@ -639,9 +640,32 @@ class Gator(object):
             matches = self.kGraph.GetMatches(dn, sourceNodes, edgeType)
 
             # We can discard the weights since we're calculating new ones
-            allMatches[dn] = list(matches.keys())
+            matches = list(matches.keys())
+
+            # For curve fitting, we need at least 3 matches, since
+            # the max number of model parameters is 3
+            if len(matches) < 3:
+                newMatches = []
+                for sn in matches:
+
+                    # Look for neighboring sources
+                    neighbors = self.kGraph.GetNeighbors(sn, sourceNodes)
+
+                    # Save the new sources to a temp list to avoid
+                    # issues with iteration
+                    newMatches.extend(neighbors)
+                
+                # Extend the existing matches
+                matches.extend(newMatches)
+                
+            # Save the final result
+            allMatches[dn] = matches
+
+            if len(allMatches[dn]) <= 1:
+                print(allMatches[dn][0].id)
         
         # allMatches: {destNode: [sourceNode1, sourceNode2, ...], ...}
+        #print(allMatches)
 
         #pprint(allMatches)
         #assert False
