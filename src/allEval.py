@@ -426,16 +426,20 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     sdGdf = sdGdf[sdGdf['STATEFP'] == ntdas.CO_FIPS]
 
     # Now, setup a graph
-    msg = "Constructing graph..."
-    print(msg)
-    logger.info(msg)
 
     graph = GranularityGraph('STEvalGraph', Path('./logs/STEvalGraph.log'))
 
     # Try and load it first
     if loadGraph:
+        msg = "Loading graph..."
+        print(msg)
+        logger.info(msg)
         graph.LoadGraph(graphsDir)
     else:
+        msg = "Constructing new graph..."
+        print(msg)
+        logger.info(msg)
+
         msg = "Adding school district-ZCTA layer..."
         print(msg)
         logger.info(msg)
@@ -482,6 +486,9 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         # Fix the ordering of the multiindex
         resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
 
+        # Save it for speed ups
+        resDf.to_csv(resFile)
+
 
     print(resDf)
         
@@ -492,4 +499,4 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    STEval(Path('./data/ntdas'), loadResults=False)
+    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)

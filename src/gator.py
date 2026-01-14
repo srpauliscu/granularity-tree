@@ -333,6 +333,8 @@ class Gator(object):
 
         # Iterrows is slow, but only needs to be done once here
         newDicts = []
+        #print(df)
+        #print(allFactors)
         for ind, row in df.iterrows():
             factors = allFactors[ind]
             
