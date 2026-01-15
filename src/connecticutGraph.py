@@ -46,13 +46,20 @@ def CityTupleIdConverter(row, cityDict: dict, cityCol: str, stateFipsCol: str):
     # Account for empty cell
     try:
         cityName = row[cityCol].lower()
+        sFips = row[stateFipsCol]
     except AttributeError as e:
         # Empty cell
         return ""
 
     if (cityName, row[stateFipsCol]) in cityDict:
-        return cityDict[(cityName, row[stateFipsCol])]
+        return cityDict[(cityName, sFips)]
     else:
+        # Check if the city name is in part of the cityDict key
+        for kPair in cityDict:
+            if cityName in kPair[0] and sFips == kPair[1]:
+                return cityDict[kPair]
+            
+        # No partial matches found
         return ""
 
 

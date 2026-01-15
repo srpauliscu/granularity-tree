@@ -19,6 +19,30 @@ from src.entities import *
 
 
 
+
+
+
+l = [1,2,3,4,5,6]
+
+r = {f'e{k}' if k % 2 == 0 else f'o{k}': k for k in l}
+
+print(r)
+
+print(l[-2:])
+
+quit()
+
+
+
+
+
+col = 'FM'
+v = (ord(col[0]) - 64)*26 + ord(col[1]) - 64
+print(v)
+
+
+quit()
+
 a = np.zeros((10,1))
 
 print(a[:len(a)-1, 0])

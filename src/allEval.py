@@ -161,7 +161,7 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
     cityGdf = LoadShapefile(sfDir, 'city')
 
     # Make the city names lower case for consistency
-    cityGdf['NAME'] = cityGdf.apply(lambda x: x['NAME'].lower(), axis=1)
+    cityGdf['NAME'] = cityGdf['NAME'].str.lower()
     
     # Make a city name: GISJOIN dict
     cityDict = pd.Series(cityGdf['GISJOIN'].values, index=[cityGdf['NAME'], cityGdf['STATEFP']]).to_dict()
@@ -512,7 +512,44 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
     print(resDf)
 
-def EmissionsPC(dataDir: Path):
+def ExtractCols(df: pd.DataFrame, colDict: dict) -> pd.DataFrame:
+
+    # Use the ascii values to calculate appropriate column index
+    colIndices = {ord(col) - 64 - 1 if len(col) == 1 else
+                  ((ord(col[0]) - 64)*26 + ord(col[1]) - 64) - 1:
+                  colDict[col]
+                  for col in colDict}
+    colNames = {df.columns[k]: colIndices[k] for k in colIndices}
+
+    # Extract only those relevant columns
+    resDf = df[list(colNames.keys())]
+
+    # Rename those columns
+    resDf = resDf.rename(columns=colNames)
+
+    return resDf
+
+def StateIntToFIPS(row: pd.Series, col: str):
+    
+    # Take a one or two digit FIPS ID int and return it
+    # as a two digit str (including leading zeros)
+    try:
+        val = str(row[col])
+        if len(val) == 1:
+            return f'0{val}'
+        elif len(val) == 2:
+            return val
+        else:
+            raise RuntimeError(f'FIPS ID of {val} is not exactly 1 or 2 digits.')
+    except RuntimeError as e:
+        print(row)
+        raise e
+
+
+
+
+
+def EmissionsPC(dataDir: Path, sfDir: Path):
 
 
     ''' Outline
@@ -542,14 +579,9 @@ def EmissionsPC(dataDir: Path):
     # Read in the emissions data
     # We only need the 'City' and 'County' sheets
     allEmissions = pd.read_excel(dataDir / 'cityAndCountyEmissions.xlsb',
-                                 sheet_name=['City', 'County'], nrows=10)
+                                 sheet_name=['City', 'County'], nrows=50)
     cityEmissions = allEmissions['City']
     countyEmissions = allEmissions['County']
-    
-
-    
-    # Remove unneeded columns for ease-of-use
-    # Do by index because the column names are poorly done
 
     # List of Excel column names of interest
     cityCols = {
@@ -557,6 +589,7 @@ def EmissionsPC(dataDir: Path):
         'B': 'StateAbbr',
         'C': 'CityStateName',
         'D': 'CityId',
+        'E': 'CityName',
         'AT': 'VehicleMilesTraveled',
         'AU': 'VehicleMilesTraveledPerCapita',
         'FA': 'ResidentialElectricityEmissions',
@@ -569,15 +602,7 @@ def EmissionsPC(dataDir: Path):
         'FH': 'OnRoadTransportationDieselEmissions'
         }
     
-    # Use the ascii values to calculate appropriate column index
-    colIndices = [ord(col) - 64 - 1 if len(col) == 1 else
-                  ((ord(col[0]) - 64)*26 + ord(col[1]) - 64) - 1
-                  for col in cityCols]
-    colNames = [cityEmissions.columns[i] for i in colIndices]
-
-    # Extract only those relevant columns
-    cityEmissions = cityEmissions[colNames]
-    print(cityEmissions)
+    cityEmissions = ExtractCols(cityEmissions, cityCols)
 
     # Do the same thing for the counties
     countyCols = {
@@ -585,6 +610,7 @@ def EmissionsPC(dataDir: Path):
         'B': 'StateAbbr',
         'C': 'CountyStateName',
         'D': 'CountyId',
+        'E': 'CountyName',
         'AT': 'VehicleMilesTraveled',
         'AU': 'VehicleMilesTraveledPerCapita',
         'FA': 'ResidentialElectricityEmissions',
@@ -597,6 +623,74 @@ def EmissionsPC(dataDir: Path):
         'FH': 'OnRoadTransportationDieselEmissions'
         }
     
+    countyEmissions = ExtractCols(countyEmissions, countyCols)
+
+    # We can drop the first four rows since they
+    # are all headers
+    cityEmissions = cityEmissions.iloc[4:].reset_index(drop=True)
+    countyEmissions = countyEmissions.iloc[4:].reset_index(drop=True)
+
+    # Get rid of invalid rows
+    cityEmissions = cityEmissions.dropna()
+    countyEmissions = countyEmissions.dropna()
+
+    # For the cities, we need to get rid of the types
+    # and the state abbr in the names.
+    # All types (city, village, borough, etc.) start with lowercase
+    # letters, so use that for a regex
+    cityEmissions['CityName'] = cityEmissions['CityName'].str.replace(r'(\s[a-z]+)+', '', regex=True)
+    cityEmissions['CityName'] = cityEmissions['CityName'].str.replace(' CDP', '')
+    cityEmissions['CityName'] = cityEmissions['CityName'].str.replace(' county', '')
+    cityEmissions['CityName'] = cityEmissions['CityName'].str.replace(' (balance)', '')
+
+    # For the counties, the types don't start with a lowercase,
+    # so add them in as unique cases
+    countyEmissions['CountyName'] = countyEmissions['CountyName'].str.replace(' County', '')
+    countyEmissions['CountyName'] = countyEmissions['CountyName'].str.replace(' Borough', '')
+    countyEmissions['CountyName'] = countyEmissions['CountyName'].str.replace(' Census Area', '')
+    countyEmissions['CountyName'] = countyEmissions['CountyName'].str.replace(' City and Borough', '')
+    countyEmissions['CountyName'] = countyEmissions['CountyName'].str.replace(' Municipality', '')
+    countyEmissions['CountyName'] = countyEmissions['CountyName'].str.replace(' Parish', '')
+    countyEmissions['CountyName'] = countyEmissions['CountyName'].str.replace(' city', '')
+
+    # Additionally, make them all lowercase for consistency
+    cityEmissions['CityName'] = cityEmissions['CityName'].str.lower()
+    countyEmissions['CountyName'] = countyEmissions['CountyName'].str.lower()
+
+    # We also need to extract the fips code WITH leading zeros
+    cityEmissions['STATEFP'] = cityEmissions.apply(StateIntToFIPS, args=('StateId',), axis=1)
+    countyEmissions['STATEFP'] = countyEmissions.apply(StateIntToFIPS, args=('StateId',), axis=1)
+
+    # Now, load in info for cities and counties
+
+    ### Cities, towns, etc. ###
+    placeGdf = LoadShapefile(sfDir, 'place')
+
+    # Make the city names lower case for consistency
+    placeGdf['NAME'] = placeGdf['NAME'].str.lower()
+
+    # Make a city name: GISJOIN dict
+    cityDict = pd.Series(placeGdf['GISJOIN'].values, index=[placeGdf['NAME'], placeGdf['STATEFP']]).to_dict()
+
+    # Convert city name, state to GISJOIN ID
+    cityEmissions['GISJOIN'] = cityEmissions.apply(CityTupleIdConverter, args=(cityDict, 'CityName', 'STATEFP'), axis=1)
+
+    # Remove cities we don't have an ID for
+    cityEmissions = cityEmissions[cityEmissions['GISJOIN'] != ""]
+
+    ### Counties ###
+
+    countyGdf = LoadShapefile(sfDir, 'county')
+
+    # Lowercase names for consistency
+    countyGdf['NAME'] = countyGdf['NAME'].str.lower()
+
+    print(countyEmissions)
+    print(countyGdf)
+
+    # Make a county FIPS code: GISJOIN dict
+    countyDict = pd.Series(countyGdf['GISJOIN'].valuies, index=[countyGdf['GEOID']]).to_dict()
+
     
     
   
@@ -609,4 +703,4 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    EmissionsPC(Path('./evaluation/emissions'))
+    EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'))
