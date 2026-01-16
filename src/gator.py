@@ -143,7 +143,6 @@ class Kriger(object):
             raise RuntimeError("You must call CalcSemivariogram before FitSemivariogram.")
 
         # Use the averaged covariances to fit the given model
-        print(self.sampleCovs)
         params, cov = curve_fit(model,
                                 self.sampleCovs.index,
                                 self.sampleCovs[self.COV_COL])
@@ -153,7 +152,7 @@ class Kriger(object):
         self.curParams = list(params)
         self.model = model
 
-        print(self.curParams)
+        #print(self.curParams)
 
         # Return the covariance from fitting the model
         # in case we want to use it for error calcs
@@ -646,14 +645,41 @@ class Gator(object):
             # the max number of model parameters is 3
             if len(matches) < 3:
                 newMatches = []
-                for sn in matches:
+                pairDistances = {}
 
-                    # Look for neighboring sources
-                    neighbors = self.kGraph.GetNeighbors(sn, sourceNodes)
+                # Calculate pair-wise distance of the matches and all other source nodes
+                for curMatchedSn in matches:
+                    for sn in sourceNodes:
 
-                    # Save the new sources to a temp list to avoid
-                    # issues with iteration
-                    newMatches.extend(neighbors)
+                        # Make sure we don't re-add matched source nodes
+                        if sn in matches:
+                            continue
+
+                        # Calculate the distance between centroids
+                        # TODO: This is currently spatial only
+                        dist = distance(curMatchedSn.centroid, sn.centroid)
+
+                        pairDistances[(curMatchedSn, sn)] = dist
+
+                
+                # With all pair-wise distances, find the minimum distance to get
+                # sufficiently many sources
+
+                # Get a list of all distances
+                allDists = list(pairDistances.values())
+
+                # Sort them, ascending
+                allDists = sorted(allDists)
+
+                # Since we need minimum 3 points, grab all points within
+                # the 4th closest
+                maxDist = allDists[3]
+
+                # Go back through and get the neighbors within that dist
+                for snPair in pairDistances:
+                    if pairDistances[snPair] <= maxDist:
+                        newMatches.append(snPair[1])
+
                 
                 # Extend the existing matches
                 matches.extend(newMatches)
@@ -823,6 +849,7 @@ class Gator(object):
 
         # 3.) Calculate mult factors
         allFactors = {}
+
         for sn in allMatches:
             for dn in allMatches[sn]:
 

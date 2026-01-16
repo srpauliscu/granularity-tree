@@ -220,7 +220,7 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
     if status != Status.SUCCESS:
 
         # Construct the graph
-        msg = "Adding City-ZCTA layers..."
+        msg = "Adding City-ZCTA layer..."
         print(msg)
         logger.info(msg)
 
@@ -546,10 +546,35 @@ def StateIntToFIPS(row: pd.Series, col: str):
         raise e
 
 
+def CountyFIPSConverter(row: pd.Series, countyDict: dict, col: str):
+    
+    # Extract the ID as a string, accounting for
+    # an empty cell
+    try:
+        idStr = str(row[col])
+    except:
+        return ""
+    
+    # Make sure we're checking a valid GEOID
+    if len(idStr) != 4 and len(idStr) != 5:
+        raise RuntimeError(f"GEOID of {idStr} is not length 4 or 5.")
+
+    # Add a leading 0 if necessary
+    if len(idStr) == 4:
+        idStr = f"0{idStr}"
+    
+    # Check the dict for the matching GISJOIN ID
+    if idStr in countyDict:
+        return countyDict[idStr]
+    
+    else:
+        return ""
+    
 
 
 
-def EmissionsPC(dataDir: Path, sfDir: Path):
+def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
+                graphsDir: Path = Path("./graphs"), stateAc: str = "CT"):
 
 
     ''' Outline
@@ -576,10 +601,16 @@ def EmissionsPC(dataDir: Path, sfDir: Path):
 
     '''
 
+    # Generate a logger for this test case
+    logger = logging.getLogger('EmissionsPC')
+    logging.basicConfig(filename="./logs/emissionsPC.log", encoding='utf-8', level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    logger.info("\n\n")
+
     # Read in the emissions data
     # We only need the 'City' and 'County' sheets
     allEmissions = pd.read_excel(dataDir / 'cityAndCountyEmissions.xlsb',
-                                 sheet_name=['City', 'County'], nrows=50)
+                                 sheet_name=['City', 'County'])#, nrows=5000)
     cityEmissions = allEmissions['City']
     countyEmissions = allEmissions['County']
 
@@ -669,6 +700,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path):
     # Make the city names lower case for consistency
     placeGdf['NAME'] = placeGdf['NAME'].str.lower()
 
+    # TODO: For testing, pick 1 state
+    placeGdf = placeGdf[placeGdf['STATEFP'] == STATE_AC_TO_FIPS[stateAc]]
+
     # Make a city name: GISJOIN dict
     cityDict = pd.Series(placeGdf['GISJOIN'].values, index=[placeGdf['NAME'], placeGdf['STATEFP']]).to_dict()
 
@@ -678,6 +712,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path):
     # Remove cities we don't have an ID for
     cityEmissions = cityEmissions[cityEmissions['GISJOIN'] != ""]
 
+    # TODO: For testing, pick 1 state
+    cityEmissions = cityEmissions[cityEmissions['StateAbbr'] == stateAc]
+
     ### Counties ###
 
     countyGdf = LoadShapefile(sfDir, 'county')
@@ -685,11 +722,191 @@ def EmissionsPC(dataDir: Path, sfDir: Path):
     # Lowercase names for consistency
     countyGdf['NAME'] = countyGdf['NAME'].str.lower()
 
-    print(countyEmissions)
-    print(countyGdf)
+    # TODO: For testing, only use one state
+    countyGdf = countyGdf[countyGdf['STATEFP'] == STATE_AC_TO_FIPS[stateAc]]
+
+    #print(countyEmissions)
+    #print(countyGdf)
 
     # Make a county FIPS code: GISJOIN dict
-    countyDict = pd.Series(countyGdf['GISJOIN'].valuies, index=[countyGdf['GEOID']]).to_dict()
+    countyDict = pd.Series(countyGdf['GISJOIN'].values, index=countyGdf['GEOID']).to_dict()
+
+
+    # Convert county FIPS to GISJOIN
+    countyEmissions['GISJOIN'] = countyEmissions.apply(CountyFIPSConverter, args=(countyDict, 'CountyId'), axis=1)
+
+    # Drop rows we didn't have a match for
+    countyEmissions = countyEmissions[countyEmissions['GISJOIN'] != ""]
+
+    # TODO: For testing, pick 1 state
+    countyEmissions = countyEmissions[countyEmissions['StateAbbr'] == stateAc]
+
+    ### States ###
+
+    # Doesn't require any work since we are using this for a layer
+    stateGdf = LoadShapefile(sfDir, 'state')
+
+
+    ### Graph Setup ###
+    graph = GranularityGraph('emissionsPCGraph', Path('./logs/emissionsPCGraph.log'))
+
+    # If specified, try loading a graph from disk first
+    status = Status.NOTEXISTS
+    if loadGraph:
+        status = graph.LoadGraph(Path("./graphs"))
+
+    # If needed, create a fresh graph
+    if status != Status.SUCCESS:
+
+        # Construct the graph, layer by layer
+
+        msg = "Adding City (place)-County layer..."
+        print(msg)
+        logger.info(msg)
+        graph = AddLevel(graph, placeGdf, countyGdf,
+                         n1Type=GEID.CITY, n2Type=GEID.COUNTY)
+        
+        msg = "Adding County-State layer..."
+        print(msg)
+        logger.info(msg)
+        graph = AddLevel(graph, countyGdf, stateGdf,
+                         n1Type=GEID.COUNTY, n2Type=GEID.STATE)
+        
+        msg = "Adding City (place)-State layer..."
+        print(msg)
+        logger.info(msg)
+        graph = AddLevel(graph, placeGdf, stateGdf,
+                         n1Type=GEID.CITY, n2Type=GEID.STATE)
+        
+        # Save the graph
+        msg = "Saving the graph..."
+        print(msg)
+        logger.info(msg)
+        graph.SaveGraph(graphsDir)
+
+    else:
+        # Log that we loaded the graph
+        msg = "Graph loaded successfully."
+        print(msg)
+        logger.info(msg)
+
+    
+    # Now, we can do the work
+    
+    # Get a gator object
+    gator = Gator(graph, Path('./logs/STEvalGator.log'))
+
+    # Sum the total emissions for each row
+    eCols = [c for c in cityEmissions.columns if 'Emissions' in c]
+    cityEmissions['TotalEmissions'] = cityEmissions[eCols].sum(axis=1)
+    countyEmissions['TotalEmissions'] = countyEmissions[eCols].sum(axis=1)
+
+    # Calculate avg per vehicle mile traveled
+    cityEmissions['EmissionsPerVM'] = cityEmissions['TotalEmissions'] / cityEmissions['VehicleMilesTraveled']
+    countyEmissions['EmissionsPerVM'] = countyEmissions['TotalEmissions'] / countyEmissions['VehicleMilesTraveled']
+
+
+
+    # Do an averaging using both areal overlap and kriging from cities to counties
+    msg = "Areal overlap equalization starting..."
+    print(msg)
+    logger.info(msg)
+    st = time.time()
+    arealResDf = gator.SpatialEqualize(cityEmissions, countyEmissions,
+                                       GEID.CITY, GEID.COUNTY, 'GISJOIN', 'GISJOIN',
+                                       'EmissionsPerVM', None, None, AggMethod.MEAN,
+                                       EdgeType.AREA, ignoreMissing=True, ignoreIncomplete=True)
+    arealRuntime = time.time() - st
+    msg = "Kriging equalization starting..."
+    print(msg)
+    logger.info(msg)
+    st = time.time()
+    krigingResDf = gator.SpatialEqualize(cityEmissions, countyEmissions,
+                                       GEID.CITY, GEID.COUNTY, 'GISJOIN', 'GISJOIN',
+                                       'EmissionsPerVM', None, None, AggMethod.KRIGING,
+                                       EdgeType.AREA, ignoreMissing=True, ignoreIncomplete=True,
+                                       distFunction=distFunc, model=VariogramModel.EXPONENTIAL)
+    krigingRuntime = time.time() - st
+    #print(arealResDf)
+    #print(krigingResDf)
+
+    # Get the groundtruth values
+    countyGt = countyEmissions[['GISJOIN', 'EmissionsPerVM']]
+    countyGt = countyGt.rename(columns={'EmissionsPerVM': 'EmissionsPerVM_GT'})
+
+    #print(countyEmissions)
+
+    # Add the 'true' value via joining
+    arealResDf = pd.merge(arealResDf, countyGt, left_index=True, right_on='GISJOIN')
+    krigingResDf = pd.merge(krigingResDf, countyGt, on='GISJOIN')
+
+    # Calculate error
+    errorCol = 'RelError'
+    arealResDf[errorCol+'_a'] = np.abs(arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
+    krigingResDf[errorCol+'_k'] = np.abs(krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
+
+    # Join the two results to compare errors directly
+    errorDf = pd.merge(arealResDf[['GISJOIN', errorCol + '_a']], krigingResDf[['GISJOIN', errorCol +'_k']], on='GISJOIN')
+
+    # Get an average error difference
+    # Remove the outlier
+    errorDf = errorDf[errorDf['GISJOIN'] != "G0100790"]
+    errorDf['Error Difference'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_k']
+    avgErrorDiff = errorDf['Error Difference'].mean()
+
+
+    print(arealResDf)
+    print(krigingResDf)
+
+
+
+    #pd.set_option('display.max_rows', None)
+    print(errorDf)
+    print(f"Average error difference (in %): {avgErrorDiff*100}")
+
+    print(f"Areal runtime: {arealRuntime}")
+    print(f"Kriging runtime: {krigingRuntime}")
+
+    #print(countyEmissions[countyEmissions['GISJOIN'] == "G0100790"])
+
+    # Now, we want the EVs at the county level
+    regsDf = pd.read_csv(Path("./evaluation/spatial/ev_registration.csv"))
+
+    # TODO: For testing, only use one state
+    regsDf = regsDf[regsDf['Primary Customer State'] == stateAc]
+
+    # We need the regs states as FIPS codes
+    regsDf['STATEFIPS'] = regsDf.apply(StateAcToFips, args=(STATE_AC_TO_FIPS, 'Primary Customer State'), axis=1)
+
+    # Drop rows with an invalid state
+    regsDf = regsDf[regsDf['STATEFIPS'] != '']
+
+    # We need to convert from city name to GISJOIN
+    regsDf['GISJOIN'] = regsDf.apply(CityTupleIdConverter, args=(cityDict, 'Primary Customer City', 'STATEFIPS'), axis=1)
+
+    # Remove cities that we didn't recognize
+    regsDf = regsDf[regsDf['GISJOIN'] != '']
+
+    # We already have city-county information in the graph,
+    # so go ahead and do the aggregation
+
+    # Make the data column a float for mathmatical operations
+    regsDf['Vehicle Year'] = regsDf['Vehicle Year'].astype(np.float64)
+
+
+    regsResDf =  gator.SpatialEqualize(regsDf, countyEmissions, GEID.CITY, GEID.COUNTY,
+                                       'GISJOIN', 'GISJOIN', 'Vehicle Year', None, None,
+                                       AggMethod.COUNT, EdgeType.AREA, ignoreMissing=True,
+                                       ignoreIncomplete=True)
+
+    print(regsResDf)
+    
+
+
+
+    
+
+
 
     
     
@@ -703,4 +920,4 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'))
+    EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), loadGraph=True)

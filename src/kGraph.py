@@ -69,7 +69,7 @@ class Node(object):
         # ID match should be enough, but use entityType as reassurance
         return self.id == value.id and self.entityType == value.entityType
     
-    def IsNeighbor(self, n: 'Node') -> bool:
+    def IsNeighbor(self, n: 'Node', modifier: int = 3) -> bool:
 
         """
         Determine if two nodes neighbor each other.
@@ -77,7 +77,7 @@ class Node(object):
         """
 
         # Use the centroids
-        return distance(self.centroid, n.centroid) <= 2*math.sqrt(self.geometry.area)
+        return distance(self.centroid, n.centroid) <= modifier*math.sqrt(self.geometry.area)
 
         # Use the geometries
         # NOTE: This is really slow
