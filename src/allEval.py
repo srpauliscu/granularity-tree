@@ -717,7 +717,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     ### Counties ###
 
-    countyGdf = LoadShapefile(sfDir, 'county')
+    # Use an older copy of the shapefile to match the data
+    countyGdf = LoadShapefile(sfDir, 'county2020')
 
     # Lowercase names for consistency
     countyGdf['NAME'] = countyGdf['NAME'].str.lower()
@@ -725,12 +726,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # TODO: For testing, only use one state
     countyGdf = countyGdf[countyGdf['STATEFP'] == STATE_AC_TO_FIPS[stateAc]]
 
-    #print(countyEmissions)
-    #print(countyGdf)
-
     # Make a county FIPS code: GISJOIN dict
     countyDict = pd.Series(countyGdf['GISJOIN'].values, index=countyGdf['GEOID']).to_dict()
-
 
     # Convert county FIPS to GISJOIN
     countyEmissions['GISJOIN'] = countyEmissions.apply(CountyFIPSConverter, args=(countyDict, 'CountyId'), axis=1)
@@ -784,6 +781,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         logger.info(msg)
         graph.SaveGraph(graphsDir)
 
+        # Load it again to make sure we have the correct objects
+        graph.LoadGraph(graphsDir)
+
     else:
         # Log that we loaded the graph
         msg = "Graph loaded successfully."
@@ -805,7 +805,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     cityEmissions['EmissionsPerVM'] = cityEmissions['TotalEmissions'] / cityEmissions['VehicleMilesTraveled']
     countyEmissions['EmissionsPerVM'] = countyEmissions['TotalEmissions'] / countyEmissions['VehicleMilesTraveled']
 
-
+    # Normalize it
+    cityEmissions['EmissionsPerVM'] /= cityEmissions['EmissionsPerVM'].max()
+    countyEmissions['EmissionsPerVM'] /= countyEmissions['EmissionsPerVM'].max()
 
     # Do an averaging using both areal overlap and kriging from cities to counties
     msg = "Areal overlap equalization starting..."

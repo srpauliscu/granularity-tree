@@ -69,7 +69,7 @@ class Node(object):
         # ID match should be enough, but use entityType as reassurance
         return self.id == value.id and self.entityType == value.entityType
     
-    def IsNeighbor(self, n: 'Node', modifier: int = 3) -> bool:
+    def IsNeighbor(self, n: 'Node', modifier: float = 3.0) -> bool:
 
         """
         Determine if two nodes neighbor each other.

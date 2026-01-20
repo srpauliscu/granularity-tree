@@ -741,8 +741,8 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
     # Plot the curve and covariances for comparison
     x = [i/100.+1 for i in range(10000)]
     y = [model(i, *params) for i in x]
-    plt.scatter(x,y, c='red')
-    plt.scatter(binAvgsDf.index, binAvgsDf[COV_COL])
+    #plt.scatter(x,y, c='red')
+    #plt.scatter(binAvgsDf.index, binAvgsDf[COV_COL])
 
     # 2.) Discretize the geometry of interest
     # Use the grid size as the number of dots per row/col
@@ -806,7 +806,7 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
 
     # 6.) Use the weights to estimate the avg val for the goi
     val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows, 0])
-    print(params)
+    #print(params)
     return val, C, D, W
 
 
@@ -929,27 +929,9 @@ def GenSyntheticData(idCol: str, dataCol: str, geoCol: str, areaCol: str, startV
     # Plot the variogram for comparison
     x = [i/100.+1 for i in range(10000)]
     y = [2*variogram(i, a, b, c) for i in x]
-    plt.scatter(x, y, c='orange')
+    #plt.scatter(x, y, c='orange')
 
     return allCircles, boundingBox
 
 
         
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-    

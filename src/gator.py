@@ -14,12 +14,12 @@ from pprint import pprint
 from shapely import centroid, distance
 from shapely.geometry import Point, shape, MultiPoint
 from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
 
 import math
 
 from kGraph import *
 #from src.kGraph import GEID, TID, AggMethod, DeAggMethod, EdgeType
-
 
 # Function for pd.apply to calculate error bound
 def CalculateError(row: pd.Series, origDataCol: str, newDataCol: str):
@@ -98,7 +98,7 @@ class Kriger(object):
         # Covariance matrix (matrix C)
         self.C: np.ndarray
 
-    def CalcSemivariogram(self) -> None:
+    def CalcSemivariogram(self, binSize: float = 5.) -> None:
         
         # 1.) Do a cross join to get a row for each pair of nodes
         self.samplePairs = pd.merge(self.samples, self.samples, how="cross")
@@ -106,11 +106,13 @@ class Kriger(object):
         # 2.) Calculate the distance between each pair of nodes
         # Assume that the distance function floors the result for us
         # when a binSize is provided
+
+        #quit()
         self.samplePairs[self.NODE_BINNED_DIST_COL] = \
             self.samplePairs.apply(lambda x: 
                                    self.dist(x[self.centroidCol+'_x'], 
                                              x[self.centroidCol+'_y'],
-                                             binSize=1000.), 
+                                             binSize=binSize), 
                                              axis=1)
         
         # Also calculate the real distance, for constructing matrix C
@@ -125,7 +127,7 @@ class Kriger(object):
             self.samplePairs.apply(lambda x: 
                                    (x[self.dataCol+'_y'] - x[self.dataCol + '_x'])**2, 
                                    axis=1)
-        
+         
         # 4.) Get average values for each distance bin
         self.sampleCovs = self.samplePairs[
             [self.NODE_BINNED_DIST_COL, self.COV_COL]]\
@@ -133,6 +135,7 @@ class Kriger(object):
         
         # Make sure to use the semivariogram
         self.sampleCovs[self.COV_COL] *= .5
+
 
     def FitSemivariogram(self, 
                          model: Callable = VariogramModel.EXPONENTIAL)\
@@ -142,17 +145,19 @@ class Kriger(object):
         if self.sampleCovs is None:
             raise RuntimeError("You must call CalcSemivariogram before FitSemivariogram.")
 
+        # Normalize the distances to 0-1 scale
+        # Save the scale factor to re-scale later
+        #self.
+        self.sampleCovs.index /= self.sampleCovs.index.max()
+
         # Use the averaged covariances to fit the given model
         params, cov = curve_fit(model,
                                 self.sampleCovs.index,
                                 self.sampleCovs[self.COV_COL])
-        
+
         # Save the params and the model
-        #print(self.sampleCovs.index)
         self.curParams = list(params)
         self.model = model
-
-        #print(self.curParams)
 
         # Return the covariance from fitting the model
         # in case we want to use it for error calcs
@@ -176,9 +181,14 @@ class Kriger(object):
 
         # TODO: There might be a more efficient way to do this
         # Populate C using the fit semivariogram
+        print('\n\n\n\n\n')
+        self.samplePairs[self.NODE_ACT_DIST_COL] /= self.samplePairs[self.NODE_ACT_DIST_COL].max()
         for i in range(numRows):
             for j in range(numRows):
                 cov = self.model(self.samplePairs.iloc[i*numRows+j][self.NODE_ACT_DIST_COL], *self.curParams)
+                #print(cov)
+                #print(self.samplePairs.iloc[i*numRows+j][self.NODE_ACT_DIST_COL])
+                print(self.samplePairs.iloc[i*numRows+j][self.NODE_ACT_DIST_COL])
 
                 # Symmetric matrix assumes the value is isotropic
                 self.C[i,j] = cov
@@ -186,8 +196,6 @@ class Kriger(object):
 
         # Make the last entry 0 for the Lagrange
         self.C[-1,-1] = 0
-        
-
 
     def CalcWeights(self, noi: Node, gridWidth: int = 5) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
@@ -235,6 +243,8 @@ class Kriger(object):
                 curSum += self.model(curDist, *self.curParams)
 
             # Calculate average covariance
+            # TODO: Needs to be normalized by the same value as the other distances
+            assert False
             D[curRow, 0] = curSum / len(gridPoints)
 
             # Increment counter
@@ -522,6 +532,7 @@ class Gator(object):
                        edgeType: EdgeType,
                        distFunction: Callable,
                        model: Callable,
+                       binSize: float = 5.,
                        ignoreMissing: bool = False,
                        ignoreIncomplete: bool = False) -> pd.DataFrame:
         
@@ -534,8 +545,9 @@ class Gator(object):
                                                    edgeType,
                                                    distFunction,
                                                    model,
-                                                   ignoreMissing,
-                                                   ignoreIncomplete)
+                                                   binSize=binSize,
+                                                   ignoreMissing=ignoreMissing,
+                                                   ignoreIncomplete=ignoreIncomplete)
         
         
         # Kriging will always be a summation of the value factors
@@ -568,6 +580,7 @@ class Gator(object):
                            edgeType: EdgeType,
                            distFunction: Callable,
                            model: Callable,
+                           binSize: float = 5.,
                            ignoreMissing: bool = False,
                            ignoreIncomplete: bool = False) \
                             -> tuple[dict[Node, pd.DataFrame], dict[Node, tuple]]:
@@ -673,7 +686,10 @@ class Gator(object):
 
                 # Since we need minimum 3 points, grab all points within
                 # the 4th closest
-                maxDist = allDists[3]
+                try:
+                    maxDist = allDists[3]
+                except:
+                    maxDist = allDists[-1]
 
                 # Go back through and get the neighbors within that dist
                 for snPair in pairDistances:
@@ -732,7 +748,7 @@ class Gator(object):
         # Have each Kriger fit their variogram
         for dn in krigers:
             k = krigers[dn]
-            k.CalcSemivariogram()
+            k.CalcSemivariogram(binSize=binSize)
             k.FitSemivariogram(model)
             k.CalcC()
         
@@ -929,7 +945,8 @@ class Gator(object):
                 edgeType: EdgeType, ignoreMissing: bool = False,
                 ignoreIncomplete: bool = False,
                 distFunction: Callable = None,
-                model: Callable = None) -> pd.DataFrame:
+                model: Callable = None,
+                binSize: float = 5.) -> pd.DataFrame:
 
         """
         Attempt to make the data in sourceDf match the granularity of destDf via 'edgeType'
@@ -976,7 +993,7 @@ class Gator(object):
             resDf = self.SpatialKriging(sourceDf, destDf, sourceType, destType,
                                         sourceIdCol, destIdCol, sourceDataCol,
                                         sourceGeoCol, destGeoCol, edgeType,
-                                        distFunction, model)
+                                        distFunction, model, binSize=binSize)
             
             # TODO: For now, just return the results.  We probably
             # want error calculation later though.

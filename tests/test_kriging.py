@@ -392,14 +392,3 @@ def testSimulatedData():
     print(groundTruths)
     print(resDf)
     
-
-
-
-
-
-
-
-
-    
-
-
