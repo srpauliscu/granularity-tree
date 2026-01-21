@@ -49,6 +49,11 @@ def testSinglePOIWeights():
     dataCol = 'AvgEVs'
     geoCol = 'shape'
 
+    # We need to normalize the data
+    normFactor = max(counties[dataCol].max(), regions[dataCol].max())
+    counties[dataCol] /= normFactor
+    regions[dataCol] /= normFactor
+
     #countyGt = ManualKriging(counties, idCol, dataCol, geoCol, poi)
     countyGt, C, D, W = ManualBlockKriging(counties, idCol,
                                            dataCol, geoCol,

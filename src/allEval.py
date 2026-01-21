@@ -806,8 +806,99 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     countyEmissions['EmissionsPerVM'] = countyEmissions['TotalEmissions'] / countyEmissions['VehicleMilesTraveled']
 
     # Normalize it
-    cityEmissions['EmissionsPerVM'] /= cityEmissions['EmissionsPerVM'].max()
-    countyEmissions['EmissionsPerVM'] /= countyEmissions['EmissionsPerVM'].max()
+    normFactor = max(cityEmissions['EmissionsPerVM'].max(), countyEmissions['EmissionsPerVM'].max())
+    cityEmissions['EmissionsPerVM'] /= normFactor
+    countyEmissions['EmissionsPerVM'] /= normFactor
+
+    import sys
+    sys.path.append("/home/srpaulis/granularity-tree")
+    from tests.util import ManualBlockKriging
+
+    # Testing rows
+    controlCounty = countyEmissions[countyEmissions['GISJOIN'] == "G0900010"]
+    problemCounty = countyEmissions[countyEmissions['GISJOIN'] == "G0900030"]
+
+    controlCountyCityIds = ['G09004790',
+                      'G09008000',
+                      'G09009050',
+                      'G09018430',
+                      'G09018936',
+                      'G09019480',
+                      'G09026698',
+                      'G09033690',
+                      'G09047515',
+                      'G09050576',
+                      'G09052910',
+                      'G09055990',
+                      'G09063620',
+                      'G09063900',
+                      'G09068100',
+                      'G09068240',
+                      'G09073000',
+                      'G09074303',
+                      'G09077278',
+                      'G09083360',
+                      'G09083586',
+                      'G09071215']
+    
+    problemCountyCityIds = ['G09008420',
+                        'G09012370',
+                        'G09022420',
+                        'G09022700',
+                        'G09031270',
+                        'G09054660',
+                        'G09022420',
+                        'G09037000',
+                        'G09044690',
+                        'G09046450',
+                        'G09047290',
+                        'G09050370',
+                        'G09052210',
+                        'G09069010',
+                        'G09074655',
+                        'G09075940',
+                        'G09082660',
+                        'G09084970',
+                        'G09087140',
+                        ]
+    
+    controlCountyCities = cityEmissions[cityEmissions['GISJOIN'].isin(controlCountyCityIds)]
+    problemCountyCities = cityEmissions[cityEmissions['GISJOIN'].isin(problemCountyCityIds)]
+
+    controlCountyNode = graph.GetNode("G0900010", GEID.COUNTY)
+    problemCountyNode = graph.GetNode("G0900030", GEID.COUNTY)
+
+    controlRows = []
+    for id in controlCountyCityIds:
+        n = graph.GetNode(id, GEID.CITY)
+        controlRows.append({'GISJOIN': id, 'geometry': n.geometry})
+    
+    problemRows = []
+    for id in problemCountyCityIds:
+        n = graph.GetNode(id, GEID.CITY)
+        problemRows.append({'GISJOIN': id, 'geometry': n.geometry})
+
+    # Add the geometries to the dataframes
+    controlGeoDf = pd.DataFrame(data=controlRows)
+    problemGeoDf = pd.DataFrame(data=problemRows)
+
+    controlCountyCities = pd.merge(controlCountyCities, controlGeoDf, on='GISJOIN')
+    problemCountyCities = pd.merge(problemCountyCities, problemGeoDf, on='GISJOIN')
+
+    #problemCountyCities = problemCountyCities.tail(n=4).reset_index()
+
+    problemCountyCities = problemCountyCities.drop_duplicates(subset=['GISJOIN']).reset_index()
+
+
+    #controlCountyGt,Cgt, Dgt, Wgt  = ManualBlockKriging(controlCountyCities, 'GISJOIN',
+    #                                              'EmissionsPerVM', 'geometry', controlCountyNode.geometry,
+    #                                              VariogramModel.EXPONENTIAL)
+
+
+    #problemCountyGt, Cprob, Dprob, Wprob = ManualBlockKriging(problemCountyCities, 'GISJOIN',
+    #                                                          'EmissionsPerVM', 'geometry', problemCountyNode.geometry,
+    #                                                          VariogramModel.EXPONENTIAL)
+
 
     # Do an averaging using both areal overlap and kriging from cities to counties
     msg = "Areal overlap equalization starting..."

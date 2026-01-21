@@ -699,11 +699,7 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
                 dist = 0
             else:
                 dist = distance(curSample[CENTROID_COL], compSample[CENTROID_COL])
-            
-            # Reset max dist if needed
-            if dist > maxDist:
-                maxDist = dist
-            
+
             # Add the distance to the new row
             newRow[DIST_COL] = dist
 
@@ -725,6 +721,11 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
     
     # Make it a df for maniuplation
     binnedPairsDf = pd.DataFrame(data=newRows)
+
+    # We need to normalize the distances too
+    normFactor = float(pairsDf[DIST_COL].max())
+    pairsDf[DIST_COL] /= normFactor
+    binnedPairsDf[DIST_COL] /= normFactor
 
     # We can group by distance to get an average for each bin
     binAvgsDf = binnedPairsDf[[DIST_COL, COV_COL]].groupby(DIST_COL).mean()
@@ -792,13 +793,12 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
             
             '''
 
-            curDist = distance(p, row[CENTROID_COL])
+            curDist = distance(p, row[CENTROID_COL]) / normFactor
             curSum += model(curDist, *params)
 
         D[i, 0] = curSum / len(gridPoints)
     
     # 4.) Use linear algebra to calculate weights
-    
     W = np.linalg.inv(C) @ D
 
     # 5.) Sanity check that the weights sum to 1
@@ -806,7 +806,7 @@ def ManualBlockKriging(samplesDf: pd.DataFrame, idCol: str,
 
     # 6.) Use the weights to estimate the avg val for the goi
     val = np.dot(samplesDf[dataCol].to_numpy(), W[:numRows, 0])
-    #print(params)
+
     return val, C, D, W
 
 

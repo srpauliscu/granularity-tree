@@ -64,7 +64,9 @@ class Kriger(object):
 
     # Column names for relevant new columns
     NODE_BINNED_DIST_COL = "nodeBinnedDist__"
+    NODE_BINNED_DIST_COL_NORM = "nodeBinnedDistNorm__"
     NODE_ACT_DIST_COL = "nodeActDist__"
+    NODE_ACT_DIST_COL_NORM = "nodeActDistNorm__"
     COV_COL = "covariance__"
 
     def __init__(self, samples: pd.DataFrame, idCol: str,
@@ -81,6 +83,9 @@ class Kriger(object):
         # Function to calculate "distance" between nodes
         # (allows for flexible defintion of distance)
         self.dist = dist
+
+        # Normalization denominator for the distances
+        self.normFactor: float
 
         # The cross join of the samples
         self.samplePairs: pd.DataFrame
@@ -121,6 +126,15 @@ class Kriger(object):
                                    self.dist(x[self.centroidCol+'_x'],
                                              x[self.centroidCol+'_y']),
                                              axis=1)
+        
+        # We need to normalize both columns for curve fit to work
+        self.normFactor = self.samplePairs[self.NODE_ACT_DIST_COL].max()
+        #self.samplePairs[self.NODE_BINNED_DIST_COL] /= self.normFactor
+        #self.samplePairs[self.NODE_ACT_DIST_COL] /= self.normFactor
+        self.samplePairs[self.NODE_ACT_DIST_COL_NORM] = self.samplePairs[self.NODE_ACT_DIST_COL] / self.normFactor
+        self.samplePairs[self.NODE_BINNED_DIST_COL_NORM] = self.samplePairs[self.NODE_BINNED_DIST_COL] / self.normFactor
+        #self.samplePairs[self.NODE_ACT_DIST_COL_NORM] = self.samplePairs[self.NODE_ACT_DIST_COL]
+        #self.samplePairs[self.NODE_BINNED_DIST_COL_NORM] = self.samplePairs[self.NODE_BINNED_DIST_COL]
 
         # 3.) Calculate the covariance (?) for each pair
         self.samplePairs[self.COV_COL] = \
@@ -130,8 +144,8 @@ class Kriger(object):
          
         # 4.) Get average values for each distance bin
         self.sampleCovs = self.samplePairs[
-            [self.NODE_BINNED_DIST_COL, self.COV_COL]]\
-                .groupby(self.NODE_BINNED_DIST_COL).mean()
+            [self.NODE_BINNED_DIST_COL_NORM, self.COV_COL]]\
+                .groupby(self.NODE_BINNED_DIST_COL_NORM).mean()
         
         # Make sure to use the semivariogram
         self.sampleCovs[self.COV_COL] *= .5
@@ -144,11 +158,6 @@ class Kriger(object):
         # Make sure the avgs have been calced
         if self.sampleCovs is None:
             raise RuntimeError("You must call CalcSemivariogram before FitSemivariogram.")
-
-        # Normalize the distances to 0-1 scale
-        # Save the scale factor to re-scale later
-        #self.
-        self.sampleCovs.index /= self.sampleCovs.index.max()
 
         # Use the averaged covariances to fit the given model
         params, cov = curve_fit(model,
@@ -181,14 +190,10 @@ class Kriger(object):
 
         # TODO: There might be a more efficient way to do this
         # Populate C using the fit semivariogram
-        print('\n\n\n\n\n')
-        self.samplePairs[self.NODE_ACT_DIST_COL] /= self.samplePairs[self.NODE_ACT_DIST_COL].max()
+
         for i in range(numRows):
             for j in range(numRows):
-                cov = self.model(self.samplePairs.iloc[i*numRows+j][self.NODE_ACT_DIST_COL], *self.curParams)
-                #print(cov)
-                #print(self.samplePairs.iloc[i*numRows+j][self.NODE_ACT_DIST_COL])
-                print(self.samplePairs.iloc[i*numRows+j][self.NODE_ACT_DIST_COL])
+                cov = self.model(self.samplePairs.iloc[i*numRows+j][self.NODE_ACT_DIST_COL_NORM], *self.curParams)
 
                 # Symmetric matrix assumes the value is isotropic
                 self.C[i,j] = cov
@@ -237,14 +242,13 @@ class Kriger(object):
                 
                 # Calculate distance between current grid point
                 # and sample centroid
-                curDist = self.dist(p, curCentroid)
+                # Make sure to normalize it by the same factor
+                curDist = self.dist(p, curCentroid) / self.normFactor
 
                 # Use the semi-variogram to estimate covariance
                 curSum += self.model(curDist, *self.curParams)
 
             # Calculate average covariance
-            # TODO: Needs to be normalized by the same value as the other distances
-            assert False
             D[curRow, 0] = curSum / len(gridPoints)
 
             # Increment counter
@@ -253,7 +257,7 @@ class Kriger(object):
         # Use linear algebra to calculate weights
         W = np.linalg.inv(self.C) @ D
 
-        # Sanity check that the weights sum to 1
+        # Sanity check that the weights sum to 1 
         assert math.isclose(np.sum(W[:numRows, 0]), 1)
 
         # Return all matrices for testing purposes
@@ -737,6 +741,11 @@ class Gator(object):
 
 
         # separatedSamples: {destNode: pd.DataFrame, ...}
+        
+        # Ensure there are no duplicate IDs
+        # This causes singular matrices
+        for dn in sepSamples:
+            sepSamples[dn] = sepSamples[dn].drop_duplicates(subset=[sourceIdCol])
 
 
         # 4.) For each set of samples, make a Kriger object to handle
@@ -746,15 +755,23 @@ class Gator(object):
                    for dn in sepSamples}
 
         # Have each Kriger fit their variogram
+        weights = {}
         for dn in krigers:
+
+            print(dn.id)
+            print(sepSamples[dn])
+
             k = krigers[dn]
             k.CalcSemivariogram(binSize=binSize)
             k.FitSemivariogram(model)
             k.CalcC()
+            weights[dn] = k.CalcWeights(dn)
+
         
         # 5.) Use each kriger to calculate weights
-        weights = {}
+        #weights = {}
         for dn in krigers:
+            break
             weights[dn] = krigers[dn].CalcWeights(dn)
 
         # Now, each entry in weights corresponds to the set of
