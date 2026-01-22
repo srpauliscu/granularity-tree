@@ -129,12 +129,8 @@ class Kriger(object):
         
         # We need to normalize both columns for curve fit to work
         self.normFactor = self.samplePairs[self.NODE_ACT_DIST_COL].max()
-        #self.samplePairs[self.NODE_BINNED_DIST_COL] /= self.normFactor
-        #self.samplePairs[self.NODE_ACT_DIST_COL] /= self.normFactor
         self.samplePairs[self.NODE_ACT_DIST_COL_NORM] = self.samplePairs[self.NODE_ACT_DIST_COL] / self.normFactor
         self.samplePairs[self.NODE_BINNED_DIST_COL_NORM] = self.samplePairs[self.NODE_BINNED_DIST_COL] / self.normFactor
-        #self.samplePairs[self.NODE_ACT_DIST_COL_NORM] = self.samplePairs[self.NODE_ACT_DIST_COL]
-        #self.samplePairs[self.NODE_BINNED_DIST_COL_NORM] = self.samplePairs[self.NODE_BINNED_DIST_COL]
 
         # 3.) Calculate the covariance (?) for each pair
         self.samplePairs[self.COV_COL] = \
@@ -347,8 +343,6 @@ class Gator(object):
 
         # Iterrows is slow, but only needs to be done once here
         newDicts = []
-        #print(df)
-        #print(allFactors)
         for ind, row in df.iterrows():
             factors = allFactors[ind]
             
@@ -658,9 +652,16 @@ class Gator(object):
             # We can discard the weights since we're calculating new ones
             matches = list(matches.keys())
 
+            # Edge case: We have no source data for this dest node, AT ALL
+            # TODO: Could maybe search nearby dest nodes and use their matches,
+            # but for now just don't put it in the final list
+            if len(matches) == 0:
+                continue
+
             # For curve fitting, we need at least 3 matches, since
             # the max number of model parameters is 3
             if len(matches) < 3:
+
                 newMatches = []
                 pairDistances = {}
 
@@ -690,9 +691,14 @@ class Gator(object):
 
                 # Since we need minimum 3 points, grab all points within
                 # the 4th closest
+        
+
+
+                # Edge case: there are no neighboring sources (?)
                 try:
                     maxDist = allDists[3]
                 except:
+                    # Grab all of the points if there aren't at least 4
                     maxDist = allDists[-1]
 
                 # Go back through and get the neighbors within that dist
@@ -706,15 +712,8 @@ class Gator(object):
                 
             # Save the final result
             allMatches[dn] = matches
-
-            if len(allMatches[dn]) <= 1:
-                print(allMatches[dn][0].id)
         
         # allMatches: {destNode: [sourceNode1, sourceNode2, ...], ...}
-        #print(allMatches)
-
-        #pprint(allMatches)
-        #assert False
 
         # 3.) For each destNode, we need to separate the corresponding
         # samples from the full dataframe
@@ -757,9 +756,6 @@ class Gator(object):
         # Have each Kriger fit their variogram
         weights = {}
         for dn in krigers:
-
-            print(dn.id)
-            print(sepSamples[dn])
 
             k = krigers[dn]
             k.CalcSemivariogram(binSize=binSize)
@@ -1050,9 +1046,6 @@ class Gator(object):
         # 6.) Error calculation
 
         # Do a one-sided join to inform each source-dest node pair of the result
-        #print(expandedDf)
-        #print(resDf)
-
         rsuffix = '_r'
         lsuffix = '_l'
         joinedDf = expandedDf.join(resDf, on=self.DEST_COL, how='left', rsuffix='_r', lsuffix='_l')
@@ -1149,11 +1142,8 @@ class Gator(object):
             # Generate timestamps for each unit between the two endpoints
             tempNewRows = []
             curTimeCounter = intervalStartTs
-
-            #print(f'\n{row[intervalCol]}')
             
             while curTimeCounter < intervalEndTs:
-                #print(curTimeCounter)
                 newRow = {}
 
                 # Copy over the data column
@@ -1186,7 +1176,6 @@ class Gator(object):
                     overlap = ((curTimeCounter + ONE_UNIT) - curTimeCounter).total_seconds()
 
                 # Sanity check: the overlap should never be bigger than
-                #print(f"Second overlap: {overlap}")
                 assert overlap <= origSize
 
                 # Calculate the factor
@@ -1208,8 +1197,6 @@ class Gator(object):
 
             # Sanity check: the data column sum should match the original
             valueFactors = [r[self.VALUE_FACTOR_COL] for r in tempNewRows]
-            #print(sum(valueFactors))
-            #print(row[dataCol])
             
             if not math.isclose(sum(valueFactors), actualData):
                 raise RuntimeError

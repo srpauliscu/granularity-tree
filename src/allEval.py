@@ -574,7 +574,7 @@ def CountyFIPSConverter(row: pd.Series, countyDict: dict, col: str):
 
 
 def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
-                graphsDir: Path = Path("./graphs"), stateAc: str = "CT"):
+                graphsDir: Path = Path("./graphs"), stateAc: str = "CA"):
 
 
     ''' Outline
@@ -790,7 +790,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         print(msg)
         logger.info(msg)
 
-    
     # Now, we can do the work
     
     # Get a gator object
@@ -810,6 +809,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     cityEmissions['EmissionsPerVM'] /= normFactor
     countyEmissions['EmissionsPerVM'] /= normFactor
 
+    '''
     import sys
     sys.path.append("/home/srpaulis/granularity-tree")
     from tests.util import ManualBlockKriging
@@ -899,6 +899,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     #                                                          'EmissionsPerVM', 'geometry', problemCountyNode.geometry,
     #                                                          VariogramModel.EXPONENTIAL)
 
+    '''
 
     # Do an averaging using both areal overlap and kriging from cities to counties
     msg = "Areal overlap equalization starting..."
@@ -918,7 +919,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                        GEID.CITY, GEID.COUNTY, 'GISJOIN', 'GISJOIN',
                                        'EmissionsPerVM', None, None, AggMethod.KRIGING,
                                        EdgeType.AREA, ignoreMissing=True, ignoreIncomplete=True,
-                                       distFunction=distFunc, model=VariogramModel.EXPONENTIAL)
+                                       distFunction=distFunc, model=VariogramModel.LINEAR,
+                                       binSize=500.)
     krigingRuntime = time.time() - st
     #print(arealResDf)
     #print(krigingResDf)
@@ -942,8 +944,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     errorDf = pd.merge(arealResDf[['GISJOIN', errorCol + '_a']], krigingResDf[['GISJOIN', errorCol +'_k']], on='GISJOIN')
 
     # Get an average error difference
-    # Remove the outlier
-    errorDf = errorDf[errorDf['GISJOIN'] != "G0100790"]
     errorDf['Error Difference'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_k']
     avgErrorDiff = errorDf['Error Difference'].mean()
 
@@ -964,6 +964,10 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Now, we want the EVs at the county level
     regsDf = pd.read_csv(Path("./evaluation/spatial/ev_registration.csv"))
+
+    #regsDf = regsDf.drop_duplicates('Primary Customer State')
+    #print(regsDf)
+    #quit()
 
     # TODO: For testing, only use one state
     regsDf = regsDf[regsDf['Primary Customer State'] == stateAc]
@@ -986,15 +990,31 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Make the data column a float for mathmatical operations
     regsDf['Vehicle Year'] = regsDf['Vehicle Year'].astype(np.float64)
 
-
     regsResDf =  gator.SpatialEqualize(regsDf, countyEmissions, GEID.CITY, GEID.COUNTY,
                                        'GISJOIN', 'GISJOIN', 'Vehicle Year', None, None,
                                        AggMethod.COUNT, EdgeType.AREA, ignoreMissing=True,
                                        ignoreIncomplete=True)
 
     print(regsResDf)
-    
 
+    # For clarity, rename the 'Vehicle Year' column
+    regsResDf = regsResDf.rename(columns={'Vehicle Year': 'EV_Count'})
+
+    # Now, join the results
+    regsArealDf = pd.merge(arealResDf, regsResDf, left_on='GISJOIN', right_index=True)
+    regsKrigingDf = pd.merge(krigingResDf, regsResDf, left_on='GISJOIN', right_index=True)
+
+    # Sort for better plotting
+    regsArealDf = regsArealDf.sort_values('EV_Count')
+    regsKrigingDf = regsKrigingDf.sort_values('EV_Count')
+
+    # Plot the results
+    fig, ax = plt.subplots()
+    regsArealDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color='red')
+    regsKrigingDf.plot(x='EV_Count', y='EmissionsPerVM_est', kind='line', ax=ax, color='blue')
+    regsArealDf.plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green')
+
+    plt.show()
 
 
     
