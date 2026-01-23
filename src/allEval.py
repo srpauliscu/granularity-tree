@@ -571,7 +571,7 @@ def CountyFIPSConverter(row: pd.Series, countyDict: dict, col: str):
         return ""
     
 
-def LoadEVRegistration(dataDir: Path, stateAc: str):
+def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID, str, str]:
 
     # Data from https://www.atlasevhub.com/market-data/state-ev-registration-data/
     # except for CT
@@ -615,6 +615,9 @@ def LoadEVRegistration(dataDir: Path, stateAc: str):
                                           'Primary Customer State': 'State', 
                                           'Vehicle Year': 'Vehicle Count'})
             
+            # Filter to only CT
+            resDf = resDf[resDf['State'] == stateAc]
+            
             return resDf, GEID.CITY, 'City', 'Vehicle Count'
             
     raise ValueError(f"Invalid state acronym of {stateAc}")
@@ -626,7 +629,8 @@ def LoadEVRegistration(dataDir: Path, stateAc: str):
     
 
 def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
-                graphsDir: Path = Path("./graphs"), stateAc: str = "CT"):
+                graphsDir: Path = Path("./graphs"), stateAc: str = "CT",
+                shapefileDir: Path = Path("./data/tiger")):
 
 
     ''' Outline
@@ -1029,20 +1033,44 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     #print(regsDf)
     #quit()
 
-    # TODO: For testing, only use one state
-    regsDf = regsDf[regsDf['Primary Customer State'] == stateAc]
+    regsDf, keyType, keyCol, dataCol = LoadEVRegistration(Path('./evaluation'), stateAc)
 
     # We need the regs states as FIPS codes
-    regsDf['STATEFIPS'] = regsDf.apply(StateAcToFips, args=(STATE_AC_TO_FIPS, 'Primary Customer State'), axis=1)
+    regsDf['STATEFIPS'] = regsDf.apply(StateAcToFips, args=(STATE_AC_TO_FIPS, 'State'), axis=1)
 
     # Drop rows with an invalid state
     regsDf = regsDf[regsDf['STATEFIPS'] != '']
 
-    # We need to convert from city name to GISJOIN
-    regsDf['GISJOIN'] = regsDf.apply(CityTupleIdConverter, args=(cityDict, 'Primary Customer City', 'STATEFIPS'), axis=1)
+    if keyType == GEID.CITY:
 
-    # Remove cities that we didn't recognize
-    regsDf = regsDf[regsDf['GISJOIN'] != '']
+        # We need to convert from city name to GISJOIN
+        regsDf['GISJOIN'] = regsDf.apply(CityTupleIdConverter, args=(cityDict, 'Primary Customer City', 'STATEFIPS'), axis=1)
+
+        # Remove cities that we didn't recognize
+        regsDf = regsDf[regsDf['GISJOIN'] != '']
+    
+    if keyType == GEID.COUNTY:
+        
+        raise NotImplementedError
+
+        # Convert county name to GISJOIN
+        regsDf['GISJOIN']
+
+    if keyType == GEID.ZIP:
+
+        # We need to convert from ZIP to ZCTA first
+        zctaGdf = LoadShapefile(shapefileDir, 'zcta')
+        ztzGdf = gpd.read_file("./data/zipToZcta.csv")
+
+        # Make a map from ZIP to ZCTA
+        ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
+
+        # Do the actual conversion
+        regsDf[ntdas.ZCTA_COL] = regsDf.apply(ZipZctaConverter, args=(ztzDict,), axis=1)
+
+        # Then, convert from ZCTA to GISJOIN
+        zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
+        regsDf['GISJOIN'] = regsDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
 
     # We already have city-county information in the graph,
     # so go ahead and do the aggregation
