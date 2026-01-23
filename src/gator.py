@@ -154,11 +154,14 @@ class Kriger(object):
         # Make sure the avgs have been calced
         if self.sampleCovs is None:
             raise RuntimeError("You must call CalcSemivariogram before FitSemivariogram.")
+        
+
 
         # Use the averaged covariances to fit the given model
         params, cov = curve_fit(model,
                                 self.sampleCovs.index,
                                 self.sampleCovs[self.COV_COL])
+        
 
         # Save the params and the model
         self.curParams = list(params)
@@ -198,7 +201,7 @@ class Kriger(object):
         # Make the last entry 0 for the Lagrange
         self.C[-1,-1] = 0
 
-    def CalcWeights(self, noi: Node, gridWidth: int = 5) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def CalcWeights(self, noi: Node, gridWidth: int = 10) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
         # Make sure that the C matrix has been constructed first
         if self.C is None:

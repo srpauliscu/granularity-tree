@@ -19,8 +19,16 @@ from src.entities import *
 
 
 
+a = 'c'
+
+match a:
+    case 'a':
+        print('It is a!')
+    case 'b' | 'c':
+        print('It is b or c!')
 
 
+quit()
 
 l = [1,2,3,4,5,6]
 

@@ -571,10 +571,62 @@ def CountyFIPSConverter(row: pd.Series, countyDict: dict, col: str):
         return ""
     
 
+def LoadEVRegistration(dataDir: Path, stateAc: str):
 
+    # Data from https://www.atlasevhub.com/market-data/state-ev-registration-data/
+    # except for CT
+
+
+    # Each state has a unique file to be loaded
+    resDf = None
+    match stateAc:
+
+        case 'CO' | 'ME' | 'MN' | 'NJ' | 'NM' | 'NY' | 'NC' | 'OR' | 'TX' | 'VT':
+
+            # Load the CSV
+            resDf = pd.read_csv(dataDir / Path(f'evRegistrations/{stateAc}.csv'))
+
+            # Drop unnecessary columns
+            resDf = resDf[['State', 'ZIP Code', 'Registration Date', 'Vehicle Count']]
+
+            return resDf, GEID.ZIP, 'ZIP Code', 'Vehicle Count'
+
+        case 'MT' | 'TN' | 'VA':
+
+            # Load the CSV
+            resDf = pd.read_csv(dataDir / Path(f'evRegistrations/{stateAc}.csv'))
+
+            # These are keyed by County, so pull that out instead of ZIP
+            resDf = resDf[['State', 'County', 'Registration Date', 'Vehicle Count']]
+
+            return resDf, GEID.COUNTY, 'County', 'Vehicle Count'
+
+
+        case 'CT':
+
+            # Use the existing file we have
+            resDf = pd.read_csv(dataDir / Path('spatial/ev_registration.csv'))
+
+            # Drop unnecessary columns
+            resDf = resDf[['Primary Customer City', 'Primary Customer State', 'Vehicle Year']]
+
+            # Rename for standardization
+            resDf = resDf.rename(columns={'Primary Customer City': 'City',
+                                          'Primary Customer State': 'State', 
+                                          'Vehicle Year': 'Vehicle Count'})
+            
+            return resDf, GEID.CITY, 'City', 'Vehicle Count'
+            
+    raise ValueError(f"Invalid state acronym of {stateAc}")
+
+
+
+
+
+    
 
 def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
-                graphsDir: Path = Path("./graphs"), stateAc: str = "CA"):
+                graphsDir: Path = Path("./graphs"), stateAc: str = "CT"):
 
 
     ''' Outline
@@ -603,7 +655,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Generate a logger for this test case
     logger = logging.getLogger('EmissionsPC')
-    logging.basicConfig(filename="./logs/emissionsPC.log", encoding='utf-8', level=logging.DEBUG,
+    logging.basicConfig(filename=f"./logs/emissionsPC{stateAc}.log", encoding='utf-8', level=logging.DEBUG,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
     logger.info("\n\n")
 
@@ -745,7 +797,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
 
     ### Graph Setup ###
-    graph = GranularityGraph('emissionsPCGraph', Path('./logs/emissionsPCGraph.log'))
+    graph = GranularityGraph(f'emissionsPCGraph{stateAc}',
+                             Path(f'./logs/emissionsPCGraph{stateAc}.log'))
 
     # If specified, try loading a graph from disk first
     status = Status.NOTEXISTS
@@ -793,7 +846,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Now, we can do the work
     
     # Get a gator object
-    gator = Gator(graph, Path('./logs/STEvalGator.log'))
+    gator = Gator(graph, Path(f'./logs/EmissionsPCGator{stateAc}.log'))
 
     # Sum the total emissions for each row
     eCols = [c for c in cityEmissions.columns if 'Emissions' in c]
@@ -919,7 +972,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                        GEID.CITY, GEID.COUNTY, 'GISJOIN', 'GISJOIN',
                                        'EmissionsPerVM', None, None, AggMethod.KRIGING,
                                        EdgeType.AREA, ignoreMissing=True, ignoreIncomplete=True,
-                                       distFunction=distFunc, model=VariogramModel.LINEAR,
+                                       distFunction=distFunc, model=VariogramModel.EXPONENTIAL,
                                        binSize=500.)
     krigingRuntime = time.time() - st
     #print(arealResDf)
@@ -940,6 +993,10 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     arealResDf[errorCol+'_a'] = np.abs(arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
     krigingResDf[errorCol+'_k'] = np.abs(krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
 
+    # Calculate variance of error
+    arealVar = arealResDf[errorCol+'_a'].var()
+    krigingVar = krigingResDf[errorCol+'_k'].var()
+
     # Join the two results to compare errors directly
     errorDf = pd.merge(arealResDf[['GISJOIN', errorCol + '_a']], krigingResDf[['GISJOIN', errorCol +'_k']], on='GISJOIN')
 
@@ -956,6 +1013,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     #pd.set_option('display.max_rows', None)
     print(errorDf)
     print(f"Average error difference (in %): {avgErrorDiff*100}")
+
+    print(f"Areal Error Variance: {arealVar}")
+    print(f"Kriging Error Variance: {krigingVar}")
 
     print(f"Areal runtime: {arealRuntime}")
     print(f"Kriging runtime: {krigingRuntime}")
