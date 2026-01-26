@@ -584,7 +584,7 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
         case 'CO' | 'ME' | 'MN' | 'NJ' | 'NM' | 'NY' | 'NC' | 'OR' | 'TX' | 'VT':
 
             # Load the CSV
-            resDf = pd.read_csv(dataDir / Path(f'evRegistrations/{stateAc}.csv'))
+            resDf = pd.read_csv(dataDir / Path(f'emissions/evRegistrations/{stateAc}.csv'))
 
             # Drop unnecessary columns
             resDf = resDf[['State', 'ZIP Code', 'Registration Date', 'Vehicle Count']]
@@ -594,7 +594,7 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
         case 'MT' | 'TN' | 'VA':
 
             # Load the CSV
-            resDf = pd.read_csv(dataDir / Path(f'evRegistrations/{stateAc}.csv'))
+            resDf = pd.read_csv(dataDir / Path(f'emissions/evRegistrations/{stateAc}.csv'))
 
             # These are keyed by County, so pull that out instead of ZIP
             resDf = resDf[['State', 'County', 'Registration Date', 'Vehicle Count']]
@@ -629,7 +629,7 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
     
 
 def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
-                graphsDir: Path = Path("./graphs"), stateAc: str = "CT",
+                graphsDir: Path = Path("./graphs"), stateAc: str = "VA",
                 shapefileDir: Path = Path("./data/tiger")):
 
 
@@ -805,12 +805,12 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                              Path(f'./logs/emissionsPCGraph{stateAc}.log'))
 
     # If specified, try loading a graph from disk first
-    status = Status.NOTEXISTS
+    loadGraphStatus = Status.NOTEXISTS
     if loadGraph:
-        status = graph.LoadGraph(Path("./graphs"))
+        loadGraphStatus = graph.LoadGraph(Path("./graphs"))
 
     # If needed, create a fresh graph
-    if status != Status.SUCCESS:
+    if loadGraphStatus != Status.SUCCESS:
 
         # Construct the graph, layer by layer
 
@@ -976,8 +976,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                        GEID.CITY, GEID.COUNTY, 'GISJOIN', 'GISJOIN',
                                        'EmissionsPerVM', None, None, AggMethod.KRIGING,
                                        EdgeType.AREA, ignoreMissing=True, ignoreIncomplete=True,
-                                       distFunction=distFunc, model=VariogramModel.EXPONENTIAL,
-                                       binSize=500.)
+                                       distFunction=distFunc, model=VariogramModel.LINEAR,
+                                       binSize=50.)
     krigingRuntime = time.time() - st
     #print(arealResDf)
     #print(krigingResDf)
@@ -1044,17 +1044,32 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     if keyType == GEID.CITY:
 
         # We need to convert from city name to GISJOIN
-        regsDf['GISJOIN'] = regsDf.apply(CityTupleIdConverter, args=(cityDict, 'Primary Customer City', 'STATEFIPS'), axis=1)
+        regsDf['GISJOIN'] = regsDf.apply(CityTupleIdConverter, args=(cityDict, keyCol, 'STATEFIPS'), axis=1)
 
         # Remove cities that we didn't recognize
         regsDf = regsDf[regsDf['GISJOIN'] != '']
     
     if keyType == GEID.COUNTY:
-        
-        raise NotImplementedError
 
         # Convert county name to GISJOIN
-        regsDf['GISJOIN']
+
+        # We're only looking at one state at a time, so no need to account
+        # for duplicate county names
+
+        # First, format the county names to match the countyEmissions DF
+        regsDf['County'] = regsDf['County'].str.replace(' County', '')
+        regsDf['County'] = regsDf['County'].str.replace(' Borough', '')
+        regsDf['County'] = regsDf['County'].str.replace(' Census Area', '')
+        regsDf['County'] = regsDf['County'].str.replace(' City and Borough', '')
+        regsDf['County'] = regsDf['County'].str.replace(' Municipality', '')
+        regsDf['County'] = regsDf['County'].str.replace(' Parish', '')
+        regsDf['County'] = regsDf['County'].str.replace(' city', '')
+
+        regsDf['County'] = regsDf['County'].str.lower()
+
+        # Do a join on the county name to get GISJOIN ids
+        regsDf = pd.merge(regsDf, countyEmissions[['CountyName', 'GISJOIN']],
+                          left_on='County', right_on='CountyName')
 
     if keyType == GEID.ZIP:
 
@@ -1072,21 +1087,45 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
         regsDf['GISJOIN'] = regsDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
 
+        # Drop rows with ZIPS we didn't have
+        regsDf['GISJOIN'] = regsDf[regsDf['GISJOIN'] != ""]
+
+        # If we didn't load the graph, we also need to add
+        # a ZCTA-county layer
+        if loadGraphStatus != Status.SUCCESS:
+            msg = "Adding ZCTA-county layer..."
+            print(msg)
+            logger.info(msg)
+            graph = AddLevel(graph, zctaGdf, countyGdf,
+                            n1Type=GEID.ZCTA, n2Type=GEID.COUNTY)
+            
+            # Re-save the graph
+            graph.SaveGraph(graphsDir)
+
+
     # We already have city-county information in the graph,
     # so go ahead and do the aggregation
 
-    # Make the data column a float for mathmatical operations
-    regsDf['Vehicle Year'] = regsDf['Vehicle Year'].astype(np.float64)
+    # Make sure the data column is a float for mathmatical operations
+    regsDf[dataCol] = regsDf[dataCol].astype(np.float64)
 
-    regsResDf =  gator.SpatialEqualize(regsDf, countyEmissions, GEID.CITY, GEID.COUNTY,
-                                       'GISJOIN', 'GISJOIN', 'Vehicle Year', None, None,
-                                       AggMethod.COUNT, EdgeType.AREA, ignoreMissing=True,
-                                       ignoreIncomplete=True)
+    if keyType == GEID.COUNTY:
 
-    print(regsResDf)
+        # We don't need to use the gator, we can just do a groupby
+        regsResDf = regsDf.groupby('GISJOIN').count()
+
+        # We only need one column
+        regsResDf = regsResDf[[dataCol]]
+
+    else:
+
+        regsResDf =  gator.SpatialEqualize(regsDf, countyEmissions, keyType, GEID.COUNTY,
+                                        'GISJOIN', 'GISJOIN', dataCol, None, None,
+                                        AggMethod.COUNT, EdgeType.AREA, ignoreMissing=True,
+                                        ignoreIncomplete=True)
 
     # For clarity, rename the 'Vehicle Year' column
-    regsResDf = regsResDf.rename(columns={'Vehicle Year': 'EV_Count'})
+    regsResDf = regsResDf.rename(columns={dataCol: 'EV_Count'})
 
     # Now, join the results
     regsArealDf = pd.merge(arealResDf, regsResDf, left_on='GISJOIN', right_index=True)
