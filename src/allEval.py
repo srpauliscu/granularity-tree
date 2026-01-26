@@ -629,8 +629,7 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
     
 
 def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
-                graphsDir: Path = Path("./graphs"), stateAc: str = "VA",
-                shapefileDir: Path = Path("./data/tiger")):
+                graphsDir: Path = Path("./graphs"), stateAc: str = "VA"):
 
 
     ''' Outline
@@ -1074,7 +1073,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     if keyType == GEID.ZIP:
 
         # We need to convert from ZIP to ZCTA first
-        zctaGdf = LoadShapefile(shapefileDir, 'zcta')
+        zctaGdf = LoadShapefile(sfDir, 'zcta')
         ztzGdf = gpd.read_file("./data/zipToZcta.csv")
 
         # Make a map from ZIP to ZCTA
@@ -1147,6 +1146,112 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     
 
 
+def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
+                   graphsDir: Path = Path("./graphs")):
+    
+    ''' Outline
+
+    Goal: See if there is a correlation between affluence (median income) and the number
+    of "green" policies enacted in a state.
+
+    Want: Policy data at a state level, median income at a state level
+    Have: Policy data at a state level, median income at a county level.
+
+    Need: Aggregate median income from county to state
+
+    NOTE: We actually HAVE median income at the state level, so we can use that
+    for accuracy comparison betwen kriging and areal overlap.
+
+    NOTE: The median income data are 1-year estimates from ACS, downloaded from 
+    the Census database.
+
+    NOTE: The policy data is from https://www.climatepolicydashboard.org/
+
+    '''
+
+
+    # Generate a logger for this test case
+    logger = logging.getLogger('IncomeVsPolicy')
+    logging.basicConfig(filename=f"./logs/incomeVsPolicy.log", encoding='utf-8', level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    logger.info("\n\n")
+
+    # Read in the policy data
+    rawPolicyDfs = pd.read_excel(dataDir / 'statePolicies.xlsx',
+                             sheet_name=['Climate Governance and Equity',
+                                         'Cross Sector',
+                                         'Electricity',
+                                         'Buildings and Efficiency',
+                                         'Transportation',
+                                         'Natural and Working Lands',
+                                         'Industry, Materials, and Waste '])
+
+    # List of column names of interest
+    policyCols = ['State',
+                  'State Abbreviation',
+                  'Policy Area',
+                  'Policy Category',
+                  'Policy Status']
+    
+    # Extract only the columns of interest
+    allPolicydfs = {}
+    for sheet in rawPolicyDfs:
+        
+        allPolicydfs[sheet] = rawPolicyDfs[sheet][policyCols]
+
+    # For each sheet, get a per-state sum of enacted or partially-enacted policies
+    policyCountDfs = {}
+    for sheet in allPolicydfs:
+
+        # Grab the df
+        curDf = allPolicydfs[sheet]
+
+        # Filter out not-enacted policies
+        curDf = curDf[curDf['Policy Status'] != 'not-enacted'].reset_index()
+
+        # Group by state and count
+        policyCountDf = curDf.groupby('State Abbreviation').count()
+
+        # We only need one column to get the count
+        policyCountDf = policyCountDf[['State']]
+
+        # Save it
+        policyCountDfs[sheet] = policyCountDf
+
+    # Now, sum up across all sheets
+
+    # First, join on the state abbreviations
+    resPolicyDf = None
+    lastSheet = None
+    for sheet in policyCountDfs:
+        curDf = policyCountDfs[sheet]
+
+
+        # If it's the first one, just reassign
+        if resPolicyDf is None:
+            resPolicyDf = curDf
+        
+        # Otherwise, merge it
+        else:
+            resPolicyDf = pd.merge(resPolicyDf, curDf, how='inner',
+                                   left_index=True, right_index=True,
+                                   suffixes=(lastSheet, sheet))
+        
+        # Save the sheet name for unique suffixes
+        lastSheet = sheet
+            
+    
+    print(resPolicyDf)
+
+    finalPolicyCountDf = resPolicyDf.sum(axis=1).to_frame().reset_index()
+
+    # Rename the count column
+    finalPolicyCountDf = finalPolicyCountDf.rename(columns={0: 'Num Policies'})
+
+    # We also need to assign GISJOIN IDs to each column
+    finalPolicyCountDf['GISJOIN'] = 'asdf'#
+    
+
 
     
     
@@ -1160,4 +1265,6 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), loadGraph=True)
+    #EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), loadGraph=True)
+
+    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
