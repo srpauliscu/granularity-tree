@@ -32,11 +32,13 @@ STATE_AC_TO_FIPS = {
     'GA': '13',
     'HI': '15',
     'ID': '16',
+    'IL': '17',
     'IN': '18',
     'IA': '19',
     'KS': '20',
     'LA': '22',
     'ME': '23',
+    'MD': '24',
     'MA': '25',
     'MI': '26',
     'MN': '27',
@@ -44,6 +46,7 @@ STATE_AC_TO_FIPS = {
     'MT': '30',
     'NE': '31',
     'NV': '32',
+    'NH': '33',
     'NJ': '34',
     'NM': '35',
     'NY': '36',
@@ -57,6 +60,7 @@ STATE_AC_TO_FIPS = {
     'TN': '47',
     'TX': '48',
     'UT': '49',
+    'VT': '50',
     'VA': '51',
     'WA': '53',
     'WI': '55',
@@ -555,7 +559,7 @@ def CountyFIPSConverter(row: pd.Series, countyDict: dict, col: str):
     except:
         return ""
     
-    # Make sure we're checking a valid GEOID
+    # Make sure we're checking a valid county GEOID
     if len(idStr) != 4 and len(idStr) != 5:
         raise RuntimeError(f"GEOID of {idStr} is not length 4 or 5.")
 
@@ -1143,8 +1147,44 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     plt.show()
 
 
-    
+def ExtractFIPSFromGEOID(row: pd.Series, geoIdCol: str) -> str:
 
+
+    # Grab the geoId
+    geoId = row[geoIdCol]
+
+    # Find the 'US' splitter
+    usIndex = geoId.index('US')
+
+    # Grab all the numbers that come after the splitter
+    fips = geoId[usIndex+2:]
+
+    return fips
+
+def StateFIPSConverter(row: pd.Series, stateDict: dict, col: str):
+
+        # Extract the ID as a string, accounting for
+    # an empty cell
+    try:
+        idStr = str(row[col])
+    except:
+        return ""
+    
+    # Make sure we're checking a valid state GEOID
+    if len(idStr) != 1 and len(idStr) != 2:
+        raise RuntimeError(f"GEOID of {idStr} is not length 1 or 2.")
+
+    # Add a leading 0 if necessary
+    if len(idStr) == 1:
+        idStr = f"0{idStr}"
+    
+    # Check the dict for the matching GISJOIN ID
+    if idStr in stateDict:
+        return stateDict[idStr]
+    
+    else:
+        return ""
+    
 
 def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                    graphsDir: Path = Path("./graphs")):
@@ -1240,8 +1280,6 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         # Save the sheet name for unique suffixes
         lastSheet = sheet
             
-    
-    print(resPolicyDf)
 
     finalPolicyCountDf = resPolicyDf.sum(axis=1).to_frame().reset_index()
 
@@ -1249,8 +1287,164 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     finalPolicyCountDf = finalPolicyCountDf.rename(columns={0: 'Num Policies'})
 
     # We also need to assign GISJOIN IDs to each column
-    finalPolicyCountDf['GISJOIN'] = 'asdf'#
     
+    # Use the state shapefile to get GISJOIN IDs
+    stateGdf = LoadShapefile(sfDir, 'state')
+
+    stateIds = stateGdf[['GISJOIN', 'STUSPS']]
+
+    finalPolicyCountDf = pd.merge(finalPolicyCountDf, stateIds,
+                                  left_on = "State Abbreviation", right_on="STUSPS")
+    
+    #print(finalPolicyCountDf)
+
+    # Now, load in the per-county income data
+    incomeByCountyDf = pd.read_csv(dataDir / 'medianIncomeByCounty2024.csv')
+
+    # Extract only columns of interest
+    incomeCols = {
+        'A': 'GEOID',
+        'B': 'Name',
+        'FG': "MedianHouseholdIncome",
+        'FH': "IncomeMOE"
+    }
+
+    incomeByCountyDf = ExtractCols(incomeByCountyDf, incomeCols)
+
+    # Do the same for the per-state income data
+    incomeByStateDf = pd.read_csv(dataDir / 'medianIncomeByState2024.csv')
+
+    # We need the same columns
+    incomeByStateDf = ExtractCols(incomeByStateDf, incomeCols)
+
+    # Drop the extra header row included
+    incomeByCountyDf = incomeByCountyDf.iloc[1:]
+    incomeByStateDf = incomeByStateDf.iloc[1:]
+
+    # Convert from GEOID to FIPS
+    incomeByCountyDf['FIPS'] = incomeByCountyDf.apply(ExtractFIPSFromGEOID, args=('GEOID',), axis=1)
+    incomeByStateDf['FIPS'] = incomeByStateDf.apply(ExtractFIPSFromGEOID, args=('GEOID',), axis=1)
+
+    # We now need to convert from FIPS to GISJOIN, via the shapefile
+    countyGdf = LoadShapefile(sfDir, 'county')
+    countyDict = pd.Series(countyGdf['GISJOIN'].values, index=countyGdf['GEOID']).to_dict()
+    incomeByCountyDf['GISJOIN'] = incomeByCountyDf.apply(
+        CountyFIPSConverter, args=(countyDict, 'FIPS'), axis=1)
+
+    # Drop rows we didn't have a match for
+    incomeByCountyDf = incomeByCountyDf[incomeByCountyDf['GISJOIN'] != ""]
+
+    # Do the same thing for state income for easy comparison
+    stateDict = pd.Series(stateGdf['GISJOIN'].values, index=stateGdf['GEOID']).to_dict()
+    incomeByStateDf['GISJOIN'] = incomeByStateDf.apply(
+        StateFIPSConverter, args=(stateDict, 'FIPS'), axis=1)
+    
+
+
+    # Try and load the graph
+    graph = GranularityGraph('incomeVsPolicy', Path('./logs/incomeVsPolicy.log'))
+    status = Status.NOTEXISTS
+    if loadGraph:
+        status = graph.LoadGraph(graphsDir)
+
+    # If needed, create a fresh graph
+    if status != Status.SUCCESS:
+
+        # Construct the graph
+        msg = "Adding County-State layer..."
+        print(msg)
+        logger.info(msg)
+
+        graph = AddLevel(graph, countyGdf, stateGdf,
+                         n1Type=GEID.COUNTY, n2Type=GEID.STATE)
+        
+        # Save the graph
+        msg = "Saving the graph..."
+        print(msg)
+        logger.info(msg)
+        graph.SaveGraph(graphsDir)
+
+        # Reload it to make sure data types are correct
+        graph.LoadGraph(graphsDir)
+
+    else:
+        # Log that we loaded the graph
+        msg = "Graph loaded successfully."
+        print(msg)
+        logger.info(msg)
+
+    # Get a gator object
+    gator = Gator(graph, Path('./logs/incomeVsPolicyGator.log'))
+
+    # We need to account for poor data quality (mainly missing values)
+    # The Census uses "N" to denote this
+    incomeByCountyDf = incomeByCountyDf[incomeByCountyDf['MedianHouseholdIncome'] != "N"]
+    incomeByCountyDf['MedianHouseholdIncome'] = \
+        incomeByCountyDf['MedianHouseholdIncome'].astype(np.float64)
+
+    # Use the gator to get the median income from county to state
+    msg = "Areal overlap equalization starting..."
+    print(msg)
+    logger.info(msg)
+    st = time.time()
+    arealResDf = gator.SpatialEqualize(incomeByCountyDf, incomeByStateDf,
+                                       GEID.COUNTY, GEID.STATE, 'GISJOIN', 'GISJOIN',
+                                       'MedianHouseholdIncome', None, None,
+                                       AggMethod.MEDIAN, edgeType=EdgeType.AREA,
+                                       ignoreMissing=True, ignoreIncomplete=True)
+    arealRuntime = time.time() - st
+
+    # Do the same thing but with kriging
+    msg = "Kriging equalization starting..."
+    print(msg)
+    logger.info(msg)
+    st = time.time()
+    krigingResDf = gator.SpatialEqualize(incomeByCountyDf, incomeByStateDf,
+                                         GEID.COUNTY, GEID.STATE, 'GISJOIN', 'GISJOIN',
+                                         'MedianHouseholdIncome', None, None,
+                                         AggMethod.KRIGING, edgeType=EdgeType.AREA,
+                                         ignoreMissing=True, ignoreIncomplete=True,
+                                         distFunction=distFunc, model=VariogramModel.EXPONENTIAL,
+                                         binSize=50.)
+    krigingRuntime = time.time() - st
+    
+    # Rename the ground truth column for clarity
+    incomeByStateDf = incomeByStateDf.rename(
+        columns={'MedianHouseholdIncome': 'MedianHouseholdIncome_GT'})
+    
+    # Fix the typing too
+    incomeByStateDf['MedianHouseholdIncome_GT'] = incomeByStateDf['MedianHouseholdIncome_GT'].astype(float)
+
+    # Join with the "ground truth" for a comparison
+    arealResDf = pd.merge(arealResDf, incomeByStateDf, left_index=True, right_on='GISJOIN')
+    krigingResDf = pd.merge(krigingResDf, incomeByStateDf, on='GISJOIN')
+
+    # Calculate error
+    errorCol = 'RelError'
+    arealResDf[errorCol+'_a'] = np.abs(arealResDf['MedianHouseholdIncome'] - arealResDf['MedianHouseholdIncome_GT']) / arealResDf['MedianHouseholdIncome_GT']
+    krigingResDf[errorCol+'_k'] = np.abs(krigingResDf['MedianHouseholdIncome_est'] - krigingResDf['MedianHouseholdIncome_GT']) / krigingResDf['MedianHouseholdIncome_GT']
+
+    # Calculate variance of error
+    arealVar = arealResDf[errorCol+'_a'].var()
+    krigingVar = krigingResDf[errorCol+'_k'].var()
+
+    # Join the two results to compare errors directly
+    errorDf = pd.merge(arealResDf[['GISJOIN', errorCol+'_a']],
+                       krigingResDf[['GISJOIN', errorCol+'_k']],
+                       on='GISJOIN')
+    
+    # Get an average error difference
+    errorDf['Error Difference'] = errorDf[errorCol+'_a'] - errorDf[errorCol+'_k']
+    avgErrorDiff = errorDf['Error Difference'].mean()
+
+    print(errorDf)
+    print(f"Average error difference (in %): {avgErrorDiff*100}")
+
+    print(f"Areal Error Variance: {arealVar}")
+    print(f"Kriging Error Variance: {krigingVar}")
+
+    print(f"Areal runtime: {arealRuntime}")
+    print(f"Kriging runtime: {krigingRuntime}")
 
 
     

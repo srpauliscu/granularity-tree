@@ -221,6 +221,9 @@ class Kriger(object):
 
         # Use only points inside the polygon
         allPoints = MultiPoint(list(zip(x.flatten(), y.flatten())))
+        print("\n\n")
+        print(goi)
+        print(allPoints.intersection(goi))
         gridPoints = list(allPoints.intersection(goi).geoms)
         
         # Calculate the D vector
@@ -347,6 +350,12 @@ class Gator(object):
         # Iterrows is slow, but only needs to be done once here
         newDicts = []
         for ind, row in df.iterrows():
+
+            if not ind in allFactors:
+                # This node didn't have any matching dests,
+                # so skip it
+                continue
+            
             factors = allFactors[ind]
             
             # Add a row for each destination
@@ -408,7 +417,29 @@ class Gator(object):
 
         elif method == AggMethod.MEDIAN:
             # Median of the source data, weighted by factor
-            raise NotImplementedError
+
+            # First, group by destination
+            groupedDf = df.groupby(destIdCol)
+
+            # We need to calculate weighted median manually
+            # and separately for each destination
+            newRows = []
+            for destId, curDf in groupedDf:
+                # Sort values within this destination
+                sortedDf = curDf.sort_values(dataCol)
+                cSum = sortedDf[fCol].cumsum()
+                cutoff = sortedDf[fCol].sum() / 2.
+
+                median = sortedDf[cSum >= cutoff][dataCol].iloc[0]
+
+                # Add a new row for this
+                newRows.append({self.DEST_COL: destId, vfCol: median})
+            
+            # Form a final dataframe for all the medians
+            resDf = pd.DataFrame(newRows)
+
+            # Set the index to the destination id
+            resDf = resDf.set_index(self.DEST_COL)
         
         elif method == AggMethod.SUM:
             '''
@@ -892,7 +923,7 @@ class Gator(object):
                 factor = weight / sn.values[edgeType]
 
                 # Sanity check
-                if factor > 1 and not math.isclose(factor, 1):
+                if factor > 1 and not math.isclose(factor, 1, rel_tol=1e-6):
                     msg = f"Factor of {factor} for {dn} - {sn} is invalid.\n \
                             destValues = {dn.values}\n \
                             sourceValues = {dn.values}\n \
@@ -904,9 +935,22 @@ class Gator(object):
                 if not sn.id in allFactors:
                     allFactors[sn.id] = {}
                 allFactors[sn.id][dn.id] = factor
+        
+        # If a sourceNode has no matches, remove it-
+        # we won't need that data to match the destinations
+        # This happens when there are sources without dests
+        toDelete = []
+        for sn in allMatches:
+            if not sn.id in allFactors:
+                toDelete.append(sn)
+        
+        for sn in toDelete:
+            del allMatches[sn]
 
         # Sanity check to make sure the ids were indeed unique
         if not len(allMatches) == len(allFactors):
+            print(len(allMatches))
+            print(len(allFactors))
             msg = f"allMatches and allFactors did not match up in length."
             self.logger.error(msg)
             raise RuntimeError(msg)

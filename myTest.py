@@ -19,6 +19,18 @@ from src.entities import *
 
 
 
+
+s0 = '011123US12345'
+s1 = '9182391629683US01'
+
+i0 = s1.index('US')
+print(s1[i0+2:])
+
+
+quit()
+
+
+
 a = 'c'
 
 match a:
