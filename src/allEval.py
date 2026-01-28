@@ -1010,6 +1010,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Get an average error difference
     errorDf['Error Difference'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_k']
     avgErrorDiff = errorDf['Error Difference'].mean()
+    medErrorDiff = errorDf['Error Difference'].median()
 
 
     print(arealResDf)
@@ -1020,6 +1021,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     #pd.set_option('display.max_rows', None)
     print(errorDf)
     print(f"Average error difference (in %): {avgErrorDiff*100}")
+    print(f"Median error difference (in %): {medErrorDiff*100}")
 
     print(f"Areal Error Variance: {arealVar}")
     print(f"Kriging Error Variance: {krigingVar}")
@@ -1436,15 +1438,36 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Get an average error difference
     errorDf['Error Difference'] = errorDf[errorCol+'_a'] - errorDf[errorCol+'_k']
     avgErrorDiff = errorDf['Error Difference'].mean()
+    medErrorDiff = errorDf['Error Difference'].median()
 
     print(errorDf)
     print(f"Average error difference (in %): {avgErrorDiff*100}")
+    print(f"Median error difference (in %): {medErrorDiff*100}")
 
     print(f"Areal Error Variance: {arealVar}")
     print(f"Kriging Error Variance: {krigingVar}")
 
     print(f"Areal runtime: {arealRuntime}")
     print(f"Kriging runtime: {krigingRuntime}")
+
+    # Now, combine it with the state policy data for our results
+    arealFinalDf = pd.merge(finalPolicyCountDf, arealResDf, on='GISJOIN')
+    krigingFinalDf = pd.merge(finalPolicyCountDf, krigingResDf, on='GISJOIN')
+    gtFinalDf = pd.merge(finalPolicyCountDf, incomeByStateDf, on='GISJOIN')
+
+    # Sort for better plotting
+    arealFinalDf.sort_values('MedianHouseholdIncome', inplace=True)
+    krigingFinalDf.sort_values('MedianHouseholdIncome_est', inplace=True)
+    gtFinalDf.sort_values('MedianHouseholdIncome_GT', inplace=True)
+
+    fig, ax = plt.subplots()
+
+    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax)
+    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax)
+    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax)
+
+    plt.show()
+
 
 
     

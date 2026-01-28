@@ -13,6 +13,7 @@ from pprint import pprint
 # For kriging
 from shapely import centroid, distance
 from shapely.geometry import Point, shape, MultiPoint
+from shapely.plotting import plot_points, plot_polygon
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
@@ -221,10 +222,37 @@ class Kriger(object):
 
         # Use only points inside the polygon
         allPoints = MultiPoint(list(zip(x.flatten(), y.flatten())))
-        print("\n\n")
-        print(goi)
-        print(allPoints.intersection(goi))
-        gridPoints = list(allPoints.intersection(goi).geoms)
+        intersect = allPoints.intersection(goi)
+        if intersect.is_empty:
+
+            # No intersections were found. Likely looking
+            # at Hawaii (or similarly disjointed geoms)
+
+            # Try a tighter grid
+            gridWidth *= 5
+            x, y = np.meshgrid(
+                np.arange(xmin, xmax, (xmax - xmin) / gridWidth),
+                np.arange(ymin, ymax, (ymax - ymin) / gridWidth)
+            )
+
+            allPoints = MultiPoint(list(zip(x.flatten(), y.flatten())))
+            intersect = allPoints.intersection(goi)
+            
+            if intersect.is_empty:
+
+                # Plot the points
+                fig, ax = plt.subplots()
+
+                plot_polygon(goi, ax=ax, color='red')
+                plot_points(allPoints, ax=ax, color='blue')
+
+                print(noi.id)
+
+                plt.show()
+
+                quit()
+
+        gridPoints = list(intersect.geoms)
         
         # Calculate the D vector
         numRows = self.samples.shape[0]
