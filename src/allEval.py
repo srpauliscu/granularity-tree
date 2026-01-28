@@ -623,8 +623,10 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
             resDf = resDf[resDf['State'] == stateAc]
             
             return resDf, GEID.CITY, 'City', 'Vehicle Count'
-            
-    raise ValueError(f"Invalid state acronym of {stateAc}")
+        
+        case _:
+            # Unrecognized acronym
+            raise ValueError(f"Invalid state acronym of {stateAc}")
 
 
 
@@ -657,6 +659,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     between kriging and areal overlap for avg emissions/vehicle.
 
     Emissions data from: https://catalog.data.gov/dataset/city-and-county-energy-profiles-60fbd
+
+    EV Data from: www.atlasevhub.com/market-data/state-ev-registration-data/
+    and https://catalog.data.gov/dataset/electric-vehicle-registration-data
 
     '''
 
@@ -1086,14 +1091,15 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
 
         # Do the actual conversion
-        regsDf[ntdas.ZCTA_COL] = regsDf.apply(ZipZctaConverter, args=(ztzDict,), axis=1)
+        regsDf[ntdas.ZCTA_COL] = regsDf.apply(ZipZctaConverter, args=(ztzDict, keyCol), axis=1)
 
         # Then, convert from ZCTA to GISJOIN
         zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
         regsDf['GISJOIN'] = regsDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
 
         # Drop rows with ZIPS we didn't have
-        regsDf['GISJOIN'] = regsDf[regsDf['GISJOIN'] != ""]
+        #print(regsDf)
+        regsDf = regsDf[regsDf['GISJOIN'] != ""]
 
         # If we didn't load the graph, we also need to add
         # a ZCTA-county layer
@@ -1117,7 +1123,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     if keyType == GEID.COUNTY:
 
         # We don't need to use the gator, we can just do a groupby
-        regsResDf = regsDf.groupby('GISJOIN').count()
+        regsResDf = regsDf.groupby('GISJOIN').sum()
 
         # We only need one column
         regsResDf = regsResDf[[dataCol]]
@@ -1126,7 +1132,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
         regsResDf =  gator.SpatialEqualize(regsDf, countyEmissions, keyType, GEID.COUNTY,
                                         'GISJOIN', 'GISJOIN', dataCol, None, None,
-                                        AggMethod.COUNT, EdgeType.AREA, ignoreMissing=True,
+                                        AggMethod.SUM, EdgeType.AREA, ignoreMissing=True,
                                         ignoreIncomplete=True)
 
     # For clarity, rename the 'Vehicle Year' column
@@ -1146,7 +1152,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     regsKrigingDf.plot(x='EV_Count', y='EmissionsPerVM_est', kind='line', ax=ax, color='blue')
     regsArealDf.plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green')
 
-    plt.show()
+    # Add labels, titles, etc.
+    plt.title(f'EVs Vs. Emissions per Vehicle Mile Traveled, {stateAc}')
 
 
 def ExtractFIPSFromGEOID(row: pd.Series, geoIdCol: str) -> str:
@@ -1456,15 +1463,40 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     gtFinalDf = pd.merge(finalPolicyCountDf, incomeByStateDf, on='GISJOIN')
 
     # Sort for better plotting
-    arealFinalDf.sort_values('MedianHouseholdIncome', inplace=True)
-    krigingFinalDf.sort_values('MedianHouseholdIncome_est', inplace=True)
-    gtFinalDf.sort_values('MedianHouseholdIncome_GT', inplace=True)
+    #arealFinalDf.sort_values('MedianHouseholdIncome', inplace=True)
+    #krigingFinalDf.sort_values('MedianHouseholdIncome_est', inplace=True)
+    #gtFinalDf.sort_values('MedianHouseholdIncome_GT', inplace=True)
+
+    arealFinalDf.sort_values('Num Policies', inplace=True)
+    krigingFinalDf.sort_values('Num Policies', inplace=True)
+    gtFinalDf.sort_values('Num Policies', inplace=True)
 
     fig, ax = plt.subplots()
 
-    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax)
-    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax)
-    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax)
+    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, color='red', label='Areal Overlap')
+    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, kind='scatter', color='red', s=50)
+
+    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, color='blue', label='Kriging')
+    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, kind='scatter', color='blue', s=50)
+
+    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='line', color='green', label='Ground Truth')
+    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='scatter', color='green', s=50)
+
+    # Fix the legend size and location
+    ax.legend(loc='upper left', fontsize=18)
+
+    # Set labels and font sizes
+    labelFontSize = 24
+    titleFontSize = 32
+
+    plt.xlabel('Number of Green Policies', fontsize=labelFontSize)
+    plt.ylabel('Median Household Income (USD)', fontsize=labelFontSize)
+    plt.title('Number of Green Policies vs. Household Income', fontsize=titleFontSize)
+
+    # Fix font sizes for axis ticks
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    ax.tick_params(axis='both', which='minor', labelsize=14)
+
 
     plt.show()
 
@@ -1482,6 +1514,10 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    #EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), loadGraph=True)
+    for stateAc in ['CO']:#, 'OR', 'TN']:
+        EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
+                    loadGraph=True)
+    
+    plt.show()
 
-    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)

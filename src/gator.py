@@ -477,6 +477,7 @@ class Gator(object):
             contributes only its share to each destination.
             '''
 
+            print(df)
             groupedDf = df.groupby(destIdCol)
             resDf = groupedDf[[vfCol]].sum()
 

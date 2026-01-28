@@ -95,9 +95,9 @@ def ZctaIdConverter(row, zctaDict: dict):
     else:
         return ""
 
-def ZipZctaConverter(row, ztzDict: dict):
+def ZipZctaConverter(row, ztzDict: dict, col: str = 'zip'):
     
-    z = row['zip']
+    z = row[col]
     if z in ztzDict:
         return ztzDict[z]
     
