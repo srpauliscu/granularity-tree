@@ -588,7 +588,7 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
         case 'CO' | 'ME' | 'MN' | 'NJ' | 'NM' | 'NY' | 'NC' | 'OR' | 'TX' | 'VT':
 
             # Load the CSV
-            resDf = pd.read_csv(dataDir / Path(f'emissions/evRegistrations/{stateAc}.csv'))
+            resDf = pd.read_csv(dataDir / Path(f'emissions/evRegistrations/{stateAc}.csv'), low_memory=False)
 
             # Drop unnecessary columns
             resDf = resDf[['State', 'ZIP Code', 'Registration Date', 'Vehicle Count']]
@@ -598,7 +598,7 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
         case 'MT' | 'TN' | 'VA':
 
             # Load the CSV
-            resDf = pd.read_csv(dataDir / Path(f'emissions/evRegistrations/{stateAc}.csv'))
+            resDf = pd.read_csv(dataDir / Path(f'emissions/evRegistrations/{stateAc}.csv'), low_memory=False)
 
             # These are keyed by County, so pull that out instead of ZIP
             resDf = resDf[['State', 'County', 'Registration Date', 'Vehicle Count']]
@@ -1102,6 +1102,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         regsDf = regsDf[regsDf['GISJOIN'] != ""]
 
         # If we didn't load the graph, we also need to add
+        print(zctaGdf)
+        print(zctaGdf[zctaGdf['GISJOIN'] == 'G85014'])
         # a ZCTA-county layer
         if loadGraphStatus != Status.SUCCESS:
             msg = "Adding ZCTA-county layer..."
@@ -1112,6 +1114,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             
             # Re-save the graph
             graph.SaveGraph(graphsDir)
+        
+        # Make sure the key type is updated
+        keyType = GEID.ZCTA
 
 
     # We already have city-county information in the graph,

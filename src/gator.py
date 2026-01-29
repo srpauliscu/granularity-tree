@@ -887,9 +887,11 @@ class Gator(object):
         # Get the populated version of each node from the graph
         newSourceNodes = []
         newDestNodes = []
+
         for sn in sourceNodes:
             if not self.kGraph.NodeExists(sn):
                 msg = f"Source node {sn.id} does not exist in the graph."
+                print(msg)
 
                 # Throw an error if specified
                 if not ignoreMissing:
@@ -930,7 +932,6 @@ class Gator(object):
 
         # 2.) For each source node, find all matching destNodes
         allMatches = {}
-
         for sn in sourceNodes:
 
             # Get the matching dest nodes
@@ -941,7 +942,6 @@ class Gator(object):
 
         # 3.) Calculate mult factors
         allFactors = {}
-
         for sn in allMatches:
             for dn in allMatches[sn]:
 
@@ -983,6 +983,7 @@ class Gator(object):
             msg = f"allMatches and allFactors did not match up in length."
             self.logger.error(msg)
             raise RuntimeError(msg)
+        
         for sn in allMatches:
             if not len(allMatches[sn]) == len(allFactors[sn.id]):
                 msg = f"allMatches and allFactors did not match up in length for source node {sn.id}."
