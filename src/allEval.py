@@ -83,6 +83,23 @@ STATE_AC_TO_FIPS = {
 
 }
 
+# Ranges of ZIP codes for each relevant state,
+# with edge cases
+STATE_AC_ZIP_RANGE = {
+     
+     'CO': (80001, 81658),
+     'ME': (3901, 4992),
+     'MN': (55001, 56763),
+     'NY': (10001, 14975, 6390),
+     'NJ': (7001, 8989),
+     'NM': (87001, 88441),
+     'NC': (27006, 28909),
+     'OR': (97001, 97920),
+     'TX': (75001, 79999, 73301),
+     'TXEP': (88510, 88589),
+     'VT': (5001, 5907)
+
+}
 
 # pytz has no PDT or PST timezones, so we
 # need to map them to the canonical names
@@ -593,6 +610,24 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
             # Drop unnecessary columns
             resDf = resDf[['State', 'ZIP Code', 'Registration Date', 'Vehicle Count']]
 
+            # For the zip codes, we need to trim out any vehicles with an out-of-state ZIP
+            stateRange = STATE_AC_ZIP_RANGE[stateAc]
+            resDf['ZIP_INT'] = pd.to_numeric(resDf['ZIP Code'], errors='coerce')
+
+            if stateAc == 'TX':
+                # We also need to account for TX El Paso's range
+                epRange = STATE_AC_TO_FIPS['TXEP']
+                resDf = resDf[((resDf['ZIP_INT'] >= stateRange[0]) & (resDf['ZIP_INT'] <= stateRange[1])) | 
+                              (resDf['ZIP_INT'].isin(stateRange[2:])) | 
+                              ((resDf['ZIP_INT'] >= epRange[0]) & (resDf['ZIP_INT'] <= epRange[1]))]
+            
+            else:
+                resDf = resDf[((resDf['ZIP_INT'] >= stateRange[0]) & (resDf['ZIP_INT'] <= stateRange[1])) | 
+                              (resDf['ZIP_INT'].isin(stateRange[2:]))]
+
+            # We can drop the ZIP as int column
+            resDf = resDf.drop(columns=['ZIP_INT'])
+
             return resDf, GEID.ZIP, 'ZIP Code', 'Vehicle Count'
 
         case 'MT' | 'TN' | 'VA':
@@ -1102,8 +1137,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         regsDf = regsDf[regsDf['GISJOIN'] != ""]
 
         # If we didn't load the graph, we also need to add
-        print(zctaGdf)
-        print(zctaGdf[zctaGdf['GISJOIN'] == 'G85014'])
         # a ZCTA-county layer
         if loadGraphStatus != Status.SUCCESS:
             msg = "Adding ZCTA-county layer..."
@@ -1114,9 +1147,17 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             
             # Re-save the graph
             graph.SaveGraph(graphsDir)
+
+        #fig, ax = plt.subplots()
+        #zctaGdf.plot(ax=ax, color='red')
+        #countyGdf.plot(ax=ax)
+        #zctaGdf.plot(ax=ax, color='red')
+        #plt.show()
         
         # Make sure the key type is updated
         keyType = GEID.ZCTA
+
+        #quit()
 
 
     # We already have city-county information in the graph,
@@ -1159,6 +1200,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Add labels, titles, etc.
     plt.title(f'EVs Vs. Emissions per Vehicle Mile Traveled, {stateAc}')
+
+    print(f'\nFinished {stateAc} analysis.\n')
 
 
 def ExtractFIPSFromGEOID(row: pd.Series, geoIdCol: str) -> str:
@@ -1519,7 +1562,8 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    for stateAc in ['CO']:#, 'OR', 'TN']:
+    for stateAc in ['CO', 'OR', 'TN']:
+        #break
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)
     

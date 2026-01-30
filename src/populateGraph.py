@@ -85,34 +85,6 @@ def AddLevel(curGraph: GranularityGraph,
     return curGraph
 
 
-
-def NationRegion(nationGdf: gpd.GeoDataFrame | None, regionGdf: gpd.GeoDataFrame):
-    pass
-
-def RegionState(regionGdf: gpd.GeoDataFrame, stateGdf: gpd.GeoDataFrame):
-    pass
-
-def StateCounty():
-    pass
-
-def CountyCity():
-    pass
-
-def CountyZip():
-    pass
-
-def CountyZCTA():
-    pass
-
-def CountyBlockGroup():
-    pass
-
-def BlockGroupBlock():
-    pass
-
-def BlockTract():
-    pass
-
 def LoadShapefile(parentDir: Path, name: str) -> gpd.GeoDataFrame:
 
     # Each directory will only have one shapefile,
