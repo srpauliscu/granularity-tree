@@ -1550,7 +1550,77 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
 
 
+def RainVsChargingUsage(dataDir: Path, loadGraph: bool = True,
+                        graphsDir: Path = Path("./graphs")):
     
+    ''' Outline
+    
+    Goal: Check for a correlation between precipitation and charger usage (a negative
+    correlation is expected)
+
+    Want: Daily precipitation for the city of Palo Alto, daily charger use (kWh) for Palo Alto
+    Have: Hourly precipitation for Palo Alto, charging sessions for Palo Alto
+
+    Need: Aggregate hourly to daily
+
+    NOTE: We have the daily precipitation already, so we can use that as ground truth for
+    accuracy comparison.
+
+    NOTE: For this comparison, make sure to note that the hourly and daily weather data
+    ARE ALL FROM THE SAME SOURCE.  Who knows how they aggregate their data.
+
+    NOTE: The weather data is from https://open-meteo.com/
+
+    
+    '''
+
+    # Generate a logger for this test case
+    logger = logging.getLogger('RainVsChargingUsage')
+    logging.basicConfig(filename=f"./logs/rainVsChargingUsage.log", encoding='utf-8', level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    logger.info("\n\n")
+
+    # Load the charging data
+    chargingDf = pd.read_csv(Path("./evaluation/temporal/EVChargingStationUsage.csv"))
+
+    # Rename the columns to remove all special characters
+    # so itertuples works
+    fixedCols = {c: c.replace(' ', '').replace('(','').replace(')','').replace(':','') 
+                 for c in chargingDf.columns}
+    
+    chargingDf = chargingDf.rename(columns=fixedCols)
+
+    # First, convert to actual timestamps
+    startTsCol = 'StartDate'
+    startTzCol = 'StartTimeZone'
+    endTsCol = 'EndDate'
+    endTzCol = 'EndTimeZone'
+
+    chargingDf[startTsCol] = chargingDf.apply(ConvertToDt, args=(startTsCol, startTzCol), axis=1)
+    chargingDf[endTsCol] = chargingDf.apply(ConvertToDt, args=(endTsCol, endTzCol), axis=1)
+
+    # Remove invalid rows
+    chargingDf = chargingDf[(chargingDf[startTsCol] != 0) & (chargingDf[endTsCol] != 0)]
+
+    # We only have weather for the year of 2018, so just select that year's data
+    chargingDf = chargingDf[chargingDf[startTsCol].dt.year == 2018]
+
+    # Make an actual Interval object
+    intervalCol = "TIME_INTERVAL"
+    chargingDf[intervalCol] = chargingDf.apply(FormInterval, args=(startTsCol, endTsCol), axis=1)
+
+    # Load in the weather data
+    allWeather = pd.read_excel(dataDir / '')
+
+    # We are only looking at temporal aggregation, so no need for the shapefiles
+
+
+
+
+    pass
+
+
+
     
   
 
