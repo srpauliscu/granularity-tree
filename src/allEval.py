@@ -316,9 +316,13 @@ def ConvertToDt(row, tsCol: str, tzCol: str):
     # Use to_datetime and tz_localize
     try:
         return pd.to_datetime(row[tsCol]).tz_localize(tzName, ambiguous=dst, nonexistent='shift_forward').tz_convert('UTC')
-    except:
-        return 0
-    #return pd.to_datetime(row[tsCol]).tz_localize('UTC').tz_convert(tz)
+    except Exception as e:
+
+        # It may already be tz-aware, so skip tz_localize
+        try:
+            return pd.to_datetime(row[tsCol]).tz_convert('UTC')
+        except Exception as e2:
+            return 0
 
 def FormInterval(row, startTsCol: str, endTsCol: str):
         
@@ -1580,45 +1584,138 @@ def RainVsChargingUsage(dataDir: Path, loadGraph: bool = True,
                         format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
     logger.info("\n\n")
 
-    # Load the charging data
-    chargingDf = pd.read_csv(Path("./evaluation/temporal/EVChargingStationUsage.csv"))
-
-    # Rename the columns to remove all special characters
-    # so itertuples works
-    fixedCols = {c: c.replace(' ', '').replace('(','').replace(')','').replace(':','') 
-                 for c in chargingDf.columns}
-    
-    chargingDf = chargingDf.rename(columns=fixedCols)
-
-    # First, convert to actual timestamps
+    # Column names
     startTsCol = 'StartDate'
     startTzCol = 'StartTimeZone'
     endTsCol = 'EndDate'
     endTzCol = 'EndTimeZone'
-
-    chargingDf[startTsCol] = chargingDf.apply(ConvertToDt, args=(startTsCol, startTzCol), axis=1)
-    chargingDf[endTsCol] = chargingDf.apply(ConvertToDt, args=(endTsCol, endTzCol), axis=1)
-
-    # Remove invalid rows
-    chargingDf = chargingDf[(chargingDf[startTsCol] != 0) & (chargingDf[endTsCol] != 0)]
-
-    # We only have weather for the year of 2018, so just select that year's data
-    chargingDf = chargingDf[chargingDf[startTsCol].dt.year == 2018]
-
-    # Make an actual Interval object
     intervalCol = "TIME_INTERVAL"
-    chargingDf[intervalCol] = chargingDf.apply(FormInterval, args=(startTsCol, endTsCol), axis=1)
+
+    # Check for a cached file first
+    cachedChargingFile = Path(dataDir / Path('chargingStations2018.csv'))
+    if cachedChargingFile.exists():
+        chargingDf = pd.read_csv(cachedChargingFile)
+
+        # We still have to convert to timestamps and intervals
+        chargingDf[startTsCol] = chargingDf.apply(ConvertToDt, args=(startTsCol, startTzCol), axis=1)
+        chargingDf[endTsCol] = chargingDf.apply(ConvertToDt, args=(endTsCol, endTzCol), axis=1)
+
+        # Invalid rows should already have been removed
+
+        # Form the interval objects too
+        chargingDf[intervalCol] = chargingDf.apply(FormInterval, args=(startTsCol, endTsCol), axis=1)
+
+    else:
+
+        msg = "No cached charging data found..."
+        logger.info(msg)
+        print(msg)
+
+        # Load the original charging data
+        chargingDf = pd.read_csv(Path("./evaluation/temporal/EVChargingStationUsage.csv"),
+                                low_memory=False)
+
+        # Rename the columns to remove all special characters
+        # so itertuples works
+        fixedCols = {c: c.replace(' ', '').replace('(','').replace(')','').replace(':','') 
+                    for c in chargingDf.columns}
+        
+        chargingDf = chargingDf.rename(columns=fixedCols)
+        
+        # First, convert to actual timestamps
+        chargingDf[startTsCol] = chargingDf.apply(ConvertToDt, args=(startTsCol, startTzCol), axis=1)
+        chargingDf[endTsCol] = chargingDf.apply(ConvertToDt, args=(endTsCol, endTzCol), axis=1)
+
+        # Remove invalid rows
+        chargingDf = chargingDf[(chargingDf[startTsCol] != 0) & (chargingDf[endTsCol] != 0)]
+
+        # We only have weather for the year of 2018, so just select that year's data
+        chargingDf = chargingDf[chargingDf[startTsCol].dt.year == 2018]
+
+        chargingDf.to_csv(cachedChargingFile, index=False)
+
+        msg = "Charging data cached, please rerun for analysis."
+        logger.info(msg)
+        print(msg)
+
+        return
+
 
     # Load in the weather data
-    allWeather = pd.read_excel(dataDir / '')
+    allWeather = pd.read_excel(dataDir / 'palo-alto-2018-weather.xlsx',
+                               sheet_name=['Hourly', 'Daily'])
+    
+    # Drop the first three rows for each sheet
+    for dfk in allWeather:
+        allWeather[dfk] = allWeather[dfk].iloc[3:].reset_index(drop=True)
+
+    # Separate hourly and daily aggregations
+    hourlyWeatherDf = allWeather['Hourly']
+    dailyWeatherDf = allWeather['Daily']
+
+    # Fix the column names
+    hourlyCols = {
+        'A': 'Timestamp',
+        'B': 'Temperature',
+        'C': 'Precipitation',
+        'D': 'Rain',
+        'E': 'Snowfall_cm'
+    }
+
+    hourlyWeatherDf = ExtractCols(hourlyWeatherDf, hourlyCols)
+
+    dailyCols = {
+        'A': 'Timestamp',
+        'B': 'Daily Precipitation',
+        'C': 'Precipitation Hours'
+    }
+
+    dailyWeatherDf = ExtractCols(dailyWeatherDf, dailyCols)
+
+    # For the weather aggregation, we actually need an interval column
+    hourlyWeatherDf[endTsCol] = hourlyWeatherDf['Timestamp'] + pd.Timedelta(minutes=59, seconds=59)
+
+    # Make sure they are both timestamp objects (not datetime) -
+    # Yes, the function is named poorly for this
+    hourlyWeatherDf['Timestamp'] = pd.to_datetime(hourlyWeatherDf['Timestamp'])
+    hourlyWeatherDf[endTsCol] = pd.to_datetime(hourlyWeatherDf[endTsCol])
+
+    # Same goes for the daily weather's timestamp column
+    dailyWeatherDf['Timestamp'] = pd.to_datetime(dailyWeatherDf['Timestamp'])
+
+    hourlyWeatherDf[intervalCol] = hourlyWeatherDf.apply(FormInterval, args=('Timestamp', endTsCol), axis=1)
 
     # We are only looking at temporal aggregation, so no need for the shapefiles
 
+    # Get a gator object
+    gator = Gator(None, Path('./logs/rainVsChargingUsage.log'))
 
+    # Aggregate weather from hour to day
+    hourlyDataCol = 'Precipitation'
 
+    msg = "Beginning weather aggregation from hourly to daily..."
+    hourlyResDf = gator.TemporalEqualize(hourlyWeatherDf, TID.DAY, intervalCol,
+                                         hourlyDataCol, AggMethod.SUM)
+    
+    # Extract the date for joining
+    dailyWeatherDf['Date'] = pd.to_datetime(dailyWeatherDf['Timestamp'].dt.date)
 
-    pass
+    # Do the join
+    weatherResDf = pd.merge(hourlyResDf, dailyWeatherDf, left_index=True, right_on='Date')
 
+    # Get an error comparison
+    # Can't use percentage because precipitation can be 0
+    weatherResDf['Actual Error'] = np.abs(weatherResDf['Precipitation'] - weatherResDf['Daily Precipitation'])
+
+    print(f"Average actual error for precipitation: {weatherResDf['Actual Error'].mean()}")
+
+    print(chargingDf)
+
+    # Now, aggregate charging usage to the day
+    chargingResDf = gator.TemporalEqualize(chargingDf, TID.DAY, intervalCol,
+                                           'EnergykWh', AggMethod.SUM)
+    
+    print(chargingResDf)
 
 
     
@@ -1633,10 +1730,12 @@ if __name__ == "__main__":
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
     for stateAc in ['CO', 'OR', 'TN']:
-        #break
+        break
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)
     
-    plt.show()
+    #plt.show()
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+
+    RainVsChargingUsage(Path('./evaluation/weather'))

@@ -476,8 +476,6 @@ class Gator(object):
             Make sure to use the value*factor so that each source
             contributes only its share to each destination.
             '''
-
-            print(df)
             groupedDf = df.groupby(destIdCol)
             resDf = groupedDf[[vfCol]].sum()
 
