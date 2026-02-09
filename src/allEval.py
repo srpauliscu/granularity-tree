@@ -18,7 +18,18 @@ from connecticutGraph import *
 
 matplotlib.use('qt5agg')
 
+# Figure parameters
+FIG_SIZE_FACTOR = 3
+FIG_SIZE = (6.4*FIG_SIZE_FACTOR, 4.8*FIG_SIZE_FACTOR)
 
+FIG_LABEL_FONT_SIZE = 24
+FIG_TITLE_FONT_SIZE = 32
+
+FIG_MAJOR_AXIS_TICK_SIZE = 16
+FIG_MINOR_AXIS_TICK_SIZE = 14
+
+
+# State acronym to FIPS code map
 STATE_AC_TO_FIPS = {
 
     'AL': '01',
@@ -169,8 +180,8 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
     regsDf = regsDf[regsDf['STATEFIPS'] != '']
 
     # Only use one state for now
-    regsDf = regsDf[regsDf['Primary Customer State'] == 'CT'].head(n=1000)
-    iouRatesDf = iouRatesDf[iouRatesDf['state'] == 'CT'].head(n=1000)
+    regsDf = regsDf[regsDf['Primary Customer State'] == 'CT']#.head(n=1000)
+    iouRatesDf = iouRatesDf[iouRatesDf['state'] == 'CT']#.head(n=1000)
 
     # We are only doing American locations, so drop BC and ON from the list
     regsDf = regsDf[(regsDf['Primary Customer State'] != 'BC') & 
@@ -223,8 +234,6 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
 
     # TODO: Graph holding all ZCTAs and cities needs too much
     # memory.  Need to add a "pager"
-
-
     # For now, just use one state
     cityGdf = cityGdf[cityGdf['STATEFP'] == '09']
 
@@ -300,8 +309,8 @@ def SpatialEval(dirPath: Path, loadGraph: bool = True):
     joinedGdf['res_rate'] = joinedGdf['res_rate'].astype(dtype='float64')
 
     # Plot it
-    joinedGdf.plot(x='Number of EVs', y='res_rate', kind='scatter')
-    joinedGdf.plot(x='Number of EVs', y='comm_rate', kind='scatter')
+    joinedGdf.plot(y='Number of EVs', x='res_rate', kind='scatter')
+    joinedGdf.plot(y='Number of EVs', x='comm_rate', kind='scatter')
     plt.show()
 
 
@@ -393,12 +402,34 @@ def TemporalEval(dirPath: Path):
     # Get a gator object
     gator = Gator(None, Path('./logs/temporalEvalGator.log'))
 
-    # Aggregate to the hour level
+    # Aggregate to the month level
     dataCol = 'EnergykWh'
-    resDf = gator.TemporalEqualize(dataDf, TID.DAY, intervalCol,
+    resDf = gator.TemporalEqualize(dataDf, TID.MONTH, intervalCol,
                                    dataCol, AggMethod.SUM)
+    
+    # Begin plotting
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
 
-    resDf.plot(y=dataCol)
+    resDf.plot(y=dataCol, ax=ax)
+
+    # Fix leggend fontsize
+    ax.legend(fontsize=18)
+
+    # Set labels and font sizes
+    plt.xlabel('Date', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Total Energy Used (kWh)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title('Total Monthly Energy Used By EV Chargers, Palo Alto', fontsize=FIG_TITLE_FONT_SIZE)
+
+    # Fix font sizes for axis ticks
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+    # Save the figure out
+    figDir = dirPath / Path("figures/")
+    if not figDir.exists():
+        figDir.mkdir()
+
+    plt.savefig(figDir / Path("monthly-charger-energy.png"))
     plt.show()
 
 def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
@@ -534,8 +565,33 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         # Save it for speed ups
         resDf.to_csv(resFile)
 
+    # Make graphs for each school district
+    groupedDfs = resDf.groupby(level=0)
+    count = 0
+    for sd, df in groupedDfs:
+        
+        # Make a new figure
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
 
-    print(resDf)
+        # Set labels and font sizes
+        plt.xlabel('Hour', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Ratio of Mean to Reference Speed', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Speed Ratio per Hour for School District {sd}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Drop the first level of the multiindex
+        df = df.droplevel(level=0)
+        
+        # Plot the results
+        df.plot(use_index=True, y='a_speed_ratio_col_', ax=ax)
+        count += 1
+        if count > 5:
+            break
+    
+    plt.show()
 
 def ExtractCols(df: pd.DataFrame, colDict: dict) -> pd.DataFrame:
 
@@ -1196,14 +1252,22 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     regsArealDf = regsArealDf.sort_values('EV_Count')
     regsKrigingDf = regsKrigingDf.sort_values('EV_Count')
 
+    # Setup the figure
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+    # Set labels and font sizes
+    plt.xlabel('EV Count', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Emissions per Vehicle Mile (MT of CO2e/mi)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title(f'Total Emissions per Vehicle Mile Traveled by EV Count for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+    # Fix font sizes for axis ticks
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
     # Plot the results
-    fig, ax = plt.subplots()
     regsArealDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color='red')
     regsKrigingDf.plot(x='EV_Count', y='EmissionsPerVM_est', kind='line', ax=ax, color='blue')
     regsArealDf.plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green')
-
-    # Add labels, titles, etc.
-    plt.title(f'EVs Vs. Emissions per Vehicle Mile Traveled, {stateAc}')
 
     print(f'\nFinished {stateAc} analysis.\n')
 
@@ -1727,7 +1791,7 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
     for stateAc in ['CO', 'OR', 'TN']:
         break
@@ -1738,4 +1802,4 @@ if __name__ == "__main__":
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
-    RainVsChargingUsage(Path('./evaluation/weather'))
+    #RainVsChargingUsage(Path('./evaluation/weather'))

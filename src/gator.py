@@ -1206,11 +1206,20 @@ class Gator(object):
                 intervalStartTs = startTs.to_period(destType.value).to_timestamp()
                 intervalEndTs = endTs.to_period(destType.value).to_timestamp() + pd.tseries.offsets.MonthBegin(1)#endTs.month)
 
+                # Make sure to re-add the timezone
+                intervalStartTs = intervalStartTs.tz_localize(startTs.tzinfo)
+                intervalEndTs = intervalEndTs.tz_localize(endTs.tzinfo)
+
             elif destType == TID.YEAR:
                 intervalStartTs = startTs.to_period(destType.value).to_timestamp()
                 intervalEndTs = endTs.to_period(destType.value).to_timestamp() + pd.tseries.offsets.YearBegin(1)#endTs.year)
 
+                # Make sure to re-add the timezone
+                intervalStartTs = intervalStartTs.tz_localize(startTs.tzinfo)
+                intervalEndTs = intervalEndTs.tz_localize(endTs.tzinfo)
+
             else:
+                # Floor preserves the timezone
                 intervalStartTs = startTs.floor(freq=destType.value)
                 intervalEndTs = endTs.ceil(freq=destType.value)
 
