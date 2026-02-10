@@ -18,6 +18,13 @@ from typing import Callable
 from src.entities import *
 
 
+l = (1,2,3)
+l1 = (4,5)
+
+print(4 in l1[2:])
+
+quit()
+
 
 
 s0 = '011123US12345'

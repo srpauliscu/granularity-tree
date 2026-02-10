@@ -584,11 +584,15 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
         # Drop the first level of the multiindex
         df = df.droplevel(level=0)
-        
+
+        # We know that this is in Denver, so fix the timestamps for better plots
+        # (Doesn't account for DST, but this is data from one day in Oct.)
+        df.index = df.index.tz_localize('MST')
+
         # Plot the results
-        df.plot(use_index=True, y='a_speed_ratio_col_', ax=ax)
+        df.plot(use_index=True, y='a_speed_ratio_col_', ax=ax, xlabel='Timestamp')
         count += 1
-        if count > 5:
+        if count > 4:
             break
     
     plt.show()
@@ -1791,14 +1795,14 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
     for stateAc in ['CO', 'OR', 'TN']:
-        break
+        #break
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)
     
-    #plt.show()
+    plt.show()
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
