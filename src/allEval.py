@@ -729,9 +729,127 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
 
 
 
+def FixFIPS(row: pd.Series, fipsCol: str, correctLen: int):
 
+    # Extract the FIPS code
+    fips = row[fipsCol]
 
+    # If no value is provided, return a default -1 (string)
+    if pd.isna(fips):
+        return "-1"
+
+    # Ensure that the decimal is cutoff
+    fips = int(fips)
+
+    # Return as a string
+    fips = str(fips)
+    if len(fips) == correctLen:
+        return fips
     
+    elif len(fips) == correctLen - 1:
+        # Add the missing leading zero
+        fips = f"0{fips}"
+
+    elif len(fips) == correctLen - 2:
+        # Add two missing leading zeros
+        fips = f"00{fips}"
+    
+    else:
+        print(row['BLOCKID'])
+        raise RuntimeError(f"Invalid length {len(fips)} for FIPS code {fips}, assuming len {correctLen}.")
+    
+    return fips
+
+def LoadBlockAssignments(stateAc: str, dataDir: Path = Path("./data")) -> pd.DataFrame:
+
+    # Block assignment files (2010)
+    url = "https://www.census.gov/geographies/reference-files/time-series/geo/block-assignment-files.2010.html#list-tab-361828852"
+
+    # Construct the full filename
+    stateFips = STATE_AC_TO_FIPS[stateAc]
+    filename = dataDir / Path(f"blockAssignments/{stateAc}/BlockAssign_ST{stateFips}_{stateAc}_INCPLACE_CDP.txt")
+
+    # Check that it exists
+    if not filename.exists():
+        msg = f"Block assignment file for {stateAc} not found, please visit {url}"
+        raise RuntimeError(msg)
+
+    # Load it as a CSV
+    resDf = pd.read_csv(filename)
+
+    # Recast the block and place FIPS as strings
+    blockCol = "BLOCKID"
+    placeCol = "PLACEFP"
+    resDf[blockCol] = resDf.apply(FixFIPS, args=(blockCol, 15), axis=1)
+    resDf[placeCol] = resDf.apply(FixFIPS, args=(placeCol, 5), axis=1)
+
+    # Extract the county FIPS from the full block FIPS
+    resDf['COUNTYFP'] = resDf.apply(lambda r: r[blockCol][0:5], axis=1)
+
+
+    return resDf
+
+def LoadBlockPopulation(stateAc: str, dataDir: Path = Path("./data")) -> pd.DataFrame:
+
+    # Construct the full filename
+    filename = dataDir / Path(f"blockPopulation/{stateAc}/data.csv")
+
+    # Check that it exists
+    if not filename.exists():
+        msg = f"Block population file for {stateAc} not found, please download the P1|RACE table for all blocks from data.census.gov"
+    
+    # Read in the csv
+    resDf = pd.read_csv(filename)
+
+    # We only need the first three columns
+    resDf = resDf[resDf.columns[0:3]]
+
+    # Drop the first row, as it is an extra header
+    resDf = resDf.iloc[1:]
+
+    # Rename the total population column to something more readable
+    resDf = resDf.rename(columns={resDf.columns[-1]: 'POPULATION'})
+
+    # Extract the actual FIPS code from the GEOID
+    resDf['BLOCKFP'] = resDf.apply(lambda r: r['GEO_ID'].split('US')[1], axis=1)
+
+    # Drop the other two columns; they are not needed
+    resDf = resDf[['BLOCKFP', 'POPULATION']]
+
+    # Ensure the population column is an int
+    resDf['POPULATION'] = resDf['POPULATION'].astype(int)
+
+
+    return resDf
+    
+def PlaceFIPSConverter(row: pd.Series, placeDict: dict, col: str):
+
+    # Extract the ID as a string, account for an empty cell
+    try:
+        idStr = str(row[col])
+    except:
+        return ""
+    
+    # Check for the default -1 string
+    if idStr == "-1":
+        return ""
+    
+    # Make sure we're checking a valid place FIPS code
+    if len(idStr) != 4 and len(idStr) != 5:
+        raise RuntimeError(f"Place FIPS code of {idStr} is not length 4 or 5.")
+
+    # Add a leading 0 if necessary
+    if len(idStr) == 4:
+        idStr = f"0{idStr}"
+
+    # Check the dict for the matching GISJOIN ID
+    if idStr in placeDict:
+        return placeDict[idStr]
+    else:
+        return ""
+
+
+
 
 def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                 graphsDir: Path = Path("./graphs"), stateAc: str = "VA"):
@@ -906,6 +1024,42 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Doesn't require any work since we are using this for a layer
     stateGdf = LoadShapefile(sfDir, 'state')
 
+    ### Population ###
+
+    # Read in the block assignment file
+    blockAssignments = LoadBlockAssignments(stateAc)
+
+    # Read in the population data by block
+    blockPopulation = LoadBlockPopulation(stateAc)
+
+    # Now, we have block -> county, block -> place, and per block population
+    # We need to aggregate by place, by county, and by place and county
+
+    # First, join everything into one dataframe
+    blockDf = pd.merge(blockAssignments, blockPopulation, left_on='BLOCKID', right_on='BLOCKFP')
+
+    # We need GISJOIN IDS for both places and counties
+    # For places, we can use the placeGdf to make a map from FIPS to GISJOIN
+    placeDict = pd.Series(placeGdf['GISJOIN'].values, index=placeGdf['PLACEFP']).to_dict()
+    blockDf['PLACEGISJOIN'] = blockDf.apply(PlaceFIPSConverter, args=(placeDict, 'PLACEFP'), axis=1)
+
+    # Drop rows we didn't have a match for (this will include the default -1 value rows)
+    blockDf = blockDf[blockDf['PLACEGISJOIN'] != ""]
+
+    # We can reuse the county dict from before
+    blockDf['COUNTYGISJOIN'] = blockDf.apply(CountyFIPSConverter, args=(countyDict, 'COUNTYFP'), axis=1)
+
+    # Drop rows we didn't have a match for
+    blockDf = blockDf[blockDf['COUNTYGISJOIN'] != ""]
+
+    # Get place and county populations separately
+    placePopulation = blockDf.groupby('PLACEGISJOIN')['POPULATION'].sum()
+    countyPopulation = blockDf.groupby('COUNTYGISJOIN')['POPULATION'].sum()
+
+    # Now, group by both place and county to get shared counts
+    placeAndCountyPop = blockDf.groupby(['PLACEGISJOIN', 'COUNTYGISJOIN'])['POPULATION'].sum()
+
+
 
     ### Graph Setup ###
     graph = GranularityGraph(f'emissionsPCGraph{stateAc}',
@@ -938,6 +1092,12 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         logger.info(msg)
         graph = AddLevel(graph, placeGdf, stateGdf,
                          n1Type=GEID.CITY, n2Type=GEID.STATE)
+        
+        # Now, we will also need the city-county graph based on population
+        msg = "Adding City (place)-County population layer..."
+        print(msg)
+        logger.info(msg)
+        graph = 
         
         # Save the graph
         msg = "Saving the graph..."
@@ -1797,7 +1957,7 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    for stateAc in ['CO', 'OR', 'TN']:
+    for stateAc in ['CO']:#, 'OR', 'TN']:
         #break
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)

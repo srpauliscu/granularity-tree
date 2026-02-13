@@ -202,7 +202,7 @@ class GranularityGraph(object):
             newNode (Node): The node to be added.
 
         Returns:
-            Node: A reference to the new node object.
+            Status: The status of the operation.
         
         """
 
@@ -234,6 +234,30 @@ class GranularityGraph(object):
         except Exception as e:
             self.logger.error(e)
             return Status.ERROR
+        
+    def UpdateNode(self, node: Node, edgeType: EdgeType, value: float) -> Status:
+
+        """
+        Function to add/change a value of an existing node.
+        Args:
+            self (GranularityGraph): This graph.
+            node (Node): The node to be updated.
+            edgeType (EdgeType): The edgeType value that is to be updated.
+            value (float): The value that is to be put into the node.
+
+        Returns:
+            Status: The status of the operation.
+        
+        """
+
+        # First, check that the node does actually exist
+        
+
+
+
+        return Status.SUCCESS
+
+
 
     def UpdateEdge(self, n1: Node, n2: Node,  edgeType: EdgeType, weight: float) -> Status:
 
