@@ -816,6 +816,9 @@ def LoadBlockPopulation(stateAc: str, dataDir: Path = Path("./data")) -> pd.Data
     # Drop the other two columns; they are not needed
     resDf = resDf[['BLOCKFP', 'POPULATION']]
 
+    # Cut out weird edge cases with poor data quality
+    resDf = resDf[~resDf['POPULATION'].str.contains('r', regex=False, na=False)]
+
     # Ensure the population column is an int
     resDf['POPULATION'] = resDf['POPULATION'].astype(int)
 
@@ -1053,13 +1056,13 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     blockDf = blockDf[blockDf['COUNTYGISJOIN'] != ""]
 
     # Get place and county populations separately
-    placePopulation = blockDf.groupby('PLACEGISJOIN')['POPULATION'].sum()
-    countyPopulation = blockDf.groupby('COUNTYGISJOIN')['POPULATION'].sum()
+    placePopulation = blockDf.groupby('PLACEGISJOIN')['POPULATION'].sum().reset_index()
+    countyPopulation = blockDf.groupby('COUNTYGISJOIN')['POPULATION'].sum().reset_index()
 
     # Now, group by both place and county to get shared counts
-    placeAndCountyPop = blockDf.groupby(['PLACEGISJOIN', 'COUNTYGISJOIN'])['POPULATION'].sum()
+    placeAndCountyPop = blockDf.groupby(['PLACEGISJOIN', 'COUNTYGISJOIN'])['POPULATION'].sum().reset_index()
 
-
+    # NOTE: We reset the indices to make the GISJOIN ids actual columns, accessible inside pd.Dataframe.apply
 
     ### Graph Setup ###
     graph = GranularityGraph(f'emissionsPCGraph{stateAc}',
@@ -1094,11 +1097,24 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                          n1Type=GEID.CITY, n2Type=GEID.STATE)
         
         # Now, we will also need the city-county graph based on population
-        msg = "Adding City (place)-County population layer..."
+
+        # First, update all the place and county nodes with their population
+        msg = "Updating City (place) nodes..."
         print(msg)
         logger.info(msg)
-        graph = 
-        
+        placePopulation.apply(UpdateNodePop, args=(graph, 'PLACEGISJOIN', 'POPULATION', EdgeType.POPULATION, GEID.CITY), axis=1)
+
+        msg = "Updating County nodes..."
+        print(msg)
+        logger.info(msg)
+        countyPopulation.apply(UpdateNodePop, args=(graph, 'COUNTYGISJOIN', 'POPULATION', EdgeType.POPULATION, GEID.COUNTY), axis=1)  
+
+        # Now, add the weights to the edges for the population as well
+        msg = "Adding City (place) - County population layer..."
+        print(msg)
+        logger.info(msg)
+        placeAndCountyPop.apply(AddPopEdge, args=(graph, 'PLACEGISJOIN', 'COUNTYGISJOIN', 'POPULATION', GEID.CITY, GEID.COUNTY), axis=1)
+
         # Save the graph
         msg = "Saving the graph..."
         print(msg)
@@ -1404,6 +1420,14 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                         'GISJOIN', 'GISJOIN', dataCol, None, None,
                                         AggMethod.SUM, EdgeType.AREA, ignoreMissing=True,
                                         ignoreIncomplete=True)
+        
+        # Also do the aggregation by population for comparison, if possible
+        if keyType == GEID.CITY:
+            regsResPopDf = gator.SpatialEqualize(regsDf, countyEmissions, keyType, GEID.COUNTY,
+                                                 'GISJOIN', 'GISJOIN', dataCol, None, None,
+                                                 AggMethod.SUM, EdgeType.POPULATION, ignoreMissing=True,
+                                                 ignoreIncomplete=True)
+            
 
     # For clarity, rename the 'Vehicle Year' column
     regsResDf = regsResDf.rename(columns={dataCol: 'EV_Count'})
@@ -1957,7 +1981,7 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    for stateAc in ['CO']:#, 'OR', 'TN']:
+    for stateAc in ['CT']:#['CO', 'OR', 'TN']:
         #break
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)

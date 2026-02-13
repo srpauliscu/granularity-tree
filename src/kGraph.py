@@ -66,7 +66,7 @@ class Node(object):
             bool: True if the two nodes reference the same entity.
         """
 
-        # ID match should be enough, but use entityType as reassurance
+        # ID match is enough for most cases, but with entityType, it should be guaranteed
         return self.id == value.id and self.entityType == value.entityType
     
     def IsNeighbor(self, n: 'Node', modifier: float = 3.0) -> bool:
@@ -251,13 +251,16 @@ class GranularityGraph(object):
         """
 
         # First, check that the node does actually exist
+        if not self.NodeExists(node):
+            return Status.NOTEXISTS
         
-
-
+        # Find the node in the index and update the value
+        for n in self.indexMap:
+            if n == node:
+                n.values[edgeType] = value
+                break
 
         return Status.SUCCESS
-
-
 
     def UpdateEdge(self, n1: Node, n2: Node,  edgeType: EdgeType, weight: float) -> Status:
 

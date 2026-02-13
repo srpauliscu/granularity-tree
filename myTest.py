@@ -18,6 +18,70 @@ from typing import Callable
 from src.entities import *
 
 
+
+
+
+class Node(object):
+
+    def __init__(self, id):
+
+        self.id = id
+        self.values = {}
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+    
+    def __eq__(self, value: object) -> bool:
+        return self.id == value.id
+
+    def AddValue(self, k, v):
+        self.values[k] = v
+    
+    def UpdateValue(self, k, v):
+        self.values[k] = v
+
+class Graph(object):
+
+    def __init__(self):
+        
+        self.indexMap = {}
+    
+    def AddNode(self, n):
+        self.indexMap[n] = len(self.indexMap)
+
+    def UpdateNode(self, n, nk, v):
+        
+        for k in self.indexMap:
+            if k == n:
+                k.values[nk] = v
+
+
+testNode = Node('n1')
+testNode.AddValue('a', 1)
+
+testNodeCopy = Node('n1')
+
+print(testNode.values)
+
+g = Graph()
+g.AddNode(testNode)
+
+for k in g.indexMap:
+    if k == testNode:
+        print(k.values)
+
+g.UpdateNode(testNodeCopy, 'a', 5)
+
+for k in g.indexMap:
+    if k == testNode:
+        print(k.values)
+
+
+
+
+quit()
+
+
 l = (1,2,3)
 l1 = (4,5)
 

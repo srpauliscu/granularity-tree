@@ -9,7 +9,7 @@ import math
 
 from gator import *
 from kGraph import Node, GranularityGraph
-from populateGraph import AddLevel, AddNodes, LoadShapefile, OVERLAY_AREA_COLUMN
+from populateGraph import AddLevel, AddNodes, UpdateNodePop, AddPopEdge, LoadShapefile, OVERLAY_AREA_COLUMN
 
 CT_FIPS = '09'
 

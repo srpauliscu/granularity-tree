@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
 import math
+import pandas as pd
 
 from entities import *
 from kGraph import Node, GranularityGraph
@@ -47,6 +48,52 @@ def AddNodes(row, curGraph: GranularityGraph, edgeType: EdgeType,
         raise RuntimeError(msg)
     
     return None
+
+def AddPopEdge(row: pd.Series,
+                curGraph: GranularityGraph,
+                n1IdCol: str,
+                n2IdCol: str,
+                weightCol: str,
+                n1Type: GEID = GEID.TEST,
+                n2Type: GEID = GEID.TEST):
+    
+
+    # Function to be applied on a dataframe to update the edges
+    # of exisiting nodes in the graph
+
+    # First, make dummy nodes for indexing the graph
+    n1 = Node(row[n1IdCol], None, n1Type, None)
+    n2 = Node(row[n2IdCol], None, n2Type, None)
+
+    # Call UpdateEdge to add the edge
+    status = curGraph.UpdateEdge(n1, n2, EdgeType.POPULATION, row[weightCol])
+
+    # Sanity check
+    assert status == Status.SUCCESS
+
+    return curGraph
+
+def UpdateNodePop(row: pd.Series,
+                  curGraph: GranularityGraph,
+                  idCol: str,
+                  valCol: str,
+                  edgeType: EdgeType,
+                  nType: GEID):
+    
+    
+    # A function to be applied on a dataframe to update the node
+    # defined by each row in the passed-in graph
+
+    # First, form a dummy node
+    dummyNode = Node(row[idCol], None, nType, None)
+
+    # Use the dummy node with the graph to update the specified value
+    status = curGraph.UpdateNode(dummyNode, edgeType, row[valCol])
+
+    # Sanity check that it worked
+    assert status == Status.SUCCESS
+
+
 
 def AddLevel(curGraph: GranularityGraph, 
                      gdf1: gpd.GeoDataFrame,
