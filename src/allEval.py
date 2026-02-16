@@ -789,6 +789,42 @@ def LoadBlockAssignments(stateAc: str, dataDir: Path = Path("./data")) -> pd.Dat
 
     return resDf
 
+def LoadBlockZCTAAssignments(stateAc: str, dataDir: Path = Path("./data")) -> pd.DataFrame:
+
+    # Block to ZCTA assignment files:
+    url = "https://www.census.gov/geographies/reference-files/time-series/geo/relationship-files.2020.html#zcta"
+
+    # Construct the full filename
+    filename = dataDir / Path(f"blockAssignments/block-to-zcta.txt")
+
+    # Check that it exists
+    if not filename.exists():
+        msg = f"Block to ZCTA file {filename} not found, please visit {url}"
+        raise RuntimeError(msg)
+    
+    # Load it as a CSV
+    resDf = pd.read_csv(filename, delimiter="|", low_memory=False)
+
+    # Only select the necessary columns
+    resDf = resDf[['GEOID_TABBLOCK_20', 'GEOID_ZCTA5_20']]
+    resDf = resDf.rename(columns={'GEOID_TABBLOCK_20': 'BLOCKFP', 'GEOID_ZCTA5_20': 'ZCTAFP'})
+
+    # We can drop the rows without a ZCTA assignment
+    #resDf = resDf.dropna(subset=['ZCTAFP'])
+
+    # Recast them as strings, fixing leading 0s if needed
+    resDf['BLOCKFP'] = resDf.apply(FixFIPS, args=('BLOCKFP', 15), axis=1)
+    resDf['ZCTAFP'] = resDf.apply(FixFIPS, args=('ZCTAFP', 5), axis=1)
+
+    # Only get blocks for this state
+    stateFIPS = STATE_AC_TO_FIPS[stateAc]
+    resDf = resDf[resDf['BLOCKFP'].str.contains(rf'^{stateFIPS}', regex=True)].reset_index(drop=True)
+
+    return resDf
+
+
+
+
 def LoadBlockPopulation(stateAc: str, dataDir: Path = Path("./data")) -> pd.DataFrame:
 
     # Construct the full filename
@@ -882,6 +918,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     EV Data from: www.atlasevhub.com/market-data/state-ev-registration-data/
     and https://catalog.data.gov/dataset/electric-vehicle-registration-data
+
+    Citation for block -> ZCTA population validity: https://www.census.gov/data/data-tools/survey-explorer/geo.html
 
     '''
 
@@ -1009,6 +1047,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # TODO: For testing, only use one state
     countyGdf = countyGdf[countyGdf['STATEFP'] == STATE_AC_TO_FIPS[stateAc]]
+    
 
     # Make a county FIPS code: GISJOIN dict
     countyDict = pd.Series(countyGdf['GISJOIN'].values, index=countyGdf['GEOID']).to_dict()
@@ -1029,19 +1068,27 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     ### Population ###
 
-    # Read in the block assignment file
+    # Read in the block -> place assignment file
     blockAssignments = LoadBlockAssignments(stateAc)
+
+    # Read in the block -> ZCTA assignment file
+    blockZCTAAssignments = LoadBlockZCTAAssignments(stateAc)
+
+    # Put it all together
+    blockAssignments = pd.merge(blockAssignments, blockZCTAAssignments,
+                                left_on='BLOCKID', right_on='BLOCKFP')
+    
 
     # Read in the population data by block
     blockPopulation = LoadBlockPopulation(stateAc)
 
-    # Now, we have block -> county, block -> place, and per block population
-    # We need to aggregate by place, by county, and by place and county
+    # Now, we have block -> county, block -> place, block -> ZCTA, and per block population
+    # We need to aggregate singularly and pairwise (block, county, ZCTA, block/county, etc.)
 
     # First, join everything into one dataframe
     blockDf = pd.merge(blockAssignments, blockPopulation, left_on='BLOCKID', right_on='BLOCKFP')
 
-    # We need GISJOIN IDS for both places and counties
+    # We need GISJOIN IDS for both places, counties, and ZCTAs
     # For places, we can use the placeGdf to make a map from FIPS to GISJOIN
     placeDict = pd.Series(placeGdf['GISJOIN'].values, index=placeGdf['PLACEFP']).to_dict()
     blockDf['PLACEGISJOIN'] = blockDf.apply(PlaceFIPSConverter, args=(placeDict, 'PLACEFP'), axis=1)
@@ -1055,14 +1102,34 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Drop rows we didn't have a match for
     blockDf = blockDf[blockDf['COUNTYGISJOIN'] != ""]
 
-    # Get place and county populations separately
+    # For ZCTAs, we need to load in the ZCTA shapefile
+    zctaGdf = LoadShapefile(sfDir, 'zcta')
+    
+    # Convert from ZCTA to GISJOIN
+    zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
+    blockDf['ZCTAGISJOIN'] = blockDf.apply(ZctaIdConverter, args=(zctaDict, 'ZCTAFP'), axis=1)
+
+    # Drop rows with ZCTAs we didn't have
+    blockDf = blockDf[blockDf['ZCTAGISJOIN'] != ""]
+
+    # Get place, county, and ZCTA populations separately
     placePopulation = blockDf.groupby('PLACEGISJOIN')['POPULATION'].sum().reset_index()
     countyPopulation = blockDf.groupby('COUNTYGISJOIN')['POPULATION'].sum().reset_index()
+    zctaPopulation = blockDf.groupby('ZCTAGISJOIN')['POPULATION'].sum().reset_index()
 
-    # Now, group by both place and county to get shared counts
+    # Now, do pairwise groupby
     placeAndCountyPop = blockDf.groupby(['PLACEGISJOIN', 'COUNTYGISJOIN'])['POPULATION'].sum().reset_index()
+    placeAndZctaPop = blockDf.groupby(['PLACEGISJOIN', 'ZCTAGISJOIN'])['POPULATION'].sum().reset_index()
+    zctaAndCountyPop = blockDf.groupby(['ZCTAGISJOIN', 'COUNTYGISJOIN'])['POPULATION'].sum().reset_index()
 
     # NOTE: We reset the indices to make the GISJOIN ids actual columns, accessible inside pd.Dataframe.apply
+
+    # Setup dataframes for comparison later
+    countyGdfComparison = countyGdf[['GISJOIN', 'ALAND', 'AWATER', 'Shape_Area']]
+    countyGdfComparison = pd.merge(countyGdfComparison, countyPopulation, left_on="GISJOIN", right_on="COUNTYGISJOIN")
+
+    # Population density: Pop / km2
+    countyGdfComparison['POPDENSITY'] = countyGdfComparison['POPULATION'] / (countyGdfComparison['Shape_Area'] / 10.**6)
 
     ### Graph Setup ###
     graph = GranularityGraph(f'emissionsPCGraph{stateAc}',
@@ -1096,9 +1163,15 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         graph = AddLevel(graph, placeGdf, stateGdf,
                          n1Type=GEID.CITY, n2Type=GEID.STATE)
         
+        msg = "Adding ZCTA-county layer..."
+        print(msg)
+        logger.info(msg)
+        graph = AddLevel(graph, zctaGdf, countyGdf,
+                        n1Type=GEID.ZCTA, n2Type=GEID.COUNTY)
+        
         # Now, we will also need the city-county graph based on population
 
-        # First, update all the place and county nodes with their population
+        # First, update all the place, county, and ZCTA nodes
         msg = "Updating City (place) nodes..."
         print(msg)
         logger.info(msg)
@@ -1109,11 +1182,28 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         logger.info(msg)
         countyPopulation.apply(UpdateNodePop, args=(graph, 'COUNTYGISJOIN', 'POPULATION', EdgeType.POPULATION, GEID.COUNTY), axis=1)  
 
+        msg = "Updating ZCTA nodes..."
+        print(msg)
+        logger.info(msg)
+        zctaPopulation.apply(UpdateNodePop, args=(graph, 'ZCTAGISJOIN', 'POPULATION', EdgeType.POPULATION, GEID.ZCTA), axis=1)  
+
+
         # Now, add the weights to the edges for the population as well
         msg = "Adding City (place) - County population layer..."
         print(msg)
         logger.info(msg)
         placeAndCountyPop.apply(AddPopEdge, args=(graph, 'PLACEGISJOIN', 'COUNTYGISJOIN', 'POPULATION', GEID.CITY, GEID.COUNTY), axis=1)
+
+        msg = "Adding City (place) - ZCTA population layer..."
+        print(msg)
+        logger.info(msg)
+        placeAndZctaPop.apply(AddPopEdge, args=(graph, 'PLACEGISJOIN', 'ZCTAGISJOIN', 'POPULATION', GEID.CITY, GEID.ZCTA), axis=1)
+
+        msg = "Adding ZCTA - County population layer..."
+        print(msg)
+        logger.info(msg)
+        zctaAndCountyPop.apply(AddPopEdge, args=(graph, 'ZCTAGISJOIN', 'COUNTYGISJOIN', 'POPULATION', GEID.ZCTA, GEID.COUNTY), axis=1)
+
 
         # Save the graph
         msg = "Saving the graph..."
@@ -1262,6 +1352,18 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                        distFunction=distFunc, model=VariogramModel.LINEAR,
                                        binSize=50.)
     krigingRuntime = time.time() - st
+
+    # Do an averaging via population as well
+    msg = "Population overlap equalization starting..."
+    print(msg)
+    logger.info(msg)
+    st = time.time()
+    populationResDf = gator.SpatialEqualize(cityEmissions, countyEmissions,
+                                       GEID.CITY, GEID.COUNTY, 'GISJOIN', 'GISJOIN',
+                                       'EmissionsPerVM', None, None, AggMethod.MEAN,
+                                       EdgeType.POPULATION, ignoreMissing=True, ignoreIncomplete=True)
+    populationRuntime = time.time() - st
+
     #print(arealResDf)
     #print(krigingResDf)
 
@@ -1274,50 +1376,67 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Add the 'true' value via joining
     arealResDf = pd.merge(arealResDf, countyGt, left_index=True, right_on='GISJOIN')
     krigingResDf = pd.merge(krigingResDf, countyGt, on='GISJOIN')
+    populationResDf = pd.merge(populationResDf, countyGt, left_index=True, right_on='GISJOIN')
 
     # Calculate error
     errorCol = 'RelError'
     arealResDf[errorCol+'_a'] = np.abs(arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
     krigingResDf[errorCol+'_k'] = np.abs(krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
+    populationResDf[errorCol + '_p'] = np.abs(populationResDf['EmissionsPerVM'] - populationResDf['EmissionsPerVM_GT']) / populationResDf['EmissionsPerVM_GT']
 
     # Calculate variance of error
     arealVar = arealResDf[errorCol+'_a'].var()
     krigingVar = krigingResDf[errorCol+'_k'].var()
+    populationVar = populationResDf[errorCol + '_p'].var()
 
-    # Join the two results to compare errors directly
+    # Join the results to compare directly
     errorDf = pd.merge(arealResDf[['GISJOIN', errorCol + '_a']], krigingResDf[['GISJOIN', errorCol +'_k']], on='GISJOIN')
+    errorDf = pd.merge(errorDf, populationResDf[['GISJOIN', errorCol + '_p']], on='GISJOIN')
 
-    # Get an average error difference
-    errorDf['Error Difference'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_k']
-    avgErrorDiff = errorDf['Error Difference'].mean()
-    medErrorDiff = errorDf['Error Difference'].median()
+    # Get pairwise average error differences
+    errorDf['Error Difference: A-K'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_k']
+    avgErrorDiffAK = errorDf['Error Difference: A-K'].mean()
+    medErrorDiffAK = errorDf['Error Difference: A-K'].median()
+
+    errorDf['Error Difference: A-P'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_p']
+    avgErrorDiffAP = errorDf['Error Difference: A-P'].mean()
+    medErrorDiffAP = errorDf['Error Difference: A-P'].median()
+
+    errorDf['Error Difference: P-K'] = errorDf[errorCol + '_p'] - errorDf[errorCol + '_k']
+    avgErrorDiffPK = errorDf['Error Difference: P-K'].mean()
+    medErrorDiffPK = errorDf['Error Difference: P-K'].median()
 
 
-    print(arealResDf)
-    print(krigingResDf)
+    # Print out average and median error difference for each pair of methods
+    print(f"\nAreal - Kriging")
+    print(f"Average error difference (in %): {avgErrorDiffAK*100}")
+    print(f"Median error difference (in %): {medErrorDiffAK*100}")
+    print(f"\nAreal - Population")
+    print(f"Average error difference (in %): {avgErrorDiffAP*100}")
+    print(f"Median error difference (in %): {medErrorDiffAP*100}")
+    print(f"\nPopulation - Kriging")
+    print(f"Average error difference (in %): {avgErrorDiffPK*100}")
+    print(f"Median error difference (in %): {medErrorDiffPK*100}")
 
-
-
-    #pd.set_option('display.max_rows', None)
-    print(errorDf)
-    print(f"Average error difference (in %): {avgErrorDiff*100}")
-    print(f"Median error difference (in %): {medErrorDiff*100}")
-
-    print(f"Areal Error Variance: {arealVar}")
+    # Print error variance by method
+    print(f"\nAreal Error Variance: {arealVar}")
     print(f"Kriging Error Variance: {krigingVar}")
+    print(f"Population Error Variance: {populationVar}")
 
-    print(f"Areal runtime: {arealRuntime}")
+    # Print runtime by method
+    print(f"\nAreal runtime: {arealRuntime}")
     print(f"Kriging runtime: {krigingRuntime}")
+    print(f"Population runtime: {populationRuntime}")
 
-    #print(countyEmissions[countyEmissions['GISJOIN'] == "G0100790"])
+    # Try to do some investigation into charactersitcs of oddly performing counties
+    # Join the results with the comparison GDF
+    errorComparisonGdf = pd.merge(errorDf, countyGdfComparison, on='GISJOIN')
+
+    print(errorComparisonGdf)
+
+    quit()
 
     # Now, we want the EVs at the county level
-    regsDf = pd.read_csv(Path("./evaluation/spatial/ev_registration.csv"))
-
-    #regsDf = regsDf.drop_duplicates('Primary Customer State')
-    #print(regsDf)
-    #quit()
-
     regsDf, keyType, keyCol, dataCol = LoadEVRegistration(Path('./evaluation'), stateAc)
 
     # We need the regs states as FIPS codes
@@ -1376,18 +1495,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         #print(regsDf)
         regsDf = regsDf[regsDf['GISJOIN'] != ""]
 
-        # If we didn't load the graph, we also need to add
-        # a ZCTA-county layer
-        if loadGraphStatus != Status.SUCCESS:
-            msg = "Adding ZCTA-county layer..."
-            print(msg)
-            logger.info(msg)
-            graph = AddLevel(graph, zctaGdf, countyGdf,
-                            n1Type=GEID.ZCTA, n2Type=GEID.COUNTY)
-            
-            # Re-save the graph
-            graph.SaveGraph(graphsDir)
-
         #fig, ax = plt.subplots()
         #zctaGdf.plot(ax=ax, color='red')
         #countyGdf.plot(ax=ax)
@@ -1414,6 +1521,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         # We only need one column
         regsResDf = regsResDf[[dataCol]]
 
+        # Can't aggregate via population for comparison
+        regsResPopDf = None
+
     else:
 
         regsResDf =  gator.SpatialEqualize(regsDf, countyEmissions, keyType, GEID.COUNTY,
@@ -1421,24 +1531,36 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                         AggMethod.SUM, EdgeType.AREA, ignoreMissing=True,
                                         ignoreIncomplete=True)
         
-        # Also do the aggregation by population for comparison, if possible
-        if keyType == GEID.CITY:
-            regsResPopDf = gator.SpatialEqualize(regsDf, countyEmissions, keyType, GEID.COUNTY,
-                                                 'GISJOIN', 'GISJOIN', dataCol, None, None,
-                                                 AggMethod.SUM, EdgeType.POPULATION, ignoreMissing=True,
-                                                 ignoreIncomplete=True)
+        # Also do the aggregation by population for comparison
+        regsResPopDf = gator.SpatialEqualize(regsDf, countyEmissions, keyType, GEID.COUNTY,
+                                                'GISJOIN', 'GISJOIN', dataCol, None, None,
+                                                AggMethod.SUM, EdgeType.POPULATION, ignoreMissing=True,
+                                                ignoreIncomplete=True)
             
 
     # For clarity, rename the 'Vehicle Year' column
     regsResDf = regsResDf.rename(columns={dataCol: 'EV_Count'})
+    if not regsResPopDf is None:
+        regsResPopDf = regsResPopDf.rename(columns={dataCol: 'EV_Count_Pop'})
 
     # Now, join the results
     regsArealDf = pd.merge(arealResDf, regsResDf, left_on='GISJOIN', right_index=True)
     regsKrigingDf = pd.merge(krigingResDf, regsResDf, left_on='GISJOIN', right_index=True)
 
+    if not regsResPopDf is None:
+        # Join with the regular regsResDf for comparison
+        regsComparisonDf = pd.merge(regsResDf, regsResPopDf)
+    else:
+        regsComparisonDf = None
+    
+    if not regsComparisonDf is None:
+        print(regsComparisonDf)
+
     # Sort for better plotting
     regsArealDf = regsArealDf.sort_values('EV_Count')
     regsKrigingDf = regsKrigingDf.sort_values('EV_Count')
+    if not regsResPopDf is None:
+        regsResPopDf = regsResPopDf.sort_values('EV_Count')
 
     # Setup the figure
     fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -1456,6 +1578,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     regsArealDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color='red')
     regsKrigingDf.plot(x='EV_Count', y='EmissionsPerVM_est', kind='line', ax=ax, color='blue')
     regsArealDf.plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green')
+
+    #if not regsResPopDf is None:
+        #regsResPopDf.plot(x='EV_Count_Pop', y='EmissionsPerVM', kind='line', ax=ax, color='yellow')
 
     print(f'\nFinished {stateAc} analysis.\n')
 
@@ -1981,7 +2106,7 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    for stateAc in ['CT']:#['CO', 'OR', 'TN']:
+    for stateAc in ['OR']:#['CO', 'OR', 'TN']:
         #break
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)

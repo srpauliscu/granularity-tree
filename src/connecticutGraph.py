@@ -78,9 +78,9 @@ def CityIdConverter(row, cityDict: dict, col: str):
     else:
         return ""
     
-def ZctaIdConverter(row, zctaDict: dict):
+def ZctaIdConverter(row, zctaDict: dict, col: str = 'ZCTA'):
 
-    zcta = row['ZCTA']
+    zcta = row[col]
     if zcta in zctaDict:
         return zctaDict[zcta]
     
