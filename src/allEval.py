@@ -1130,6 +1130,12 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Population density: Pop / km2
     countyGdfComparison['POPDENSITY'] = countyGdfComparison['POPULATION'] / (countyGdfComparison['Shape_Area'] / 10.**6)
+    countyGdfComparison['POPLANDDENSITY'] = countyGdfComparison['POPULATION'] / (countyGdfComparison['ALAND'] / 10.**6)
+    countyGdfComparison['LOGPOP'] = np.log(countyGdfComparison['POPULATION'])
+
+    # Land to water ratio
+    countyGdfComparison['LANDWATERRATIO'] = countyGdfComparison['ALAND'] / countyGdfComparison['AWATER']
+
 
     ### Graph Setup ###
     graph = GranularityGraph(f'emissionsPCGraph{stateAc}',
@@ -1364,6 +1370,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                        EdgeType.POPULATION, ignoreMissing=True, ignoreIncomplete=True)
     populationRuntime = time.time() - st
 
+    # Do a rename for clarity when joining later
+    populationResDf = populationResDf.rename(columns={'EmissionsPerVM': 'EmissionsPerVM_Pop'})
+
     #print(arealResDf)
     #print(krigingResDf)
 
@@ -1382,7 +1391,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     errorCol = 'RelError'
     arealResDf[errorCol+'_a'] = np.abs(arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
     krigingResDf[errorCol+'_k'] = np.abs(krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
-    populationResDf[errorCol + '_p'] = np.abs(populationResDf['EmissionsPerVM'] - populationResDf['EmissionsPerVM_GT']) / populationResDf['EmissionsPerVM_GT']
+    populationResDf[errorCol + '_p'] = np.abs(populationResDf['EmissionsPerVM_Pop'] - populationResDf['EmissionsPerVM_GT']) / populationResDf['EmissionsPerVM_GT']
 
     # Calculate variance of error
     arealVar = arealResDf[errorCol+'_a'].var()
@@ -1432,9 +1441,56 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Join the results with the comparison GDF
     errorComparisonGdf = pd.merge(errorDf, countyGdfComparison, on='GISJOIN')
 
-    print(errorComparisonGdf)
+    #print(errorComparisonGdf)
 
-    quit()
+    # Plot the error rate against each characterstic
+    errorCols = {errorCol+'_a': 'red', errorCol+'_k': 'blue', errorCol+'_p': 'green'}
+    charCols = ['POPULATION', 'POPDENSITY', 'POPLANDDENSITY', 'LANDWATERRATIO', 'LOGPOP']
+
+    for characteristic in charCols:
+
+        # Make a new figure
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+        # Set labels and font sizes
+        plt.xlabel(characteristic, fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Error rate vs. {characteristic} for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Plot each error rate
+        for ec in errorCols:
+            errorComparisonGdf.plot(x=characteristic, y=ec, kind='line', ax=ax, color=errorCols[ec])
+
+    # Do the same thing, but with the error differences
+    errorCols = {'Error Difference: A-K': 'red',
+                 'Error Difference: A-P': 'blue',
+                 'Error Difference: P-K': 'green'}
+    
+
+    for characteristic in charCols:
+
+        #TODO: Remove to plot everything
+        break
+
+        # Make a new figure
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+        # Set labels and font sizes
+        plt.xlabel(characteristic, fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error Difference', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Error difference vs. {characteristic} for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Plot each error rate
+        for ec in errorCols:
+            errorComparisonGdf.plot(x=characteristic, y=ec, kind='line', ax=ax, color=errorCols[ec])
 
     # Now, we want the EVs at the county level
     regsDf, keyType, keyCol, dataCol = LoadEVRegistration(Path('./evaluation'), stateAc)
@@ -1543,27 +1599,58 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     if not regsResPopDf is None:
         regsResPopDf = regsResPopDf.rename(columns={dataCol: 'EV_Count_Pop'})
 
-    # Now, join the results
-    regsArealDf = pd.merge(arealResDf, regsResDf, left_on='GISJOIN', right_index=True)
-    regsKrigingDf = pd.merge(krigingResDf, regsResDf, left_on='GISJOIN', right_index=True)
+    # Do some renames for looping purposes
+    krigingResDf = krigingResDf.rename(columns={'EmissionsPerVM_est': 'EmissionsPerVM'})
+    populationResDf = populationResDf.rename(columns={'EmissionsPerVM_Pop': 'EmissionsPerVM'})
+
+    # Put everything in a dictionary for organization
+    resDfs = {'Areal': arealResDf,
+               'Kriging': krigingResDf,
+               'Population': populationResDf}
+    
+    # Join the emissions results with the EV registration
+    joinedFinalDfs = {}
+    for k in resDfs:
+        joinedFinalDfs[k] = pd.merge(resDfs[k], regsResDf, left_on='GISJOIN', right_index=True)
+
+        # Do the same with the population-based EV registration data, if applicable
+        if not regsResPopDf is None:
+            joinedFinalDfs[k + ' (Pop-based EVs)'] = pd.merge(resDfs[k], regsResPopDf, left_on='GISJOIN', right_index=True)
 
     if not regsResPopDf is None:
-        # Join with the regular regsResDf for comparison
-        regsComparisonDf = pd.merge(regsResDf, regsResPopDf)
+        # Join with the regular regsResDf for comparison of EV registration counts
+        regsComparisonDf = pd.merge(regsResDf, regsResPopDf, left_index=True, right_index=True)
+
+        # Calculate relative difference, using the areal version as "ground truth"
+        regsComparisonDf['Percent Difference'] = ((regsComparisonDf['EV_Count_Pop'] - regsComparisonDf['EV_Count']) / regsComparisonDf['EV_Count'])*100.
+
+        # Get statistics for the difference
+        regsMeanDiff = regsComparisonDf['Percent Difference'].mean()
+        regsMedDiff = regsComparisonDf['Percent Difference'].median()
+        regsDiffVar = regsComparisonDf['Percent Difference'].var()
+
+        print(regsComparisonDf)
+        print('\nStatistics for difference between areal and population-based methods for EV registrations')
+        print(f'Mean percent difference: {regsMeanDiff}')
+        print(f'Median percent difference: {regsMedDiff}')
+        print(f'Percent difference variance: {regsDiffVar}')
+
     else:
         regsComparisonDf = None
-    
-    if not regsComparisonDf is None:
-        print(regsComparisonDf)
+
 
     # Sort for better plotting
-    regsArealDf = regsArealDf.sort_values('EV_Count')
-    regsKrigingDf = regsKrigingDf.sort_values('EV_Count')
-    if not regsResPopDf is None:
-        regsResPopDf = regsResPopDf.sort_values('EV_Count')
+    for k in joinedFinalDfs:
 
-    # Setup the figure
+        if 'Pop-based' in k:
+            # Do a rename for looping first
+            joinedFinalDfs[k] = joinedFinalDfs[k].rename(columns={'EV_Count_Pop': 'EV_Count'})
+        
+        joinedFinalDfs[k] = joinedFinalDfs[k].sort_values('EV_Count')
+
+    # Setup the figure(s)
     fig, ax = plt.subplots(figsize=FIG_SIZE)
+    allAxes = {'Areal': ax}
 
     # Set labels and font sizes
     plt.xlabel('EV Count', fontsize=FIG_LABEL_FONT_SIZE)
@@ -1574,14 +1661,45 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
+    allAxes = {'Areal': ax}
+
+    # Do the same for the pop-based EV registrations, if applicable
+    if not regsResPopDf is None:
+        fig, axp = plt.subplots(figsize=FIG_SIZE)
+
+        # Set labels and font sizes
+        plt.xlabel('EV Count (Pop-based)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Emissions per Vehicle Mile (MT of CO2e/mi)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Total Emissions per Vehicle Mile Traveled by Pop-based EV Count for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        axp.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        axp.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+        
+        allAxes['Population'] = axp
+
     # Plot the results
-    regsArealDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color='red')
-    regsKrigingDf.plot(x='EV_Count', y='EmissionsPerVM_est', kind='line', ax=ax, color='blue')
-    regsArealDf.plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green')
+    colors = {}
+    for k in joinedFinalDfs:
+        if 'Areal' in k:
+            colors[k] = 'red'
+        elif 'Kriging' in k:
+            colors[k] = 'blue'
+        elif 'Population' in k:
+            colors[k] = 'black'
+    
+    for k in joinedFinalDfs:
+        curDf = joinedFinalDfs[k]
+        if 'Pop-based' in k:
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=allAxes['Population'], color=colors[k])
+        else:
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=allAxes['Areal'], color=colors[k])
 
-    #if not regsResPopDf is None:
-        #regsResPopDf.plot(x='EV_Count_Pop', y='EmissionsPerVM', kind='line', ax=ax, color='yellow')
-
+    # Plot the ground truth as well
+    joinedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=allAxes['Areal'], color='green')
+    if 'Population' in joinedFinalDfs:
+        joinedFinalDfs['Population'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=allAxes['Population'], color='green')
+    
     print(f'\nFinished {stateAc} analysis.\n')
 
 
@@ -2106,7 +2224,7 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
-    for stateAc in ['OR']:#['CO', 'OR', 'TN']:
+    for stateAc in ['CO', 'OR', 'TN']:
         #break
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)
