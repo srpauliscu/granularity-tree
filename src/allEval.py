@@ -369,7 +369,7 @@ def TemporalEval(dirPath: Path):
     logger.info("\n\n")
 
     # Load the data
-    dataDf = pd.read_csv(dirPath / 'EVChargingStationUsage.csv')
+    dataDf = pd.read_csv(dirPath / 'EVChargingStationUsage.csv', low_memory=False)
 
     # Rename the columns to remove all special characters
     # so itertuples works
@@ -397,6 +397,11 @@ def TemporalEval(dirPath: Path):
     # Make an actual Interval object
     intervalCol = 'TIME_INTERVAL'
 
+    dataDf = dataDf[dataDf[endTsCol] - dataDf[startTsCol] >= pd.Timedelta(minutes=1)]
+
+    print(dataDf)
+    quit()
+
     dataDf[intervalCol] = dataDf.apply(FormInterval, args=(startTsCol, endTsCol), axis=1)
 
     # Get a gator object
@@ -404,13 +409,32 @@ def TemporalEval(dirPath: Path):
 
     # Aggregate to the month level
     dataCol = 'EnergykWh'
-    resDf = gator.TemporalEqualize(dataDf, TID.MONTH, intervalCol,
-                                   dataCol, AggMethod.SUM)
+
+    st = time.time()
+    monthlyResDf = None#gator.TemporalEqualize(dataDf, TID.MONTH, intervalCol,
+                       #            dataCol, AggMethod.SUM)
+    runTime = time.time() - st
+
+    print(f"Final runtime for monthly data: {runTime} seconds")
+
+    # Now, select data for, arbitrarily, the first week of October, 2019
+    startTs = pd.Timestamp(year=2019, month=10, day=1, hour=0, minute=0, second=0, tz='PST')
+    endTs = pd.Timestamp(year=2019, month=10, day=8, hour=0, minute=0, second=0, tz='PST')
+    dataDf = dataDf[(dataDf[startTsCol] >= startTs) & (dataDf[endTs] < endTs)]
+    
+    st = time.time()
+    dailyResDf = gator.TemporalEqualize(dataDf, TID.HOUR, intervalCol,
+                                        dataCol, AggMethod.SUM)
+    runTime = time.time() - st
+
+    print(f"Final runtime for hourly data: {runTime} seconds")
+    
+    quit()
     
     # Begin plotting
     fig, ax = plt.subplots(figsize=FIG_SIZE)
 
-    resDf.plot(y=dataCol, ax=ax)
+    monthlyResDf.plot(y=dataCol, ax=ax)
 
     # Fix leggend fontsize
     ax.legend(fontsize=18)
@@ -2220,16 +2244,16 @@ if __name__ == "__main__":
     
     #SpatialEval(Path('./evaluation/spatial'), loadGraph=True)
 
-    #TemporalEval(Path('./evaluation/temporal'))
+    TemporalEval(Path('./evaluation/temporal'))
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
     for stateAc in ['CO', 'OR', 'TN']:
-        #break
+        break
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)
     
-    plt.show()
+    #plt.show()
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
