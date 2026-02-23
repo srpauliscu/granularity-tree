@@ -397,10 +397,8 @@ def TemporalEval(dirPath: Path):
     # Make an actual Interval object
     intervalCol = 'TIME_INTERVAL'
 
-    dataDf = dataDf[dataDf[endTsCol] - dataDf[startTsCol] >= pd.Timedelta(minutes=1)]
-
-    print(dataDf)
-    quit()
+    # Duration for dataset statistics
+    dataDf['duration'] = pd.to_datetime(dataDf[endTsCol]) - pd.to_datetime(dataDf[startTsCol])
 
     dataDf[intervalCol] = dataDf.apply(FormInterval, args=(startTsCol, endTsCol), axis=1)
 
@@ -418,9 +416,9 @@ def TemporalEval(dirPath: Path):
     print(f"Final runtime for monthly data: {runTime} seconds")
 
     # Now, select data for, arbitrarily, the first week of October, 2019
-    startTs = pd.Timestamp(year=2019, month=10, day=1, hour=0, minute=0, second=0, tz='PST')
-    endTs = pd.Timestamp(year=2019, month=10, day=8, hour=0, minute=0, second=0, tz='PST')
-    dataDf = dataDf[(dataDf[startTsCol] >= startTs) & (dataDf[endTs] < endTs)]
+    startTs = pd.Timestamp(year=2019, month=10, day=1, hour=0, minute=0, second=0, tz='US/Pacific')
+    endTs = pd.Timestamp(year=2019, month=10, day=3, hour=0, minute=0, second=0, tz='US/Pacific')
+    dataDf = dataDf[(dataDf[startTsCol] >= startTs) & (dataDf[endTsCol] < endTs)]
     
     st = time.time()
     dailyResDf = gator.TemporalEqualize(dataDf, TID.HOUR, intervalCol,
@@ -428,6 +426,26 @@ def TemporalEval(dirPath: Path):
     runTime = time.time() - st
 
     print(f"Final runtime for hourly data: {runTime} seconds")
+
+    # Begin plotting the hourly data
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    dailyResDf.plot(y=dataCol, ax=ax)
+
+    # Fix font sizes
+    plt.xlabel('Time', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Total Energy Used (kWh)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title('Total Hourly Energy Used By EV Chargers, Palo Alto', fontsize=FIG_TITLE_FONT_SIZE)
+
+    # Fix font sizes for axis ticks
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+    figDir = dirPath / Path("figures/")
+    if not figDir.exists():
+        figDir.mkdir()
+
+    plt.savefig(figDir / Path("daily-charger-energy.png"))
+    plt.show()
     
     quit()
     
@@ -436,7 +454,7 @@ def TemporalEval(dirPath: Path):
 
     monthlyResDf.plot(y=dataCol, ax=ax)
 
-    # Fix leggend fontsize
+    # Fix legend fontsize
     ax.legend(fontsize=18)
 
     # Set labels and font sizes
@@ -2244,9 +2262,10 @@ if __name__ == "__main__":
     
     #SpatialEval(Path('./evaluation/spatial'), loadGraph=True)
 
-    TemporalEval(Path('./evaluation/temporal'))
+    #TemporalEval(Path('./evaluation/temporal'))
 
-    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    
 
     for stateAc in ['CO', 'OR', 'TN']:
         break
