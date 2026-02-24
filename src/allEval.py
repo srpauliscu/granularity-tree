@@ -35,10 +35,12 @@ STATE_AC_TO_FIPS = {
     'AL': '01',
     'AK': '02',
     'AZ': '04',
+    'AR': '05',
     'CA': '06',
     'CO': '08',
     'CT': '09',
     'DE': '10',
+    'DC': '11',
     'FL': '12',
     'GA': '13',
     'HI': '15',
@@ -47,6 +49,7 @@ STATE_AC_TO_FIPS = {
     'IN': '18',
     'IA': '19',
     'KS': '20',
+    'KY': '21',
     'LA': '22',
     'ME': '23',
     'MD': '24',
@@ -54,6 +57,7 @@ STATE_AC_TO_FIPS = {
     'MI': '26',
     'MN': '27',
     'MS': '28',
+    'MO': '29',
     'MT': '30',
     'NE': '31',
     'NV': '32',
@@ -63,8 +67,10 @@ STATE_AC_TO_FIPS = {
     'NY': '36',
     'NC': '37',
     'ND': '38',
+    'OH': '39',
     'OK': '40',
     'OR': '41',
+    'PA': '42',
     'RI': '44',
     'SC': '45',
     'SD': '46',
@@ -74,6 +80,7 @@ STATE_AC_TO_FIPS = {
     'VT': '50',
     'VA': '51',
     'WA': '53',
+    'WV': '54',
     'WI': '55',
     'WY': '56',
 
@@ -93,6 +100,74 @@ STATE_AC_TO_FIPS = {
 
 
 }
+
+# State acronyms to full state names
+ACRO_TO_STATE = {
+
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "AS": "American Samoa",
+    "CA": "California",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "DC": "District of Columbia",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "GU": "Guam",
+    "HI": "Hawaii",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Louisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Michigan",
+    "MN": "Minnesota",
+    "MS": "Mississippi",
+    "MO": "Missouri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "New Hampshire",
+    "NJ": "New Jersey",
+    "NM": "New Mexico",
+    "NY": "New York",
+    "NC": "North Carolina",
+    "ND": "North Dakota",
+    "MP": "Northern Mariana Islands",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregon",
+    "PA": "Pennsylvania",
+    "PR": "Puerto Rico",
+    "RI": "Rhode Island",
+    "SC": "South Carolina",
+    "SD": "South Dakota",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "TT": "Trust Territories",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VA": "Virginia",
+    "VI": "Virgin Islands",
+    "WA": "Washington",
+    "WV": "West Virginia",
+    "WI": "Wisconsin",
+    "WY": "Wyoming",
+    "UM": "Minor Outlying Islands"
+    }
+
+# Reverse it to get full state names to acro
+STATE_TO_ACRO = {}
+for k in ACRO_TO_STATE:
+    STATE_TO_ACRO[ACRO_TO_STATE[k]] = k
 
 # Ranges of ZIP codes for each relevant state,
 # with edge cases
@@ -1457,25 +1532,43 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     avgErrorDiffPK = errorDf['Error Difference: P-K'].mean()
     medErrorDiffPK = errorDf['Error Difference: P-K'].median()
 
+    # Caclulate singular error averages
+    avgErrorAreal = errorDf[errorCol + '_a'].mean()
+    medErrorAreal = errorDf[errorCol + '_a'].median()
+
+    avgErrorKriging = errorDf[errorCol + '_k'].mean()
+    medErrorKriging = errorDf[errorCol + '_k'].median()
+
+    avgErrorPopulation = errorDf[errorCol + '_p'].mean()
+    medErrorPopulation = errorDf[errorCol + '_p'].median()
+
 
     # Print out average and median error difference for each pair of methods
     print(f"\nAreal - Kriging")
-    print(f"Average error difference (in %): {avgErrorDiffAK*100}")
-    print(f"Median error difference (in %): {medErrorDiffAK*100}")
+    print(f"Average error difference (in %): {avgErrorDiffAK*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAK*100.}")
     print(f"\nAreal - Population")
-    print(f"Average error difference (in %): {avgErrorDiffAP*100}")
-    print(f"Median error difference (in %): {medErrorDiffAP*100}")
+    print(f"Average error difference (in %): {avgErrorDiffAP*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAP*100.}")
     print(f"\nPopulation - Kriging")
-    print(f"Average error difference (in %): {avgErrorDiffPK*100}")
-    print(f"Median error difference (in %): {medErrorDiffPK*100}")
+    print(f"Average error difference (in %): {avgErrorDiffPK*100.}")
+    print(f"Median error difference (in %): {medErrorDiffPK*100.}")
+
+    # Print average errors by method
+    print(f"\n\n\nAreal Mean Error (in %): {avgErrorAreal*100.}")
+    print(f"Areal Median Error (in %): {medErrorAreal*100.}")
+    print(f"\nKriging Mean Error (in %): {avgErrorKriging*100.}")
+    print(f"Kriging Median Error (in %): {medErrorKriging*100.}")
+    print(f"\nPopulation Mean Error (in %): {avgErrorPopulation*100.}")
+    print(f"Population Median Error (in %): {medErrorPopulation*100.}")
 
     # Print error variance by method
-    print(f"\nAreal Error Variance: {arealVar}")
+    print(f"\n\n\nAreal Error Variance: {arealVar}")
     print(f"Kriging Error Variance: {krigingVar}")
     print(f"Population Error Variance: {populationVar}")
 
     # Print runtime by method
-    print(f"\nAreal runtime: {arealRuntime}")
+    print(f"\n\n\nAreal runtime: {arealRuntime}")
     print(f"Kriging runtime: {krigingRuntime}")
     print(f"Population runtime: {populationRuntime}")
 
@@ -1784,6 +1877,89 @@ def StateFIPSConverter(row: pd.Series, stateDict: dict, col: str):
         return ""
     
 
+
+def LoadCountyPopulation(dataDir: Path = Path("./data")) -> pd.DataFrame:
+
+
+    # Construct the full filename
+    filename = dataDir / Path("county-pop-2020.csv")
+
+    # Check that it exists
+    if not filename.exists():
+        msg = f"County population file not found, please download the P1|Race table for all counties from data.census.gov"
+    
+    # Read it in
+    resDf = pd.read_csv(filename)
+
+    # We only need the first three columns
+    resDf = resDf[resDf.columns[0:3]]
+
+    # Drop the first row, as it is an extra header
+    resDf = resDf.iloc[1:]
+
+    # Rename the population column for readability
+    resDf = resDf.rename(columns={resDf.columns[-1]: 'POPULATION'})
+
+    # Extract the actual FIPS code from the provided GEOID
+    resDf['COUNTYFP'] = resDf.apply(lambda r: r['GEO_ID'].split('US')[1], axis=1)
+
+    # Only keep the needed columns
+    resDf = resDf[['COUNTYFP', 'POPULATION']]
+
+    # Ensure the population column in an int
+    resDf['POPULATION'] = resDf['POPULATION'].astype(int)
+
+    return resDf
+
+def LoadStatePopulation(dataDir: Path = Path("./data")) -> pd.DataFrame:
+
+    # Construct the full filename
+    filename = dataDir / Path("state-pop-2020.csv")
+
+    # Check that it exists
+    if not filename.exists():
+        msg = f"State population file not found, please download the P1|Total Population table for all states from data.census.gov"
+    
+    # Read it in
+    resDf = pd.read_csv(filename)
+
+    # We can drop the first column
+    resDf = resDf[resDf.columns[1:]]
+
+    # Each remaining column is a state
+    # We need to translate to integers
+
+    for c in resDf.columns:
+        # Strip out commas before casting as an int
+        resDf[c] = resDf[c].str.replace(',', '', regex=False).astype(int)
+
+    # We also need to assign the correct FIPS codes
+    # While they are in alphabetical order, FIPS codes are not contiguous,
+    # so we need a map
+    colRenames = {}
+    for c in resDf.columns:
+        colRenames[c] = STATE_AC_TO_FIPS[STATE_TO_ACRO[c]]
+    
+    resDf = resDf.rename(columns=colRenames)
+
+    # For joining, we need to make each state a row instead
+    # The index is now the state FIPS code
+    resDf = resDf.transpose().reset_index()
+
+    # Sanity check
+    assert len(resDf.columns) == 2
+
+    # Rename the columns for clarity
+    resDf = resDf.rename(columns={resDf.columns[0]: 'STATEFP', 
+                                  resDf.columns[1]: 'POPULATION'})
+
+    return resDf
+
+
+
+
+
+
 def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                    graphsDir: Path = Path("./graphs")):
     
@@ -1938,6 +2114,25 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         StateFIPSConverter, args=(stateDict, 'FIPS'), axis=1)
     
 
+    # Load in the population data by county and by state
+    countyPopDf = LoadCountyPopulation()
+    statePopDf = LoadStatePopulation()
+
+    # Get the correct GISJOIN IDs to match with the nodes
+    countyPopDf = pd.merge(countyPopDf, countyGdf[['GISJOIN', 'GEOID']],
+                           left_on='COUNTYFP', right_on='GEOID')
+    statePopDf = pd.merge(statePopDf, stateGdf[['GISJOIN', 'GEOID']],
+                          left_on='STATEFP', right_on='GEOID')
+    
+    # Rename to avoid naming conflicts
+    countyPopDf = countyPopDf.rename(columns={'GISJOIN': 'COUNTYGISJOIN'})
+
+    # We need to match the counties to their state.  We can
+    # use the FIPS code for this
+    countyPopDf['STATEFP'] = countyPopDf['COUNTYFP'].str[0:2]
+    countyPopDf = pd.merge(countyPopDf, stateGdf[['GISJOIN', 'GEOID']],
+                           left_on="STATEFP", right_on='GEOID')
+    countyPopDf = countyPopDf.rename(columns={'GISJOIN': 'STATEGISJOIN'})
 
     # Try and load the graph
     graph = GranularityGraph('incomeVsPolicy', Path('./logs/incomeVsPolicy.log'))
@@ -1956,14 +2151,39 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         graph = AddLevel(graph, countyGdf, stateGdf,
                          n1Type=GEID.COUNTY, n2Type=GEID.STATE)
         
+        # Update the county and state nodes with their population
+        msg = "Updating County nodes..."
+        print(msg)
+        logger.info(msg)
+        countyPopDf.apply(UpdateNodePop, args=(graph, 'COUNTYGISJOIN', 'POPULATION', EdgeType.POPULATION, GEID.COUNTY), axis=1)
+
+        msg = "Updating State nodes..."
+        print(msg)
+        logger.info(msg)
+        statePopDf.apply(UpdateNodePop, args=(graph, 'GISJOIN', 'POPULATION', EdgeType.POPULATION, GEID.STATE), axis=1)
+
+        # Add the population layer
+        # We assume that counties are fully contained within one state each
+        msg = "Adding County-State population layer..."
+        print(msg)
+        logger.info(msg)
+        countyPopDf.apply(AddPopEdge, args=(graph, 'COUNTYGISJOIN', 'STATEGISJOIN', 'POPULATION', GEID.COUNTY, GEID.STATE), axis=1)
+
+
         # Save the graph
         msg = "Saving the graph..."
         print(msg)
         logger.info(msg)
         graph.SaveGraph(graphsDir)
+        msg = "Saved the graph."
+        print(msg)
+        logger.info(msg)
 
         # Reload it to make sure data types are correct
         graph.LoadGraph(graphsDir)
+        msg = "Graph re-loaded successfully."
+        print(msg)
+        logger.info(msg)
 
     else:
         # Log that we loaded the graph
@@ -2005,6 +2225,21 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                          distFunction=distFunc, model=VariogramModel.EXPONENTIAL,
                                          binSize=50.)
     krigingRuntime = time.time() - st
+
+    # Now, do it via population overlap
+    msg = "Population overlap equlization starting..."
+    print(msg)
+    logger.info(msg)
+    st = time.time()
+    popResDf = gator.SpatialEqualize(incomeByCountyDf, incomeByStateDf,
+                                       GEID.COUNTY, GEID.STATE, 'GISJOIN', 'GISJOIN',
+                                       'MedianHouseholdIncome', None, None,
+                                       AggMethod.MEDIAN, edgeType=EdgeType.POPULATION,
+                                       ignoreMissing=True, ignoreIncomplete=True)
+    popRuntime = time.time() - st
+
+    # Rename for clarity
+    popResDf = popResDf.rename(columns={"MedianHouseholdIncome": "MedianHouseholdIncome_Pop"})
     
     # Rename the ground truth column for clarity
     incomeByStateDf = incomeByStateDf.rename(
@@ -2013,42 +2248,135 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Fix the typing too
     incomeByStateDf['MedianHouseholdIncome_GT'] = incomeByStateDf['MedianHouseholdIncome_GT'].astype(float)
 
+    # Generate a combined dataset that averages all estimates together
+    print(arealResDf)
+    print(krigingResDf)
+    print(popResDf)
+    avgResDf = pd.merge(arealResDf, krigingResDf, left_index=True, right_on='GISJOIN')
+    print(avgResDf)
+    avgResDf = pd.merge(avgResDf, popResDf, left_on='GISJOIN', right_index=True)
+
+    avgResDf['AvgEstIncome'] = (avgResDf['MedianHouseholdIncome'] +
+                                avgResDf['MedianHouseholdIncome_est'] +
+                                avgResDf['MedianHouseholdIncome_Pop']) / 3.
+
     # Join with the "ground truth" for a comparison
     arealResDf = pd.merge(arealResDf, incomeByStateDf, left_index=True, right_on='GISJOIN')
     krigingResDf = pd.merge(krigingResDf, incomeByStateDf, on='GISJOIN')
+    popResDf = pd.merge(popResDf, incomeByStateDf, left_index=True, right_on='GISJOIN')
+    avgResDf = pd.merge(avgResDf, incomeByStateDf, on='GISJOIN')
 
     # Calculate error
     errorCol = 'RelError'
     arealResDf[errorCol+'_a'] = np.abs(arealResDf['MedianHouseholdIncome'] - arealResDf['MedianHouseholdIncome_GT']) / arealResDf['MedianHouseholdIncome_GT']
     krigingResDf[errorCol+'_k'] = np.abs(krigingResDf['MedianHouseholdIncome_est'] - krigingResDf['MedianHouseholdIncome_GT']) / krigingResDf['MedianHouseholdIncome_GT']
+    popResDf[errorCol+'_p'] = np.abs(popResDf['MedianHouseholdIncome_Pop'] - popResDf['MedianHouseholdIncome_GT']) / popResDf['MedianHouseholdIncome_GT']
+    avgResDf[errorCol+'_avg'] = np.abs(avgResDf['AvgEstIncome'] - avgResDf['MedianHouseholdIncome_GT']) / avgResDf['MedianHouseholdIncome_GT']
 
     # Calculate variance of error
     arealVar = arealResDf[errorCol+'_a'].var()
     krigingVar = krigingResDf[errorCol+'_k'].var()
+    popVar = popResDf[errorCol+'_p'].var()
+    avgVar = avgResDf[errorCol+'_avg'].var()
 
-    # Join the two results to compare errors directly
+    # Join the results to compare errors directly
     errorDf = pd.merge(arealResDf[['GISJOIN', errorCol+'_a']],
                        krigingResDf[['GISJOIN', errorCol+'_k']],
                        on='GISJOIN')
+    errorDf = pd.merge(errorDf,
+                       popResDf[['GISJOIN', errorCol+'_p']],
+                       on='GISJOIN')
+    errorDf = pd.merge(errorDf,
+                       avgResDf[['GISJOIN', errorCol+'_avg']],
+                       on='GISJOIN')
     
-    # Get an average error difference
-    errorDf['Error Difference'] = errorDf[errorCol+'_a'] - errorDf[errorCol+'_k']
-    avgErrorDiff = errorDf['Error Difference'].mean()
-    medErrorDiff = errorDf['Error Difference'].median()
+    # Get pairwise average error differences
+    errorDf['Error Difference: A-K'] = errorDf[errorCol+'_a'] - errorDf[errorCol+'_k']
+    avgErrorDiffAK = errorDf['Error Difference: A-K'].mean()
+    medErrorDiffAK = errorDf['Error Difference: A-K'].median()
+        
+    errorDf['Error Difference: A-P'] = errorDf[errorCol+'_a'] - errorDf[errorCol+'_p']
+    avgErrorDiffAP = errorDf['Error Difference: A-P'].mean()
+    medErrorDiffAP = errorDf['Error Difference: A-P'].median()
 
-    print(errorDf)
-    print(f"Average error difference (in %): {avgErrorDiff*100}")
-    print(f"Median error difference (in %): {medErrorDiff*100}")
+    errorDf['Error Difference: P-K'] = errorDf[errorCol+'_p'] - errorDf[errorCol+'_k']
+    avgErrorDiffPK = errorDf['Error Difference: P-K'].mean()
+    medErrorDiffPK = errorDf['Error Difference: P-K'].median()
 
-    print(f"Areal Error Variance: {arealVar}")
+    # Redo it for the avg (yes, this could have been a loop)
+    errorDf['Error Difference: Avg-A'] = errorDf[errorCol+'_avg'] - errorDf[errorCol+'_a']
+    avgErrorDiffAvgA = errorDf['Error Difference: Avg-A'].mean()
+    medErrorDiffAvgA = errorDf['Error Difference: Avg-A'].median()
+
+    errorDf['Error Difference: Avg-K'] = errorDf[errorCol+'_avg'] - errorDf[errorCol+'_k']
+    avgErrorDiffAvgK = errorDf['Error Difference: Avg-K'].mean()
+    medErrorDiffAvgK = errorDf['Error Difference: Avg-K'].median()
+
+    errorDf['Error Difference: Avg-P'] = errorDf[errorCol+'_avg'] - errorDf[errorCol+'_p']
+    avgErrorDiffAvgP = errorDf['Error Difference: Avg-P'].mean()
+    medErrorDiffAvgP = errorDf['Error Difference: Avg-P'].median()
+
+    
+
+    # Caclulate singular error averages
+    avgErrorAreal = errorDf[errorCol + '_a'].mean()
+    medErrorAreal = errorDf[errorCol + '_a'].median()
+
+    avgErrorKriging = errorDf[errorCol + '_k'].mean()
+    medErrorKriging = errorDf[errorCol + '_k'].median()
+
+    avgErrorPop = errorDf[errorCol + '_p'].mean()
+    medErrorPop = errorDf[errorCol + '_p'].median()
+
+    avgErrorAvg = errorDf[errorCol + '_avg'].mean()
+    medErrorAvg = errorDf[errorCol + '_avg'].median()
+
+    print(f"\nAreal - Kriging")
+    print(f"Average error difference (in %): {avgErrorDiffAK*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAK*100.}")
+    print(f"\nAreal - Population")
+    print(f"Average error difference (in %): {avgErrorDiffAP*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAP*100.}")
+    print(f"\nPopulation - Kriging")
+    print(f"Average error difference (in %): {avgErrorDiffPK*100.}")
+    print(f"Median error difference (in %): {medErrorDiffPK*100.}")
+
+    print(f"\n\nAveraged - Areal")
+    print(f"Average error difference (in %): {avgErrorDiffAvgA*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAvgA*100.}")
+    print(f"\nAveraged - Kriging")
+    print(f"Average error difference (in %): {avgErrorDiffAvgK*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAvgK*100.}")
+    print(f"\nAveraged - Population")
+    print(f"Average error difference (in %): {avgErrorDiffAvgP*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAvgP*100.}")
+
+    # Print average errors by method
+    print(f"\n\n\nAreal Mean Error (in %): {avgErrorAreal*100.}")
+    print(f"Areal Median Error (in %): {medErrorAreal*100.}")
+    print(f"\nKriging Mean Error (in %): {avgErrorKriging*100.}")
+    print(f"Kriging Median Error (in %): {medErrorKriging*100.}")
+    print(f"\nPopulation Mean Error (in %): {avgErrorPop*100.}")
+    print(f"Population Median Error (in %): {medErrorPop*100.}")
+    print(f"\nAveraged Estimate Mean Error (in %): {avgErrorAvg*100.}")
+    print(f"Averaged Estimate Median Error (in %): {medErrorAvg*100.}")
+
+    # Print error variance by method
+    print(f"\n\n\nAreal Error Variance: {arealVar}")
     print(f"Kriging Error Variance: {krigingVar}")
+    print(f"Population Error Variance: {popVar}")
+    print(f"Averaged Estimate Error Variance: {avgVar}")
 
-    print(f"Areal runtime: {arealRuntime}")
+    # Print runtime by method
+    print(f"\n\n\nAreal runtime: {arealRuntime}")
     print(f"Kriging runtime: {krigingRuntime}")
+    print(f"Population runtime: {popRuntime}")
 
     # Now, combine it with the state policy data for our results
     arealFinalDf = pd.merge(finalPolicyCountDf, arealResDf, on='GISJOIN')
     krigingFinalDf = pd.merge(finalPolicyCountDf, krigingResDf, on='GISJOIN')
+    popFinalDf = pd.merge(finalPolicyCountDf, popResDf, on='GISJOIN')
+    avgFinalDf = pd.merge(finalPolicyCountDf, avgResDf, on='GISJOIN')
     gtFinalDf = pd.merge(finalPolicyCountDf, incomeByStateDf, on='GISJOIN')
 
     # Sort for better plotting
@@ -2058,9 +2386,11 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     arealFinalDf.sort_values('Num Policies', inplace=True)
     krigingFinalDf.sort_values('Num Policies', inplace=True)
+    popFinalDf.sort_values('Num Policies', inplace=True)
+    avgFinalDf.sort_values('Num Policies', inplace=True)
     gtFinalDf.sort_values('Num Policies', inplace=True)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
 
     arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, color='red', label='Areal Overlap')
     arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, kind='scatter', color='red', s=50)
@@ -2068,23 +2398,36 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, color='blue', label='Kriging')
     krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, kind='scatter', color='blue', s=50)
 
+    popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='line', color='black', label='Pop. Overlap')
+    popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='scatter', color='black', s=50)
+
+    avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='line', color='orange', label='Averaged Est.')
+    avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='scatter', color='orange', s=50)
+
     gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='line', color='green', label='Ground Truth')
     gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='scatter', color='green', s=50)
 
+
+
     # Fix the legend size and location
-    ax.legend(loc='upper left', fontsize=18)
+    ax.legend(loc='upper left', fontsize=FIG_LABEL_FONT_SIZE)
 
     # Set labels and font sizes
-    labelFontSize = 24
-    titleFontSize = 32
 
-    plt.xlabel('Number of Green Policies', fontsize=labelFontSize)
-    plt.ylabel('Median Household Income (USD)', fontsize=labelFontSize)
-    plt.title('Number of Green Policies vs. Household Income', fontsize=titleFontSize)
+    plt.xlabel('Number of Green Policies', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Median Household Income (USD)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title('Number of Green Policies vs. Household Income', fontsize=FIG_TITLE_FONT_SIZE)
 
     # Fix font sizes for axis ticks
-    ax.tick_params(axis='both', which='major', labelsize=16)
-    ax.tick_params(axis='both', which='minor', labelsize=14)
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+    # Save the figure out
+    figDir = dataDir / Path("figures/")
+    if not figDir.exists():
+        figDir.mkdir()
+
+    plt.savefig(figDir / Path("policies-vs-income.png"))
 
 
     plt.show()
@@ -2264,7 +2607,7 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
     
 
     for stateAc in ['CO', 'OR', 'TN']:
@@ -2274,6 +2617,6 @@ if __name__ == "__main__":
     
     #plt.show()
 
-    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
     #RainVsChargingUsage(Path('./evaluation/weather'))

@@ -1263,7 +1263,6 @@ class Gator(object):
                 assert overlap <= origSize
 
                 # Calculate the factor
-                # TODO: Is this correct for both agg/deagg?
                 if origSize == 0:
                     # Avoid divide by zero error
                     newRow[self.FACTOR_COL] = 1
