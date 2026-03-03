@@ -137,6 +137,11 @@ def main(load: bool = True, overwrite: bool = False):
         vehicleDf = vehicleDf[vehicleDf[TIMESTAMP_COL] < dateCutoff]
         #vehicleDf = vehicleDf.sample(n=1000000, random_state=42)
 
+        print(vehicleDf)
+        print(vehicleDf[TIMESTAMP_COL].min())
+        print(vehicleDf[TIMESTAMP_COL].max())
+        quit()
+
         # Only get Denver zip codes for the roads
         roadDf = roadDf[roadDf['zip'].isin(DENVER_ZIPS)]
 

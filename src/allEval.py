@@ -492,7 +492,7 @@ def TemporalEval(dirPath: Path):
 
     # Now, select data for, arbitrarily, the first week of October, 2019
     startTs = pd.Timestamp(year=2019, month=10, day=1, hour=0, minute=0, second=0, tz='US/Pacific')
-    endTs = pd.Timestamp(year=2019, month=10, day=3, hour=0, minute=0, second=0, tz='US/Pacific')
+    endTs = pd.Timestamp(year=2019, month=10, day=7, hour=0, minute=0, second=0, tz='US/Pacific')
     dataDf = dataDf[(dataDf[startTsCol] >= startTs) & (dataDf[endTsCol] < endTs)]
     
     st = time.time()
@@ -577,7 +577,8 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     vehicleDf, roadDf = ntdas.LoadData(dataDir, numRows=-1)
 
     # Let's start with specific dates of data
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+    #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
     vehicleDf = vehicleDf[vehicleDf[ntdas.TIMESTAMP_COL] < dateCutoff]
 
     # We only want Denver ZIP codes for the roads
@@ -585,6 +586,12 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
     # Take out rows with a travel time of 0 minutes
     vehicleDf = vehicleDf[vehicleDf[ntdas.TRAVEL_TIME_COL] > 0]
+
+
+
+    print(vehicleDf)
+    print(vehicleDf[ntdas.TIMESTAMP_COL].min())
+    print(vehicleDf[ntdas.TIMESTAMP_COL].max())
 
     # We need to calculate an end timestamp for each measurement
     vehicleDf[ntdas.INTERVAL_COL] = vehicleDf.apply(ntdas.CalcInterval, axis=1)
@@ -666,6 +673,9 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         joinedDf = joinedDf.dropna(subset=[ntdas.SPEED_RATIO_COL])
 
         # Do the scaling
+        msg = "Starting scaling operation..."
+        print(msg)
+        logger.info(msg)
         st = time.time()
         resDf = gator.SpatioTemporalEqualize(joinedDf, sdGdf,
                                              TID.HOUR, GEID.ZCTA, GEID.SD,
@@ -673,14 +683,18 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
                                              None, ntdas.SPEED_RATIO_COL, None, None,
                                              AggMethod.MEAN, AggMethod.MEAN, EdgeType.AREA,
                                              True, True)
-        
-        print(f"Runtime: {time.time() - st}")
+        et = time.time()
+        msg = f"Finished scaling operation, runtime was {et - st} seconds."
+        print(msg)
+        logger.info(msg)
 
         # Fix the ordering of the multiindex
         resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
 
         # Save it for speed ups
         resDf.to_csv(resFile)
+
+    quit()
 
     # Make graphs for each school district
     groupedDfs = resDf.groupby(level=0)
@@ -1497,27 +1511,40 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     countyGt = countyEmissions[['GISJOIN', 'EmissionsPerVM']]
     countyGt = countyGt.rename(columns={'EmissionsPerVM': 'EmissionsPerVM_GT'})
 
+    # Generated a combined dataset that averages all estimates together
+    avgResDf = pd.merge(arealResDf, krigingResDf, left_index=True, right_on="GISJOIN")
+    avgResDf = pd.merge(avgResDf, populationResDf, left_on='GISJOIN', right_index=True)
+
+    # Calculate the combined estimate
+    avgResDf['AvgEstEmissions'] = (avgResDf['EmissionsPerVM'] + 
+                                   avgResDf['EmissionsPerVM_est'] +
+                                   avgResDf['EmissionsPerVM_Pop']) / 3.
+
     #print(countyEmissions)
 
     # Add the 'true' value via joining
     arealResDf = pd.merge(arealResDf, countyGt, left_index=True, right_on='GISJOIN')
     krigingResDf = pd.merge(krigingResDf, countyGt, on='GISJOIN')
     populationResDf = pd.merge(populationResDf, countyGt, left_index=True, right_on='GISJOIN')
+    avgResDf = pd.merge(avgResDf, countyGt, on='GISJOIN')
 
     # Calculate error
     errorCol = 'RelError'
     arealResDf[errorCol+'_a'] = np.abs(arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
     krigingResDf[errorCol+'_k'] = np.abs(krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
     populationResDf[errorCol + '_p'] = np.abs(populationResDf['EmissionsPerVM_Pop'] - populationResDf['EmissionsPerVM_GT']) / populationResDf['EmissionsPerVM_GT']
+    avgResDf[errorCol + '_avg'] = np.abs(avgResDf['AvgEstEmissions'] - avgResDf['EmissionsPerVM_GT']) / avgResDf['EmissionsPerVM_GT']
 
     # Calculate variance of error
     arealVar = arealResDf[errorCol+'_a'].var()
     krigingVar = krigingResDf[errorCol+'_k'].var()
     populationVar = populationResDf[errorCol + '_p'].var()
+    avgVar = avgResDf[errorCol + '_avg'].var()
 
     # Join the results to compare directly
     errorDf = pd.merge(arealResDf[['GISJOIN', errorCol + '_a']], krigingResDf[['GISJOIN', errorCol +'_k']], on='GISJOIN')
     errorDf = pd.merge(errorDf, populationResDf[['GISJOIN', errorCol + '_p']], on='GISJOIN')
+    errorDf = pd.merge(errorDf, avgResDf[['GISJOIN', errorCol + '_avg']], on='GISJOIN')
 
     # Get pairwise average error differences
     errorDf['Error Difference: A-K'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_k']
@@ -1532,6 +1559,19 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     avgErrorDiffPK = errorDf['Error Difference: P-K'].mean()
     medErrorDiffPK = errorDf['Error Difference: P-K'].median()
 
+    # Redo it for the avg (yes, this could have been a loop and a function)
+    errorDf['Error Difference: Avg-A'] = errorDf[errorCol+'_avg'] - errorDf[errorCol+'_a']
+    avgErrorDiffAvgA = errorDf['Error Difference: Avg-A'].mean()
+    medErrorDiffAvgA = errorDf['Error Difference: Avg-A'].median()
+
+    errorDf['Error Difference: Avg-K'] = errorDf[errorCol+'_avg'] - errorDf[errorCol+'_k']
+    avgErrorDiffAvgK = errorDf['Error Difference: Avg-K'].mean()
+    medErrorDiffAvgK = errorDf['Error Difference: Avg-K'].median()
+
+    errorDf['Error Difference: Avg-P'] = errorDf[errorCol+'_avg'] - errorDf[errorCol+'_p']
+    avgErrorDiffAvgP = errorDf['Error Difference: Avg-P'].mean()
+    medErrorDiffAvgP = errorDf['Error Difference: Avg-P'].median()
+
     # Caclulate singular error averages
     avgErrorAreal = errorDf[errorCol + '_a'].mean()
     medErrorAreal = errorDf[errorCol + '_a'].median()
@@ -1541,6 +1581,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     avgErrorPopulation = errorDf[errorCol + '_p'].mean()
     medErrorPopulation = errorDf[errorCol + '_p'].median()
+
+    avgErrorAvg = errorDf[errorCol + '_avg'].mean()
+    medErrorAvg = errorDf[errorCol + '_avg'].median()
 
 
     # Print out average and median error difference for each pair of methods
@@ -1554,6 +1597,16 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     print(f"Average error difference (in %): {avgErrorDiffPK*100.}")
     print(f"Median error difference (in %): {medErrorDiffPK*100.}")
 
+    print(f"\n\nAveraged - Areal")
+    print(f"Average error difference (in %): {avgErrorDiffAvgA*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAvgA*100.}")
+    print(f"\nAveraged - Kriging")
+    print(f"Average error difference (in %): {avgErrorDiffAvgK*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAvgK*100.}")
+    print(f"\nAveraged - Population")
+    print(f"Average error difference (in %): {avgErrorDiffAvgP*100.}")
+    print(f"Median error difference (in %): {medErrorDiffAvgP*100.}")
+
     # Print average errors by method
     print(f"\n\n\nAreal Mean Error (in %): {avgErrorAreal*100.}")
     print(f"Areal Median Error (in %): {medErrorAreal*100.}")
@@ -1561,11 +1614,14 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     print(f"Kriging Median Error (in %): {medErrorKriging*100.}")
     print(f"\nPopulation Mean Error (in %): {avgErrorPopulation*100.}")
     print(f"Population Median Error (in %): {medErrorPopulation*100.}")
+    print(f"\nAveraged Estimate Mean Error (in %): {avgErrorAvg*100.}")
+    print(f"Averaged Estimate Median Error (in %): {medErrorAvg*100.}")
 
     # Print error variance by method
     print(f"\n\n\nAreal Error Variance: {arealVar}")
     print(f"Kriging Error Variance: {krigingVar}")
     print(f"Population Error Variance: {populationVar}")
+    print(f"Averaged Estimate Error Variance: {avgVar}")
 
     # Print runtime by method
     print(f"\n\n\nAreal runtime: {arealRuntime}")
@@ -1583,6 +1639,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     charCols = ['POPULATION', 'POPDENSITY', 'POPLANDDENSITY', 'LANDWATERRATIO', 'LOGPOP']
 
     for characteristic in charCols:
+
+        #TODO: Remove to plot everything
+        break
 
         # Make a new figure
         fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -1603,7 +1662,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Do the same thing, but with the error differences
     errorCols = {'Error Difference: A-K': 'red',
                  'Error Difference: A-P': 'blue',
-                 'Error Difference: P-K': 'green'}
+                 'Error Difference: P-K': 'green'
+                 }
     
 
     for characteristic in charCols:
@@ -1741,7 +1801,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Put everything in a dictionary for organization
     resDfs = {'Areal': arealResDf,
                'Kriging': krigingResDf,
-               'Population': populationResDf}
+               'Population': populationResDf,
+               'Averaged': avgResDf}
     
     # Join the emissions results with the EV registration
     joinedFinalDfs = {}
@@ -1757,18 +1818,18 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         regsComparisonDf = pd.merge(regsResDf, regsResPopDf, left_index=True, right_index=True)
 
         # Calculate relative difference, using the areal version as "ground truth"
-        regsComparisonDf['Percent Difference'] = ((regsComparisonDf['EV_Count_Pop'] - regsComparisonDf['EV_Count']) / regsComparisonDf['EV_Count'])*100.
+        regsComparisonDf['Percent Difference'] = ((regsComparisonDf['EV_Count_Pop'] - regsComparisonDf['EV_Count']) / regsComparisonDf['EV_Count'])
 
         # Get statistics for the difference
-        regsMeanDiff = regsComparisonDf['Percent Difference'].mean()
-        regsMedDiff = regsComparisonDf['Percent Difference'].median()
+        regsMeanDiff = regsComparisonDf['Percent Difference'].mean()*100.
+        regsMedDiff = regsComparisonDf['Percent Difference'].median()*100.
         regsDiffVar = regsComparisonDf['Percent Difference'].var()
 
         print(regsComparisonDf)
         print('\nStatistics for difference between areal and population-based methods for EV registrations')
         print(f'Mean percent difference: {regsMeanDiff}')
         print(f'Median percent difference: {regsMedDiff}')
-        print(f'Percent difference variance: {regsDiffVar}')
+        print(f'Error difference variance: {regsDiffVar}')
 
     else:
         regsComparisonDf = None
@@ -1822,18 +1883,30 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             colors[k] = 'blue'
         elif 'Population' in k:
             colors[k] = 'black'
+        elif 'Averaged' in k:
+            colors[k] = 'orange'
     
+
+    names = []
+    popNames = []
     for k in joinedFinalDfs:
         curDf = joinedFinalDfs[k]
         if 'Pop-based' in k:
             curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=allAxes['Population'], color=colors[k])
+            popNames.append(k)
         else:
             curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=allAxes['Areal'], color=colors[k])
+            names.append(k)
 
     # Plot the ground truth as well
     joinedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=allAxes['Areal'], color='green')
+    names.append('Ground Truth')
+    allAxes['Areal'].legend(names)
+
     if 'Population' in joinedFinalDfs:
         joinedFinalDfs['Population'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=allAxes['Population'], color='green')
+        popNames.append('Ground Truth')
+        allAxes['Population'].legend(popNames)
     
     print(f'\nFinished {stateAc} analysis.\n')
 
@@ -2303,7 +2376,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     avgErrorDiffPK = errorDf['Error Difference: P-K'].mean()
     medErrorDiffPK = errorDf['Error Difference: P-K'].median()
 
-    # Redo it for the avg (yes, this could have been a loop)
+    # Redo it for the avg (yes, this could have been a loop and a function)
     errorDf['Error Difference: Avg-A'] = errorDf[errorCol+'_avg'] - errorDf[errorCol+'_a']
     avgErrorDiffAvgA = errorDf['Error Difference: Avg-A'].mean()
     medErrorDiffAvgA = errorDf['Error Difference: Avg-A'].median()
@@ -2317,8 +2390,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     medErrorDiffAvgP = errorDf['Error Difference: Avg-P'].median()
 
     
-
-    # Caclulate singular error averages
+    # Calculate singular error averages
     avgErrorAreal = errorDf[errorCol + '_a'].mean()
     medErrorAreal = errorDf[errorCol + '_a'].median()
 
@@ -2331,6 +2403,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     avgErrorAvg = errorDf[errorCol + '_avg'].mean()
     medErrorAvg = errorDf[errorCol + '_avg'].median()
 
+    # Print out average and median error difference for each pair of methods
     print(f"\nAreal - Kriging")
     print(f"Average error difference (in %): {avgErrorDiffAK*100.}")
     print(f"Median error difference (in %): {medErrorDiffAK*100.}")
@@ -2610,13 +2683,12 @@ if __name__ == "__main__":
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
     
 
-    for stateAc in ['CO', 'OR', 'TN']:
-        break
+    for stateAc in ['CT']:#['TN']:#['OR']:#['CT']:#, 'OR', 'TN']:
         EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                     loadGraph=True)
     
-    #plt.show()
+    plt.show()
 
-    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
     #RainVsChargingUsage(Path('./evaluation/weather'))
