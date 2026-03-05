@@ -22,11 +22,11 @@ matplotlib.use('qt5agg')
 FIG_SIZE_FACTOR = 3
 FIG_SIZE = (6.4*FIG_SIZE_FACTOR, 4.8*FIG_SIZE_FACTOR)
 
-FIG_LABEL_FONT_SIZE = 24
-FIG_TITLE_FONT_SIZE = 32
+FIG_LABEL_FONT_SIZE = 36#24
+FIG_TITLE_FONT_SIZE = 48#32
 
-FIG_MAJOR_AXIS_TICK_SIZE = 16
-FIG_MINOR_AXIS_TICK_SIZE = 14
+FIG_MAJOR_AXIS_TICK_SIZE = 24#16
+FIG_MINOR_AXIS_TICK_SIZE = 21#14
 
 
 # State acronym to FIPS code map
@@ -484,8 +484,8 @@ def TemporalEval(dirPath: Path):
     dataCol = 'EnergykWh'
 
     st = time.time()
-    monthlyResDf = None#gator.TemporalEqualize(dataDf, TID.MONTH, intervalCol,
-                       #            dataCol, AggMethod.SUM)
+    monthlyResDf = gator.TemporalEqualize(dataDf, TID.MONTH, intervalCol,
+                                   dataCol, AggMethod.SUM)
     runTime = time.time() - st
 
     print(f"Final runtime for monthly data: {runTime} seconds")
@@ -515,14 +515,15 @@ def TemporalEval(dirPath: Path):
     ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
+    # Fix legend fontsize
+    ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
+
     figDir = dirPath / Path("figures/")
     if not figDir.exists():
         figDir.mkdir()
 
     plt.savefig(figDir / Path("daily-charger-energy.png"))
-    plt.show()
-    
-    quit()
+    #plt.show()
     
     # Begin plotting
     fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -530,7 +531,7 @@ def TemporalEval(dirPath: Path):
     monthlyResDf.plot(y=dataCol, ax=ax)
 
     # Fix legend fontsize
-    ax.legend(fontsize=18)
+    ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
     # Set labels and font sizes
     plt.xlabel('Date', fontsize=FIG_LABEL_FONT_SIZE)
@@ -1063,7 +1064,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Read in the emissions data
     # We only need the 'City' and 'County' sheets
     allEmissions = pd.read_excel(dataDir / 'cityAndCountyEmissions.xlsb',
-                                 sheet_name=['City', 'County'])#, nrows=5000)
+                                 sheet_name=['City', 'County'], nrows=5000)
     cityEmissions = allEmissions['City']
     countyEmissions = allEmissions['County']
 
@@ -1910,6 +1911,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     
     print(f'\nFinished {stateAc} analysis.\n')
 
+    return errorDf, errorCol
+
 
 def ExtractFIPSFromGEOID(row: pd.Series, geoIdCol: str) -> str:
 
@@ -2682,10 +2685,23 @@ if __name__ == "__main__":
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
     
-
+    errorDfs = {}
     for stateAc in ['CT']:#['TN']:#['OR']:#['CT']:#, 'OR', 'TN']:
-        EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
-                    loadGraph=True)
+        errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
+                                        loadGraph=True)
+    
+
+    # Plot a boxplot of all the errors
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    for stateAc in errorDfs:
+        curDf, errorCol = errorDfs[stateAc]
+        print(curDf)
+        print(errorCol)
+
+        curDf.boxplot(column=[errorCol+'_a', errorCol+'_k', errorCol+'_p', errorCol+'_avg'],
+                      ax=ax)
+    
+
     
     plt.show()
 
