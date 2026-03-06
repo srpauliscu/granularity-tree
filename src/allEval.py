@@ -1064,7 +1064,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Read in the emissions data
     # We only need the 'City' and 'County' sheets
     allEmissions = pd.read_excel(dataDir / 'cityAndCountyEmissions.xlsb',
-                                 sheet_name=['City', 'County'], nrows=5000)
+                                 sheet_name=['City', 'County'])#, nrows=5000)
     cityEmissions = allEmissions['City']
     countyEmissions = allEmissions['County']
 
@@ -1904,7 +1904,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     names.append('Ground Truth')
     allAxes['Areal'].legend(names)
 
-    if 'Population' in joinedFinalDfs:
+    if not regsResPopDf is None:
         joinedFinalDfs['Population'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=allAxes['Population'], color='green')
         popNames.append('Ground Truth')
         allAxes['Population'].legend(popNames)
@@ -2468,19 +2468,19 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     fig, ax = plt.subplots(figsize=FIG_SIZE)
 
-    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, color='red', label='Areal Overlap')
+    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, color='red', label='Areal Overlap', lw=2)
     arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, kind='scatter', color='red', s=50)
 
-    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, color='blue', label='Kriging')
+    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, color='blue', label='Kriging', lw=2)
     krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, kind='scatter', color='blue', s=50)
 
-    popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='line', color='black', label='Pop. Overlap')
+    popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='line', color='black', label='Pop. Overlap', lw=2)
     popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='scatter', color='black', s=50)
 
-    avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='line', color='orange', label='Averaged Est.')
+    avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='line', color='orange', label='Averaged Est.', lw=2)
     avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='scatter', color='orange', s=50)
 
-    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='line', color='green', label='Ground Truth')
+    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='line', color='green', label='Ground Truth', lw=2)
     gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='scatter', color='green', s=50)
 
 
@@ -2498,12 +2498,51 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
+    ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
+
     # Save the figure out
     figDir = dataDir / Path("figures/")
     if not figDir.exists():
         figDir.mkdir()
 
     plt.savefig(figDir / Path("policies-vs-income.png"))
+
+    # We also want to get a boxplot for the errors
+    
+    # First, rename the columns for a better plot
+    colMapper = {
+            errorCol+'_a': 'Areal',
+            errorCol+'_k': 'Kriging',
+            errorCol+'_p': 'Population',
+            errorCol+'_avg': 'Averaged'
+    }
+    errorDf = errorDf.rename(columns=colMapper)
+
+    # Multiply each error by 100 for the percentage
+    for c in list(colMapper.values()):
+        errorDf[c] = errorDf[c]*100.
+
+    # Generate a new figure
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+    # Plot all 4 error columns for this state
+    props = dict(linewidth=3)
+    dotProps = dict(marker='o', markersize=12, markeredgewidth=3)
+    errorDf.boxplot(column=['Areal', 'Kriging', 'Population', 'Averaged'],
+                    ax=ax, grid=False, boxprops=props, whiskerprops=props,
+                    capprops=props, medianprops=props, flierprops=dotProps)
+    
+    # Fix plot labels and sizes
+    plt.xlabel('Change of Support Method', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Relative Error (%)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title(f'Relative Error of Estimation of Median Income', fontsize=FIG_TITLE_FONT_SIZE)
+
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+    #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+    plt.savefig(figDir / Path("income-est-boxplot.png"))
 
 
     plt.show()
@@ -2686,25 +2725,69 @@ if __name__ == "__main__":
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
     
     errorDfs = {}
-    for stateAc in ['CT']:#['TN']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['TN', 'CT', 'OR']:#['OR']:#['CT']:#, 'OR', 'TN']:
+        break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
     
 
     # Plot a boxplot of all the errors
-    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    #fig, ax = plt.subplots(figsize=FIG_SIZE)
+    finalDf = None
     for stateAc in errorDfs:
+
+        # New figure for each state since the scales are mismatched
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+
         curDf, errorCol = errorDfs[stateAc]
-        print(curDf)
-        print(errorCol)
 
-        curDf.boxplot(column=[errorCol+'_a', errorCol+'_k', errorCol+'_p', errorCol+'_avg'],
-                      ax=ax)
+        # All columns except the first should be floats
+        for c in curDf.columns[1:]:
+            curDf[c] = curDf[c].astype(float)
+
+        # Add the state in for groupby later
+        curDf['STATE'] = stateAc
+
+        # Rename the columns for a better plot
+        curDf = curDf.rename(columns={
+            errorCol+'_a': 'Areal',
+            errorCol+'_k': 'Kriging',
+            errorCol+'_p': 'Population',
+            errorCol+'_avg': 'Averaged'
+        })
+
+        # Plot all 4 error columns for this state
+        curDf.boxplot(column=['Areal', 'Kriging', 'Population', 'Averaged'],
+                      ax=ax, grid=False)
+        
+        # Fix plot labels and sizes
+        plt.xlabel('Method', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Relative Error for{ACRO_TO_STATE[stateAc]}, by Method', fontsize=FIG_TITLE_FONT_SIZE)
+
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+        
+        ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+
+        # Concatenate with the other results
+        if finalDf is None:
+            finalDf = curDf
+        else:
+            finalDf = pd.concat([finalDf, curDf])
+        
+
+        
+
+    # Plot all boxplots together
+    #finalDf.boxplot(column=[errorCol+'_a', errorCol+'_k', errorCol+'_p', errorCol+'_avg'],
+    #                ax=ax, grid=False, by='STATE')
+
+
     
+    #plt.show()
 
-    
-    plt.show()
-
-    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
     #RainVsChargingUsage(Path('./evaluation/weather'))

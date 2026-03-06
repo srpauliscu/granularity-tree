@@ -21,6 +21,38 @@ from src.entities import *
 
 
 
+
+
+
+df = pd.DataFrame({"col1": [1,2,3], "col2": [4,5,6], "col3": [7,8,9]})
+df1 = pd.DataFrame({"col1": [4], "col2": [7], "col3": [10]})
+
+df2 = pd.concat([df, df1])
+
+df['col4'] = 10
+
+print(df)
+print(df2)
+
+
+
+quit()
+
+df = pd.DataFrame({"col1": [1], "col2": [2], "col3": [3]})
+
+print(df)
+dft = df.transpose()
+print(dft)
+print(dft.reset_index(drop=True))
+
+
+
+
+quit()
+
+
+
+
 class Node(object):
 
     def __init__(self, id):
