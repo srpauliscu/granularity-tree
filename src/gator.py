@@ -608,7 +608,7 @@ class Gator(object):
                                                    ignoreMissing=ignoreMissing,
                                                    ignoreIncomplete=ignoreIncomplete)
         
-        
+
         # Kriging will always be a summation of the value factors
         allNewRows = []
         for dn in samples:
@@ -1106,6 +1106,19 @@ class Gator(object):
         # the factor to multiply the numerical data by
         # The actual operation depends on 'method'
 
+        # Before this, take some measures of the factors to try and determine where
+        # estimation is worse
+
+        print(f"\n\n\nFactor stats for {method}-{edgeType}, source col {sourceDataCol}")
+
+        lowFactorDf = expandedDf[expandedDf[self.FACTOR_COL] <= .90]
+        print(f"\nThe ratio of imperfect weights to total weights is {lowFactorDf.shape[0] / expandedDf.shape[0]}")
+
+        print("\nFactor statistics:")
+        print(f"Mean: {expandedDf[self.FACTOR_COL].mean()}")
+        print(f"Median: {expandedDf[self.FACTOR_COL].median()}")
+        print(f"Variance: {expandedDf[self.FACTOR_COL].var()}\n\n\n")
+
         if type(method) == AggMethod:
             resDf = self.Aggregate(expandedDf, sourceDataCol, method,
                                    self.DEST_COL, self.FACTOR_COL, self.VALUE_FACTOR_COL)
@@ -1117,8 +1130,8 @@ class Gator(object):
             msg = f"Invalid method of type {type(method)} used."
             self.logger.error(msg)
             raise TypeError(msg)
-        
-        # 6.) Error calculation
+
+        # 6.) Error calculation (incomplete)
 
         # Do a one-sided join to inform each source-dest node pair of the result
         rsuffix = '_r'

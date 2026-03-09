@@ -28,6 +28,9 @@ FIG_TITLE_FONT_SIZE = 48#32
 FIG_MAJOR_AXIS_TICK_SIZE = 24#16
 FIG_MINOR_AXIS_TICK_SIZE = 21#14
 
+BP_PROPS = dict(linewidth=3)
+BP_DOT_PROPS = dict(marker='o', markersize=12, markeredgewidth=3)
+
 
 # State acronym to FIPS code map
 STATE_AC_TO_FIPS = {
@@ -812,7 +815,7 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
 
             if stateAc == 'TX':
                 # We also need to account for TX El Paso's range
-                epRange = STATE_AC_TO_FIPS['TXEP']
+                epRange = STATE_AC_ZIP_RANGE['TXEP']
                 resDf = resDf[((resDf['ZIP_INT'] >= stateRange[0]) & (resDf['ZIP_INT'] <= stateRange[1])) | 
                               (resDf['ZIP_INT'].isin(stateRange[2:])) | 
                               ((resDf['ZIP_INT'] >= epRange[0]) & (resDf['ZIP_INT'] <= epRange[1]))]
@@ -2526,11 +2529,9 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     fig, ax = plt.subplots(figsize=FIG_SIZE)
 
     # Plot all 4 error columns for this state
-    props = dict(linewidth=3)
-    dotProps = dict(marker='o', markersize=12, markeredgewidth=3)
     errorDf.boxplot(column=['Areal', 'Kriging', 'Population', 'Averaged'],
-                    ax=ax, grid=False, boxprops=props, whiskerprops=props,
-                    capprops=props, medianprops=props, flierprops=dotProps)
+                    ax=ax, grid=False, boxprops=BP_PROPS, whiskerprops=BP_PROPS,
+                    capprops=BP_PROPS, medianprops=BP_PROPS, flierprops=BP_DOT_PROPS)
     
     # Fix plot labels and sizes
     plt.xlabel('Change of Support Method', fontsize=FIG_LABEL_FONT_SIZE)
@@ -2725,8 +2726,7 @@ if __name__ == "__main__":
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
     
     errorDfs = {}
-    for stateAc in ['TN', 'CT', 'OR']:#['OR']:#['CT']:#, 'OR', 'TN']:
-        break
+    for stateAc in ['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
     
@@ -2734,6 +2734,10 @@ if __name__ == "__main__":
     # Plot a boxplot of all the errors
     #fig, ax = plt.subplots(figsize=FIG_SIZE)
     finalDf = None
+    figDir = Path('./evaluation/emissions/figures')
+    if not figDir.exists():
+        figDir.mkdir()
+    
     for stateAc in errorDfs:
 
         # New figure for each state since the scales are mismatched
@@ -2744,6 +2748,9 @@ if __name__ == "__main__":
         # All columns except the first should be floats
         for c in curDf.columns[1:]:
             curDf[c] = curDf[c].astype(float)
+
+            # Multiply by 100 to get percentage error
+            curDf[c] = curDf[c]*100.
 
         # Add the state in for groupby later
         curDf['STATE'] = stateAc
@@ -2758,17 +2765,21 @@ if __name__ == "__main__":
 
         # Plot all 4 error columns for this state
         curDf.boxplot(column=['Areal', 'Kriging', 'Population', 'Averaged'],
-                      ax=ax, grid=False)
+                      ax=ax, grid=False, boxprops=BP_PROPS, whiskerprops=BP_PROPS,
+                      capprops=BP_PROPS, medianprops=BP_PROPS, flierprops=BP_DOT_PROPS)
         
         # Fix plot labels and sizes
         plt.xlabel('Method', fontsize=FIG_LABEL_FONT_SIZE)
-        plt.ylabel('Relative Error', fontsize=FIG_LABEL_FONT_SIZE)
-        plt.title(f'Relative Error for{ACRO_TO_STATE[stateAc]}, by Method', fontsize=FIG_TITLE_FONT_SIZE)
+        plt.ylabel('Relative Error (%)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Relative Error for {ACRO_TO_STATE[stateAc]}', fontsize=FIG_TITLE_FONT_SIZE)
 
         ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
         
-        ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
+        #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Save the figure out
+        plt.savefig(figDir / Path(f"{stateAc}-emissions.png"))
 
 
         # Concatenate with the other results
@@ -2786,8 +2797,8 @@ if __name__ == "__main__":
 
 
     
-    #plt.show()
+    plt.show()
 
-    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
     #RainVsChargingUsage(Path('./evaluation/weather'))
