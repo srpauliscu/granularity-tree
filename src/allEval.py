@@ -5,6 +5,7 @@ import numpy as np
 import time
 import matplotlib
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Get functions for loading the NTDAS data for CS 3
 import ntdas
@@ -28,7 +29,8 @@ FIG_TITLE_FONT_SIZE = 48#32
 FIG_MAJOR_AXIS_TICK_SIZE = 24#16
 FIG_MINOR_AXIS_TICK_SIZE = 21#14
 
-BP_PROPS = dict(linewidth=3)
+LW = 3
+BP_PROPS = dict(linewidth=LW)
 BP_DOT_PROPS = dict(marker='o', markersize=12, markeredgewidth=3)
 
 
@@ -501,25 +503,49 @@ def TemporalEval(dirPath: Path):
     st = time.time()
     dailyResDf = gator.TemporalEqualize(dataDf, TID.HOUR, intervalCol,
                                         dataCol, AggMethod.SUM)
+    
+    # For better plotting
+    dailyResDf = dailyResDf.set_index(dailyResDf.index.tz_convert('US/Pacific'))
+    monthlyResDf = monthlyResDf.set_index(monthlyResDf.index.tz_convert('US/Pacific'))
+
+    betterName = {'EnergykWh': 'Total Energy Used'}
+    dailyResDf = dailyResDf.rename(columns=betterName)
+    monthlyResDf = monthlyResDf.rename(columns=betterName)
+
+
     runTime = time.time() - st
 
     print(f"Final runtime for hourly data: {runTime} seconds")
 
     # Begin plotting the hourly data
     fig, ax = plt.subplots(figsize=FIG_SIZE)
-    dailyResDf.plot(y=dataCol, ax=ax)
+    dailyResDf.plot(y='Total Energy Used', ax=ax, lw=LW)
+
+    #dataDf.plot(x=startTsCol, y=dataCol, ax=ax, kind='scatter')
+
+    # Adjust font sizes for this case study
+    global FIG_LABEL_FONT_SIZE
+    global FIG_TITLE_FONT_SIZE
+    global FIG_MAJOR_AXIS_TICK_SIZE
+    global FIG_MINOR_AXIS_TICK_SIZE
+
+    factor = 1.2
+    FIG_LABEL_FONT_SIZE *= factor
+    FIG_TITLE_FONT_SIZE *= factor
+    FIG_MAJOR_AXIS_TICK_SIZE *= factor
+    FIG_MINOR_AXIS_TICK_SIZE *= factor
 
     # Fix font sizes
-    plt.xlabel('Time', fontsize=FIG_LABEL_FONT_SIZE)
-    plt.ylabel('Total Energy Used (kWh)', fontsize=FIG_LABEL_FONT_SIZE)
-    plt.title('Total Hourly Energy Used By EV Chargers, Palo Alto', fontsize=FIG_TITLE_FONT_SIZE)
+    plt.xlabel('Timestamp (PDT)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Energy (kWh)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title('Hourly Energy Used by EV Chargers', fontsize=FIG_TITLE_FONT_SIZE)
 
     # Fix font sizes for axis ticks
     ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
     # Fix legend fontsize
-    ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
+    ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE, loc="upper left")
 
     figDir = dirPath / Path("figures/")
     if not figDir.exists():
@@ -531,15 +557,19 @@ def TemporalEval(dirPath: Path):
     # Begin plotting
     fig, ax = plt.subplots(figsize=FIG_SIZE)
 
-    monthlyResDf.plot(y=dataCol, ax=ax)
+    #plt.show()
+
+    #quit()
+
+    monthlyResDf.plot(y='Total Energy Used', ax=ax, lw=LW)
 
     # Fix legend fontsize
     ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
     # Set labels and font sizes
     plt.xlabel('Date', fontsize=FIG_LABEL_FONT_SIZE)
-    plt.ylabel('Total Energy Used (kWh)', fontsize=FIG_LABEL_FONT_SIZE)
-    plt.title('Total Monthly Energy Used By EV Chargers, Palo Alto', fontsize=FIG_TITLE_FONT_SIZE)
+    plt.ylabel('Energy (kWh)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title('Monthly Energy Used By EV Chargers', fontsize=FIG_TITLE_FONT_SIZE)
 
     # Fix font sizes for axis ticks
     ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
@@ -562,7 +592,7 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     Scenario: Planning new bus routes and we want to know traffic trends.
 
     Want: Traffic density by school district (avg speed reduction per hour per district)
-    Have: Average speed data for vehicles during travel at individual TSs where location
+    Have: Average speed data for vehicleimport tqdms during travel at individual TSs where location
     is given by ZIP code
     
     Need: Avg speed reduction per hour, group by school district via areal overlap
@@ -581,8 +611,9 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     vehicleDf, roadDf = ntdas.LoadData(dataDir, numRows=-1)
 
     # Let's start with specific dates of data
-    #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
+    #dateCutoff = pd.Timestamp(year=2020, month=10, day=6, hour=0, minute=0, second=0)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+    #dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
     vehicleDf = vehicleDf[vehicleDf[ntdas.TIMESTAMP_COL] < dateCutoff]
 
     # We only want Denver ZIP codes for the roads
@@ -698,9 +729,109 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         # Save it for speed ups
         resDf.to_csv(resFile)
 
-    quit()
-
     # Make graphs for each school district
+
+    plotCount = 0
+    figRows = 1
+    figCols = 1
+    dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    print("Beginning plotting...")
+
+    for lv, group in tqdm(resDf.groupby(level=0)):
+
+        # We only need a couple specific plots
+        #if not ("Denver" in ntdas.DENVER_SD_IDS[lv] or "Gilpin" in ntdas.DENVER_SD_IDS[lv]):
+        #    continue
+
+        if plotCount % (figRows * figCols) == 0:
+            curFig, axisPairs = plt.subplots(figCols, figRows, figsize=(15,9))
+            if figRows*figCols > 1:
+                axisPairs = axisPairs.flatten()
+
+        # Do this to get rid of the GISJOIN as an axis label
+        group = group.droplevel(0)
+
+        # Pass a specific axis pair to pd.plot
+        if figRows*figCols > 1:
+            curAxPair = axisPairs[plotCount % (figRows * figCols)]
+        else:
+            curAxPair = axisPairs
+
+        # Now, we want to group and plot each day as separate lines
+        days = group.groupby(group.index.get_level_values(0).day_name())
+        legendList = []
+        handleList = []
+        for day, dayGroup in days:
+
+            if day == "Saturday" or day == "Sunday":
+                # Skip weekends
+                continue
+
+            # Plot by hour of the day
+            dayGroup.set_index(dayGroup.index.get_level_values(0).hour, inplace=True)
+            dayGroup.plot(kind='line', rot=0, ax=curAxPair, linewidth=2.5)
+
+            # Save handles and labels to fix legend later
+            handleList.append(curAxPair.get_lines()[-1])
+            legendList.append(day)
+
+        # Set labels
+        curAxPair.set_xlabel('Hour of Day', fontsize=20)
+        curAxPair.set_ylabel('Ratio of Recorded to Typical Speed', fontsize=20)
+        curAxPair.set_title(ntdas.DENVER_SD_IDS[lv] + ", 10/5/20 - 10/9/20", fontsize=24)
+
+        # Set limits for specific graphs
+        if 'Denver' in ntdas.DENVER_SD_IDS[lv]:
+            curAxPair.set_ylim(bottom=0.5, top=1.0)
+        elif 'Gilpin' in ntdas.DENVER_SD_IDS[lv]:
+            curAxPair.set_ylim(bottom=0.6, top=1.2)
+
+        # Fix tick sizes and fonts
+        curAxPair.tick_params(axis='x', which='major', labelsize=16)
+        curAxPair.tick_params(axis='y', which='major', labelsize=16)
+        curAxPair.tick_params(axis='x', which='minor', labelsize=16)
+        curAxPair.tick_params(axis='both', length=12, width=3)
+
+        # Reorder the legend labels
+        newHandleList = []
+        for d in dayOrder:
+            curI = legendList.index(d)
+            newHandleList.append(handleList[curI])
+
+
+        # Fix the legend label
+        curAxPair.legend(newHandleList, dayOrder, fontsize=16)
+
+        # Add lines for the times
+        xticks = curAxPair.get_xticks()
+        ymin, ymax = curAxPair.get_ylim()
+        for i, xt in enumerate(xticks):
+            if i==0:
+                continue
+            curAxPair.vlines(xt, ymin-.2, ymax+.2, color='gray', linestyle=':', linewidth=1.25)
+
+        # Fix overlapping labels
+        plt.tight_layout()
+        curFig.tight_layout()
+        curFig.set_tight_layout(True)
+
+
+        plotCount += 1
+
+        plt.savefig(f"./data/ntdas/smallerFigs/{DENVER_SD_IDS[lv]}.png", dpi=1600)
+
+        # Clear figures and axes for memory issues
+        plt.clf()
+        plt.cla()
+        plt.close()
+
+        # For testing
+        if plotCount >= 24:
+            break
+
+    plt.show()
+
+    '''
     groupedDfs = resDf.groupby(level=0)
     count = 0
     for sd, df in groupedDfs:
@@ -709,13 +840,16 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         fig, ax = plt.subplots(figsize=FIG_SIZE)
 
         # Set labels and font sizes
-        plt.xlabel('Hour', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.xlabel('Timestamp (MDT)', fontsize=FIG_LABEL_FONT_SIZE)
         plt.ylabel('Ratio of Mean to Reference Speed', fontsize=FIG_LABEL_FONT_SIZE)
         plt.title(f'Speed Ratio per Hour for School District {sd}', fontsize=FIG_TITLE_FONT_SIZE)
 
         # Fix font sizes for axis ticks
         ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Fix legend font size
+        ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Drop the first level of the multiindex
         df = df.droplevel(level=0)
@@ -724,13 +858,17 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         # (Doesn't account for DST, but this is data from one day in Oct.)
         df.index = df.index.tz_localize('MST')
 
+        # Rename the column for clarity
+        #df = df.rename(columns={'a_speed_ratio_col': 'Ratio'})
+
         # Plot the results
-        df.plot(use_index=True, y='a_speed_ratio_col_', ax=ax, xlabel='Timestamp')
+        df.plot(use_index=True, y='a_speed_ratio_col', ax=ax, lw=2)
         count += 1
         if count > 4:
             break
     
     plt.show()
+    '''
 
 def ExtractCols(df: pd.DataFrame, colDict: dict) -> pd.DataFrame:
 
@@ -2723,10 +2861,11 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
     
     errorDfs = {}
     for stateAc in ['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+        break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
     
@@ -2797,7 +2936,7 @@ if __name__ == "__main__":
 
 
     
-    plt.show()
+    #plt.show()
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
