@@ -612,8 +612,8 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
     # Let's start with specific dates of data
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=6, hour=0, minute=0, second=0)
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
-    #dateCutoff = pd.Timestamp(year=2020, month=10, day=9, hour=23, minute=59, second=59)
+    #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
     vehicleDf = vehicleDf[vehicleDf[ntdas.TIMESTAMP_COL] < dateCutoff]
 
     # We only want Denver ZIP codes for the roads
@@ -628,77 +628,71 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     print(vehicleDf[ntdas.TIMESTAMP_COL].min())
     print(vehicleDf[ntdas.TIMESTAMP_COL].max())
 
-    # We need to calculate an end timestamp for each measurement
-    vehicleDf[ntdas.INTERVAL_COL] = vehicleDf.apply(ntdas.CalcInterval, axis=1)
+    if not (loadResults and resFile.exists()):
 
-    # Calculate ratio of speed to reference speed
-    vehicleDf[ntdas.SPEED_RATIO_COL] = vehicleDf[ntdas.SPEED_COL] / vehicleDf[ntdas.REFERENCE_COL]
+        # We need to calculate an end timestamp for each measurement
+        vehicleDf[ntdas.INTERVAL_COL] = vehicleDf.apply(ntdas.CalcInterval, axis=1)
 
-    # We need to convert from ZIP to ZCTA
-    zctaGdf = LoadShapefile(shapefileDir, 'zcta')
+        # Calculate ratio of speed to reference speed
+        vehicleDf[ntdas.SPEED_RATIO_COL] = vehicleDf[ntdas.SPEED_COL] / vehicleDf[ntdas.REFERENCE_COL]
 
-    ztzGdf = gpd.read_file("./data/zipToZcta.csv")
+        graph = GranularityGraph('STEvalGraph', Path('./logs/STEvalGraph.log'))
 
-    # For now, only use CO data
-    ztzGdf = ztzGdf[ztzGdf['STATE'] == 'CO']
+        # We need to convert from ZIP to ZCTA
+        zctaGdf = LoadShapefile(shapefileDir, 'zcta')
 
-    ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
+        ztzGdf = gpd.read_file("./data/zipToZcta.csv")
 
-    # Do the actual conversion
-    roadDf[ntdas.ZCTA_COL] = roadDf.apply(ZipZctaConverter, args=(ztzDict,), axis=1)
+        # For now, only use CO data
+        ztzGdf = ztzGdf[ztzGdf['STATE'] == 'CO']
 
-    # Convert from ZCTA to GISJOIN
-    zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
-    roadDf['GISJOIN'] = roadDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
+        ztzDict = pd.Series(ztzGdf['zcta'].values, index=ztzGdf['ZIP_CODE']).to_dict()
 
-    # Remove rows with ZIPS we didn't have
-    roadDf = roadDf[roadDf['GISJOIN'] != ""]
+        # Do the actual conversion
+        roadDf[ntdas.ZCTA_COL] = roadDf.apply(ZipZctaConverter, args=(ztzDict,), axis=1)
 
-    # Get the school districts now
-    sdGdf = LoadShapefile(shapefileDir, 'school')
+        # Convert from ZCTA to GISJOIN
+        zctaDict = pd.Series(zctaGdf['GISJOIN'].values, index=zctaGdf['ZCTA5CE20']).to_dict()
+        roadDf['GISJOIN'] = roadDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
 
-    # We only need CO school districs
-    sdGdf = sdGdf[sdGdf['STATEFP'] == ntdas.CO_FIPS]
+        # Remove rows with ZIPS we didn't have
+        roadDf = roadDf[roadDf['GISJOIN'] != ""]
 
-    # Now, setup a graph
+        # Get the school districts now
+        sdGdf = LoadShapefile(shapefileDir, 'school')
 
-    graph = GranularityGraph('STEvalGraph', Path('./logs/STEvalGraph.log'))
+        # We only need CO school districs
+        sdGdf = sdGdf[sdGdf['STATEFP'] == ntdas.CO_FIPS]
 
-    # Try and load it first
-    if loadGraph:
-        msg = "Loading graph..."
-        print(msg)
-        logger.info(msg)
-        graph.LoadGraph(graphsDir)
-    else:
-        msg = "Constructing new graph..."
-        print(msg)
-        logger.info(msg)
+        # Try and load it first
+        if loadGraph:
+            msg = "Loading graph..."
+            print(msg)
+            logger.info(msg)
+            graph.LoadGraph(graphsDir)
+        else:
 
-        msg = "Adding school district-ZCTA layer..."
-        print(msg)
-        logger.info(msg)
-        graph = AddLevel(graph, sdGdf, zctaGdf,
-                         n1Type=GEID.SD, n2Type=GEID.ZCTA)
-        
-        # Save it out
-        graph.SaveGraph(graphsDir)
-    
-    # Check if we have an existing result file first
-    if loadResults and resFile.exists():
-        resDf = pd.read_csv(resFile)
+            # Now, setup the graph
+            msg = "Constructing new graph..."
+            print(msg)
+            logger.info(msg)
 
-        # Make the interval column timestamps
-        resDf[ntdas.INTERVAL_COL] = pd.to_datetime(resDf[ntdas.INTERVAL_COL])
+            msg = "Adding school district-ZCTA layer..."
+            print(msg)
+            logger.info(msg)
+            graph = AddLevel(graph, sdGdf, zctaGdf,
+                            n1Type=GEID.SD, n2Type=GEID.ZCTA)
+            
+            # Save it out
+            graph.SaveGraph(graphsDir)
 
-        # Reform the multiindex
-        resDf = resDf.set_index(['GISJOIN', ntdas.INTERVAL_COL])
-    
-    # Otherwise, do the work
-    else:
+        # Do the work
 
         # Get a gator object
         gator = Gator(graph, Path('./logs/STEvalGator.log'))
+
+        # Drop uneeded columns before the join
+        roadDf = roadDf[[ntdas.SEG_ID_COL, "GISJOIN"]]
 
         # Before aggregation, we need to do a join
         # to assign ZCTAs to each vehicle reading
@@ -706,6 +700,10 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
         # Drop NANs
         joinedDf = joinedDf.dropna(subset=[ntdas.SPEED_RATIO_COL])
+
+        # Delete the dataframes to save memory
+        del vehicleDf
+        del roadDf
 
         # Do the scaling
         msg = "Starting scaling operation..."
@@ -728,7 +726,22 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
         # Save it for speed ups
         resDf.to_csv(resFile)
+        
+    # Load the results file
+    else:
 
+        msg = "Loading results file..."
+        print(msg)
+        logger.info(msg)
+
+        resDf = pd.read_csv(resFile)
+
+        # Make the interval column timestamps
+        resDf[ntdas.INTERVAL_COL] = pd.to_datetime(resDf[ntdas.INTERVAL_COL])
+
+        # Reform the multiindex
+        resDf = resDf.set_index(['GISJOIN', ntdas.INTERVAL_COL])
+    
     # Make graphs for each school district
 
     plotCount = 0
@@ -736,12 +749,17 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     figCols = 1
     dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     print("Beginning plotting...")
+    print(resDf)
 
     for lv, group in tqdm(resDf.groupby(level=0)):
 
+        # Skip missing ids
+        if not lv in ntdas.DENVER_SD_IDS:
+            continue
+
         # We only need a couple specific plots
-        #if not ("Denver" in ntdas.DENVER_SD_IDS[lv] or "Gilpin" in ntdas.DENVER_SD_IDS[lv]):
-        #    continue
+        if not ("Denver" in ntdas.DENVER_SD_IDS[lv] or "Gilpin" in ntdas.DENVER_SD_IDS[lv]):
+            continue
 
         if plotCount % (figRows * figCols) == 0:
             curFig, axisPairs = plt.subplots(figCols, figRows, figsize=(15,9))
@@ -776,9 +794,9 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
             legendList.append(day)
 
         # Set labels
-        curAxPair.set_xlabel('Hour of Day', fontsize=20)
-        curAxPair.set_ylabel('Ratio of Recorded to Typical Speed', fontsize=20)
-        curAxPair.set_title(ntdas.DENVER_SD_IDS[lv] + ", 10/5/20 - 10/9/20", fontsize=24)
+        curAxPair.set_xlabel('Hour of Day', fontsize=FIG_LABEL_FONT_SIZE)
+        curAxPair.set_ylabel('Ratio of Recorded to\nReference Speed', fontsize=FIG_LABEL_FONT_SIZE)
+        curAxPair.set_title(ntdas.DENVER_SD_IDS[lv] + ",\n10/5/20 - 10/9/20", fontsize=FIG_TITLE_FONT_SIZE)
 
         # Set limits for specific graphs
         if 'Denver' in ntdas.DENVER_SD_IDS[lv]:
@@ -787,20 +805,22 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
             curAxPair.set_ylim(bottom=0.6, top=1.2)
 
         # Fix tick sizes and fonts
-        curAxPair.tick_params(axis='x', which='major', labelsize=16)
-        curAxPair.tick_params(axis='y', which='major', labelsize=16)
-        curAxPair.tick_params(axis='x', which='minor', labelsize=16)
+        curAxPair.tick_params(axis='x', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        curAxPair.tick_params(axis='y', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        curAxPair.tick_params(axis='x', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
         curAxPair.tick_params(axis='both', length=12, width=3)
 
         # Reorder the legend labels
         newHandleList = []
         for d in dayOrder:
+            if d not in legendList:
+                continue
             curI = legendList.index(d)
             newHandleList.append(handleList[curI])
 
 
         # Fix the legend label
-        curAxPair.legend(newHandleList, dayOrder, fontsize=16)
+        curAxPair.legend(newHandleList, dayOrder, fontsize=FIG_MAJOR_AXIS_TICK_SIZE, loc='upper center')
 
         # Add lines for the times
         xticks = curAxPair.get_xticks()
@@ -808,7 +828,7 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         for i, xt in enumerate(xticks):
             if i==0:
                 continue
-            curAxPair.vlines(xt, ymin-.2, ymax+.2, color='gray', linestyle=':', linewidth=1.25)
+            curAxPair.vlines(xt, ymin-.2, ymax+.2, color='gray', linestyle=':', linewidth=2)
 
         # Fix overlapping labels
         plt.tight_layout()
@@ -818,7 +838,7 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
         plotCount += 1
 
-        plt.savefig(f"./data/ntdas/smallerFigs/{DENVER_SD_IDS[lv]}.png", dpi=1600)
+        plt.savefig(f"./evaluation/st/figures/{ntdas.DENVER_SD_IDS[lv]}.png", dpi=400)
 
         # Clear figures and axes for memory issues
         plt.clf()
@@ -983,6 +1003,9 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
             # Use the existing file we have
             resDf = pd.read_csv(dataDir / Path('spatial/ev_registration.csv'))
 
+            # Filter to ensure unique vehicles
+            resDf = resDf.drop_duplicates(subset=['ID'], inplace=False)
+
             # Drop unnecessary columns
             resDf = resDf[['Primary Customer City', 'Primary Customer State', 'Vehicle Year']]
 
@@ -990,6 +1013,10 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
             resDf = resDf.rename(columns={'Primary Customer City': 'City',
                                           'Primary Customer State': 'State', 
                                           'Vehicle Year': 'Vehicle Count'})
+            
+            # Fix the column so that vehicles are counted correctly,
+            # as the other datasets use SUM
+            resDf['Vehicle Count'] = 1
             
             # Filter to only CT
             resDf = resDf[resDf['State'] == stateAc]
@@ -1164,7 +1191,8 @@ def PlaceFIPSConverter(row: pd.Series, placeDict: dict, col: str):
 
 
 def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
-                graphsDir: Path = Path("./graphs"), stateAc: str = "VA"):
+                graphsDir: Path = Path("./graphs"), stateAc: str = "VA",
+                figDir: Path = Path("./evaluation/emissions/figures")):
 
 
     ''' Outline
@@ -1309,6 +1337,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # TODO: For testing, pick 1 state
     cityEmissions = cityEmissions[cityEmissions['StateAbbr'] == stateAc]
+
+    print(f"{stateAc} has {len(cityEmissions)} cities for emissions data.")
 
     ### Counties ###
 
@@ -1986,37 +2016,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         
         joinedFinalDfs[k] = joinedFinalDfs[k].sort_values('EV_Count')
 
-    # Setup the figure(s)
-    fig, ax = plt.subplots(figsize=FIG_SIZE)
-    allAxes = {'Areal': ax}
-
-    # Set labels and font sizes
-    plt.xlabel('EV Count', fontsize=FIG_LABEL_FONT_SIZE)
-    plt.ylabel('Emissions per Vehicle Mile (MT of CO2e/mi)', fontsize=FIG_LABEL_FONT_SIZE)
-    plt.title(f'Total Emissions per Vehicle Mile Traveled by EV Count for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
-
-    # Fix font sizes for axis ticks
-    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
-    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
-
-    allAxes = {'Areal': ax}
-
-    # Do the same for the pop-based EV registrations, if applicable
-    if not regsResPopDf is None:
-        fig, axp = plt.subplots(figsize=FIG_SIZE)
-
-        # Set labels and font sizes
-        plt.xlabel('EV Count (Pop-based)', fontsize=FIG_LABEL_FONT_SIZE)
-        plt.ylabel('Emissions per Vehicle Mile (MT of CO2e/mi)', fontsize=FIG_LABEL_FONT_SIZE)
-        plt.title(f'Total Emissions per Vehicle Mile Traveled by Pop-based EV Count for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
-
-        # Fix font sizes for axis ticks
-        axp.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
-        axp.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
-        
-        allAxes['Population'] = axp
-
-    # Plot the results
+    # Set up colors for lines
     colors = {}
     for k in joinedFinalDfs:
         if 'Areal' in k:
@@ -2028,27 +2028,68 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         elif 'Averaged' in k:
             colors[k] = 'orange'
     
-
+    # Plot the areal-based EV results first
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
     names = []
-    popNames = []
     for k in joinedFinalDfs:
         curDf = joinedFinalDfs[k]
         if 'Pop-based' in k:
-            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=allAxes['Population'], color=colors[k])
-            popNames.append(k)
+            continue
+        if 'Averaged' in k:
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2)
         else:
-            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=allAxes['Areal'], color=colors[k])
-            names.append(k)
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2)
+
+        names.append(k)
 
     # Plot the ground truth as well
-    joinedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=allAxes['Areal'], color='green')
+    joinedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2)
     names.append('Ground Truth')
-    allAxes['Areal'].legend(names)
+    ax.legend(names, fontsize=FIG_MAJOR_AXIS_TICK_SIZE)
 
+    # Set labels and font sizes
+    plt.xlabel('EV Count', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Emissions per VM (MT of CO2e/mi)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title(f'Total Emissions per VM by EV Count for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+    # Fix font sizes for axis ticks
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+
+    # Save the figure
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs.png"), dpi=600)
+
+    # Do the same for the pop-based EV registrations, if applicable
     if not regsResPopDf is None:
-        joinedFinalDfs['Population'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=allAxes['Population'], color='green')
+        fig, axp = plt.subplots(figsize=FIG_SIZE)
+
+        popNames = []
+        for k in joinedFinalDfs:
+            curDf = joinedFinalDfs[k]
+            if not 'Pop-based' in k:
+                continue
+            if 'Averaged' in k:
+                curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=axp, color=colors[k], lw=2)
+            else:
+                curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=axp, color=colors[k], lw=2)
+            popNames.append(k)
+
+        joinedFinalDfs['Population'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=axp, color='green', lw=2)
         popNames.append('Ground Truth')
-        allAxes['Population'].legend(popNames)
+        axp.legend(popNames, fontsize=FIG_MAJOR_AXIS_TICK_SIZE)
+
+        # Set labels and font sizes
+        plt.xlabel('EV Count (Pop-based)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Emissions per VM (MT of CO2e/mi)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Total Emissions per VM by Pop-based EV Count for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        axp.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        axp.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+            
+
+        plt.savefig(figDir / Path(f"{stateAc}-emissions-pop-evs.png"), dpi=600)
     
     print(f'\nFinished {stateAc} analysis.\n')
 
@@ -2861,15 +2902,14 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
     
     errorDfs = {}
-    for stateAc in ['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
-        break
+    for stateAc in ['CT']:#['CT','OR','TN', 'MN', 'VT']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+        #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
     
-
     # Plot a boxplot of all the errors
     #fig, ax = plt.subplots(figsize=FIG_SIZE)
     finalDf = None
@@ -2907,8 +2947,16 @@ if __name__ == "__main__":
                       ax=ax, grid=False, boxprops=BP_PROPS, whiskerprops=BP_PROPS,
                       capprops=BP_PROPS, medianprops=BP_PROPS, flierprops=BP_DOT_PROPS)
         
+        # Adjust font sizes for these boxplots
+
+        factor = 1.2
+        FIG_LABEL_FONT_SIZE *= factor
+        FIG_TITLE_FONT_SIZE *= factor
+        FIG_MAJOR_AXIS_TICK_SIZE *= factor
+        FIG_MINOR_AXIS_TICK_SIZE *= factor
+
         # Fix plot labels and sizes
-        plt.xlabel('Method', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.xlabel('Change of Support Method', fontsize=FIG_LABEL_FONT_SIZE)
         plt.ylabel('Relative Error (%)', fontsize=FIG_LABEL_FONT_SIZE)
         plt.title(f'Relative Error for {ACRO_TO_STATE[stateAc]}', fontsize=FIG_TITLE_FONT_SIZE)
 
@@ -2918,7 +2966,7 @@ if __name__ == "__main__":
         #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save the figure out
-        plt.savefig(figDir / Path(f"{stateAc}-emissions.png"))
+        plt.savefig(figDir / Path(f"{stateAc}-boxplot.png"), dpi=600)
 
 
         # Concatenate with the other results
@@ -2936,7 +2984,7 @@ if __name__ == "__main__":
 
 
     
-    #plt.show()
+    plt.show()
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
