@@ -959,7 +959,7 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
     resDf = None
     match stateAc:
 
-        case 'CO' | 'ME' | 'MN' | 'NJ' | 'NM' | 'NY' | 'NC' | 'OR' | 'TX' | 'VT':
+        case 'CO' | 'ME' | 'MN' | 'NJ' | 'NM' | 'NC' | 'OR' | 'TX' | 'VT':
 
             # Load the CSV
             resDf = pd.read_csv(dataDir / Path(f'emissions/evRegistrations/{stateAc}.csv'), low_memory=False)
@@ -1023,6 +1023,36 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
             
             return resDf, GEID.CITY, 'City', 'Vehicle Count'
         
+        case 'NY':
+
+            # Obtained from: https://www.nyserda.ny.gov/All-Programs/Drive-Clean-Rebate-For-Electric-Cars-Program/Rebate-Data/Data-on-Electric-Vehicles-and-Charging-Stations
+            
+            # Grab the file
+            resDf = pd.read_csv(dataDir / Path(f'emissions/evRegistrations/{stateAc}.csv'), low_memory=False)
+
+            # Grab only relevant columns (they have different names than the other files)
+            resDf = resDf[['ZIP Code', 'Registration Valid Date', 'DMV ID', 'Vehicle ID']]
+
+            # Only grab the 2016 vehicles for analysis
+            resDf = resDf[resDf['Registration Valid Date'].str.contains(r'^2016', regex=True)]
+
+            # Select only unique vehicle IDs
+            resDf = resDf.drop_duplicates(subset=['Vehicle ID'], inplace=False)
+
+            # Fix column names
+            #'ZIP Code', 'Registration Date', 'Vehicle Count']]
+            resDf = resDf.rename(columns={'Registration Valid Date': 'Registration Date',
+                                          'Vehicle ID': 'Vehicle Count'})
+            
+            # Fix the 'count' column to allow SUM to be used for everything
+            resDf['Vehicle Count'] = 1
+
+            # Add the state name in, just in case
+            resDf['State'] = stateAc
+
+            return resDf, GEID.ZIP, 'ZIP Code', 'Vehicle Count'
+
+
         case _:
             # Unrecognized acronym
             raise ValueError(f"Invalid state acronym of {stateAc}")
@@ -1338,7 +1368,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # TODO: For testing, pick 1 state
     cityEmissions = cityEmissions[cityEmissions['StateAbbr'] == stateAc]
 
-    print(f"{stateAc} has {len(cityEmissions)} cities for emissions data.")
 
     ### Counties ###
 
@@ -1363,6 +1392,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # TODO: For testing, pick 1 state
     countyEmissions = countyEmissions[countyEmissions['StateAbbr'] == stateAc]
+
+    print(f"{stateAc} has {len(cityEmissions)} cities and {len(countyEmissions)} counties for emissions data.")
+
 
     ### States ###
 
@@ -2905,18 +2937,31 @@ if __name__ == "__main__":
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
     
     errorDfs = {}
-    for stateAc in ['CT']:#['CT','OR','TN', 'MN', 'VT']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['NY']:#['MN']:#['CT','OR','TN','MN','VT']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
     
     # Plot a boxplot of all the errors
     #fig, ax = plt.subplots(figsize=FIG_SIZE)
+    quit()
+
+
     finalDf = None
     figDir = Path('./evaluation/emissions/figures')
     if not figDir.exists():
         figDir.mkdir()
-    
+
+    # Adjust font sizes for these boxplots
+    if len(errorDfs) > 0:
+        factor = 1.2
+    else:
+        factor = 1.0
+    FIG_LABEL_FONT_SIZE *= factor
+    FIG_TITLE_FONT_SIZE *= factor
+    FIG_MAJOR_AXIS_TICK_SIZE *= factor
+    FIG_MINOR_AXIS_TICK_SIZE *= factor
+
     for stateAc in errorDfs:
 
         # New figure for each state since the scales are mismatched
@@ -2946,14 +2991,7 @@ if __name__ == "__main__":
         curDf.boxplot(column=['Areal', 'Kriging', 'Population', 'Averaged'],
                       ax=ax, grid=False, boxprops=BP_PROPS, whiskerprops=BP_PROPS,
                       capprops=BP_PROPS, medianprops=BP_PROPS, flierprops=BP_DOT_PROPS)
-        
-        # Adjust font sizes for these boxplots
 
-        factor = 1.2
-        FIG_LABEL_FONT_SIZE *= factor
-        FIG_TITLE_FONT_SIZE *= factor
-        FIG_MAJOR_AXIS_TICK_SIZE *= factor
-        FIG_MINOR_AXIS_TICK_SIZE *= factor
 
         # Fix plot labels and sizes
         plt.xlabel('Change of Support Method', fontsize=FIG_LABEL_FONT_SIZE)
