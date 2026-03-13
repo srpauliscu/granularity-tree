@@ -1039,6 +1039,13 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
             # Select only unique vehicle IDs
             resDf = resDf.drop_duplicates(subset=['Vehicle ID'], inplace=False)
 
+            # Filter out erroneous (?) ZIP codes from other states
+            stateRange = STATE_AC_ZIP_RANGE[stateAc]
+            resDf['ZIP_INT'] = pd.to_numeric(resDf['ZIP Code'], errors='coerce')
+            resDf = resDf[((resDf['ZIP_INT'] >= stateRange[0]) & (resDf['ZIP_INT'] <= stateRange[1])) | 
+                (resDf['ZIP_INT'].isin(stateRange[2:]))]
+
+
             # Fix column names
             #'ZIP Code', 'Registration Date', 'Vehicle Count']]
             resDf = resDf.rename(columns={'Registration Valid Date': 'Registration Date',
@@ -1377,7 +1384,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Lowercase names for consistency
     countyGdf['NAME'] = countyGdf['NAME'].str.lower()
 
-    # TODO: For testing, only use one state
+    # Only grab the current state's counties
     countyGdf = countyGdf[countyGdf['STATEFP'] == STATE_AC_TO_FIPS[stateAc]]
     
 
@@ -1471,7 +1478,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Land to water ratio
     countyGdfComparison['LANDWATERRATIO'] = countyGdfComparison['ALAND'] / countyGdfComparison['AWATER']
 
-
     ### Graph Setup ###
     graph = GranularityGraph(f'emissionsPCGraph{stateAc}',
                              Path(f'./logs/emissionsPCGraph{stateAc}.log'))
@@ -1480,6 +1486,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     loadGraphStatus = Status.NOTEXISTS
     if loadGraph:
         loadGraphStatus = graph.LoadGraph(Path("./graphs"))
+
+    #print(countyGdf)
+    #quit()
 
     # If needed, create a fresh graph
     if loadGraphStatus != Status.SUCCESS:
@@ -1750,6 +1759,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     errorDf = pd.merge(errorDf, populationResDf[['GISJOIN', errorCol + '_p']], on='GISJOIN')
     errorDf = pd.merge(errorDf, avgResDf[['GISJOIN', errorCol + '_avg']], on='GISJOIN')
 
+    pd.set_option('display.max_rows', 10000000)
+    print(errorDf)
+
     # Get pairwise average error differences
     errorDf['Error Difference: A-K'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_k']
     avgErrorDiffAK = errorDf['Error Difference: A-K'].mean()
@@ -1842,6 +1854,20 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     errorCols = {errorCol+'_a': 'red', errorCol+'_k': 'blue', errorCol+'_p': 'green'}
     charCols = ['POPULATION', 'POPDENSITY', 'POPLANDDENSITY', 'LANDWATERRATIO', 'LOGPOP']
 
+    # For investigation, pick specific counties
+    if stateAc == 'NY':
+        specialCounties = ['G3600170', 'G3600830', 'G3600370',
+                        'G3600430', 'G3600450', 'G3600570',
+                        'G3601150', 'G3600210']
+        
+        #errorDf = errorDf[errorDf['GISJOIN'].isin(specialCounties)]
+        #errorComparisonGdf = errorComparisonGdf[errorComparisonGdf['GISJOIN'].isin(specialCounties)]
+
+        print('\nProblem counties:')
+        print(errorDf)
+
+
+
     for characteristic in charCols:
 
         #TODO: Remove to plot everything
@@ -1860,8 +1886,40 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Plot each error rate
+        names = []
         for ec in errorCols:
-            errorComparisonGdf.plot(x=characteristic, y=ec, kind='line', ax=ax, color=errorCols[ec])
+            errorComparisonGdf.plot(x=characteristic, y=ec, kind='scatter', ax=ax, color=errorCols[ec])
+            names.append(ec)
+        plt.legend(names)
+
+    # Plot matching and weight statistics
+    curMatchesDf = pd.DataFrame(MATCH_STAT_ROWS)
+    curMatchesDf = pd.merge(curMatchesDf, errorComparisonGdf, left_on='ID', right_on='GISJOIN')
+    weightStatsDf = pd.DataFrame(WEIGHT_ROWS)
+    curMatchesDf = pd.merge(curMatchesDf, weightStatsDf, on='ID')
+
+    for characteristic in ['Num matches', 'Avg distance', 'Stddev of distance',
+                           'Weight avg', 'Weight stddev', 'Lagrange', 'Error var contribution',
+                           'Model variance', 'Error variance']:
+        # Make a new figure
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+        # Set labels and font sizes
+        plt.xlabel(characteristic, fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error Difference', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Error difference vs. {characteristic} for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Plot each error rate
+        names = []
+        for ec in errorCols:
+            curMatchesDf.plot(x=characteristic, y=ec, kind='scatter', ax=ax, color=errorCols[ec])
+            names.append(ec)
+        
+        plt.legend(names)
 
     # Do the same thing, but with the error differences
     errorCols = {'Error Difference: A-K': 'red',
@@ -1888,8 +1946,16 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Plot each error rate
+        names = []
         for ec in errorCols:
-            errorComparisonGdf.plot(x=characteristic, y=ec, kind='line', ax=ax, color=errorCols[ec])
+            errorComparisonGdf.plot(x=characteristic, y=ec, kind='scatter', ax=ax, color=errorCols[ec])
+            names.append(ec)
+        
+        plt.legend(names)
+
+    plt.show()
+    quit()
+
 
     # Now, we want the EVs at the county level
     regsDf, keyType, keyCol, dataCol = LoadEVRegistration(Path('./evaluation'), stateAc)
@@ -1947,7 +2013,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         regsDf['GISJOIN'] = regsDf.apply(ZctaIdConverter, args=(zctaDict,), axis=1)
 
         # Drop rows with ZIPS we didn't have
-        #print(regsDf)
         regsDf = regsDf[regsDf['GISJOIN'] != ""]
 
         #fig, ax = plt.subplots()
@@ -1960,7 +2025,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         keyType = GEID.ZCTA
 
         #quit()
-
 
     # We already have city-county information in the graph,
     # so go ahead and do the aggregation
@@ -2029,7 +2093,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         regsMedDiff = regsComparisonDf['Percent Difference'].median()*100.
         regsDiffVar = regsComparisonDf['Percent Difference'].var()
 
-        print(regsComparisonDf)
+        #print(regsComparisonDf)
         print('\nStatistics for difference between areal and population-based methods for EV registrations')
         print(f'Mean percent difference: {regsMeanDiff}')
         print(f'Median percent difference: {regsMedDiff}')
@@ -2944,7 +3008,6 @@ if __name__ == "__main__":
     
     # Plot a boxplot of all the errors
     #fig, ax = plt.subplots(figsize=FIG_SIZE)
-    quit()
 
 
     finalDf = None

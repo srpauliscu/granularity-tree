@@ -17,9 +17,29 @@ from typing import Callable
 
 from src.entities import *
 
+from myTestTwo import DoSomething, FOO
 
 
 
+
+a1 = np.array([[1,2,3,4,5]])
+a2 = np.array([[1,1,1,1,1]])
+
+print(np.shape(a1))
+
+print(a1[0,:] @ a2[0,:])
+
+quit()
+
+for x in range(10):
+    DoSomething(x)
+print(FOO)
+
+
+
+
+
+quit()
 
 
 

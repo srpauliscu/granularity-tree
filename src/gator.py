@@ -17,10 +17,15 @@ from shapely.plotting import plot_points, plot_polygon
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
+import statistics
+
 import math
 
 from kGraph import *
 #from src.kGraph import GEID, TID, AggMethod, DeAggMethod, EdgeType
+
+MATCH_STAT_ROWS = []
+WEIGHT_ROWS = []
 
 # Function for pd.apply to calculate error bound
 def CalculateError(row: pd.Series, origDataCol: str, newDataCol: str):
@@ -721,6 +726,7 @@ class Gator(object):
 
             # For curve fitting, we need at least 3 matches, since
             # the max number of model parameters is 3
+
             if len(matches) < 3:
 
                 newMatches = []
@@ -773,6 +779,22 @@ class Gator(object):
                 
             # Save the final result
             allMatches[dn] = matches
+
+            # Print out stats
+            global MATCH_STAT_ROWS
+            distList = []
+            for mn in matches:
+                distList.append(distance(dn.centroid, mn.centroid))
+
+            print(f"\nDestination {dn.id} had {len(matches)} matches with the following dist stats:")
+            print(f"Avg distance: {sum(distList) / len(distList)}")
+            print(f"Var of distance: {statistics.stdev(distList)}")
+
+            newRow = {'ID': dn.id,
+                      'Num matches': len(matches),
+                      'Avg distance': (sum(distList) / len(distList)),
+                      'Stddev of distance': statistics.stdev(distList)}
+            MATCH_STAT_ROWS.append(newRow)
         
         # allMatches: {destNode: [sourceNode1, sourceNode2, ...], ...}
 
@@ -814,7 +836,7 @@ class Gator(object):
                           sourceDataCol, self.S_CENTROID_COL, distFunction)
                    for dn in sepSamples}
 
-        # Have each Kriger fit their variogram
+        # Have each Kriger fit their variogram and calculate weights
         weights = {}
         for dn in krigers:
 
@@ -824,18 +846,26 @@ class Gator(object):
             k.CalcC()
             weights[dn] = k.CalcWeights(dn)
 
-        
-        # 5.) Use each kriger to calculate weights
-        #weights = {}
-        for dn in krigers:
-            break
-            weights[dn] = krigers[dn].CalcWeights(dn)
-
         # Now, each entry in weights corresponds to the set of
         # source samples for that destination node
 
         # weights[dn] = (W, C, D)
 
+        # Save out the weights for stats
+        for dn in weights:
+            W, C, D = weights[dn]
+
+            WEIGHT_ROWS.append({'ID': dn.id,
+                                'Weight avg': np.mean(W[:len(W) - 1, 0]),
+                                'Weight stddev': np.std(W[:len(W) - 1, 0]),
+                                'Lagrange': W[-1,0],
+                                'Error var contribution': W[:,0] @ D[:,0],
+                                'Model variance': C[0,0],
+                                'Error variance': C[0,0]  - (W[:,0] @ D[:,0])})
+
+
+
+        # Add the weights into the samples
         for dn in sepSamples:
 
             W = weights[dn][0]
