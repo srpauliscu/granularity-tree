@@ -1899,15 +1899,22 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     curMatchesDf = pd.merge(curMatchesDf, weightStatsDf, on='ID')
 
     for characteristic in ['Num matches', 'Avg distance', 'Stddev of distance',
-                           'Weight avg', 'Weight stddev', 'Lagrange', 'Error var contribution',
-                           'Model variance', 'Error variance']:
+                           'Weight avg', 'Weight stddev', 'Lagrange',
+                           'Model variance', 'Error variance',
+                           'Param error mean', 'Param error median',
+                           'Param error stddev', 'Avg RMSE',
+                           'Median RMSE', 'Stddev RMSE']:
+
+        # TODO: Comment to plot investigation plots
+        break
+        
         # Make a new figure
         fig, ax = plt.subplots(figsize=FIG_SIZE)
 
         # Set labels and font sizes
         plt.xlabel(characteristic, fontsize=FIG_LABEL_FONT_SIZE)
-        plt.ylabel('Relative Error Difference', fontsize=FIG_LABEL_FONT_SIZE)
-        plt.title(f'Error difference vs. {characteristic} for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+        plt.ylabel('Relative Error', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Error vs. {characteristic} for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
 
         # Fix font sizes for axis ticks
         ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
@@ -1920,6 +1927,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             names.append(ec)
         
         plt.legend(names)
+
 
     # Do the same thing, but with the error differences
     errorCols = {'Error Difference: A-K': 'red',
@@ -1953,10 +1961,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         
         plt.legend(names)
 
-    plt.show()
-    quit()
-
-
+ 
     # Now, we want the EVs at the county level
     regsDf, keyType, keyCol, dataCol = LoadEVRegistration(Path('./evaluation'), stateAc)
 
@@ -2102,6 +2107,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     else:
         regsComparisonDf = None
 
+    # We only need to plot the actual results for new york
+    if not stateAc == 'NY':
+        return errorDf, errorCol
 
     # Sort for better plotting
     for k in joinedFinalDfs:
@@ -2132,14 +2140,17 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         if 'Pop-based' in k:
             continue
         if 'Averaged' in k:
-            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2)
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+            #curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='scatter', ax=ax, color=colors[k], s=50)
+
         else:
-            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2)
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+            #curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='scatter', ax=ax, color=colors[k], s=50)
 
         names.append(k)
 
     # Plot the ground truth as well
-    joinedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2)
+    joinedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2, marker='o', ms=10)
     names.append('Ground Truth')
     ax.legend(names, fontsize=FIG_MAJOR_AXIS_TICK_SIZE)
 
@@ -2166,12 +2177,12 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             if not 'Pop-based' in k:
                 continue
             if 'Averaged' in k:
-                curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=axp, color=colors[k], lw=2)
+                curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=axp, color=colors[k], lw=2, marker='o', ms=10)
             else:
-                curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=axp, color=colors[k], lw=2)
+                curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=axp, color=colors[k], lw=2, marker='o', ms=10)
             popNames.append(k)
 
-        joinedFinalDfs['Population'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=axp, color='green', lw=2)
+        joinedFinalDfs['Population'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=axp, color='green', lw=2, marker='o', ms=10)
         popNames.append('Ground Truth')
         axp.legend(popNames, fontsize=FIG_MAJOR_AXIS_TICK_SIZE)
 
@@ -2576,7 +2587,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                          'MedianHouseholdIncome', None, None,
                                          AggMethod.KRIGING, edgeType=EdgeType.AREA,
                                          ignoreMissing=True, ignoreIncomplete=True,
-                                         distFunction=distFunc, model=VariogramModel.EXPONENTIAL,
+                                         distFunction=distFunc, model=VariogramModel.LINEAR,
                                          binSize=50.)
     krigingRuntime = time.time() - st
 
@@ -2999,9 +3010,15 @@ if __name__ == "__main__":
     #TemporalEval(Path('./evaluation/temporal'))
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+
+
+    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+
+
+    quit()
     
     errorDfs = {}
-    for stateAc in ['NY']:#['MN']:#['CT','OR','TN','MN','VT']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['CT','OR','TN','MN','VT','NY']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
@@ -3086,7 +3103,5 @@ if __name__ == "__main__":
 
     
     plt.show()
-
-    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
     #RainVsChargingUsage(Path('./evaluation/weather'))

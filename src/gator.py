@@ -1,6 +1,6 @@
 
 
-
+import warnings
 import numpy as np
 import logging
 import json
@@ -14,6 +14,7 @@ from pprint import pprint
 from shapely import centroid, distance
 from shapely.geometry import Point, shape, MultiPoint
 from shapely.plotting import plot_points, plot_polygon
+from scipy.optimize import OptimizeWarning
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
@@ -155,7 +156,7 @@ class Kriger(object):
 
     def FitSemivariogram(self, 
                          model: Callable = VariogramModel.EXPONENTIAL)\
-                            -> np.ndarray:
+                            -> tuple[np.ndarray, None | OptimizeWarning, dict]:
         
         # Make sure the avgs have been calced
         if self.sampleCovs is None:
@@ -163,11 +164,32 @@ class Kriger(object):
         
 
 
+        # Force an error from a warning so we can react
+        warnings.filterwarnings('error')
+
         # Use the averaged covariances to fit the given model
-        params, cov = curve_fit(model,
-                                self.sampleCovs.index,
-                                self.sampleCovs[self.COV_COL])
-        
+        e = None
+        try:
+            params, cov, infoDict, _, _ = curve_fit(model,
+                                    self.sampleCovs.index,
+                                    self.sampleCovs[self.COV_COL],
+                                    full_output=True)
+        except OptimizeWarning as w:
+
+            # Save out the error
+            e = w
+
+            # Reset the warnings so we can rerun it
+            warnings.resetwarnings()
+            params, cov, infoDict, _, _ = curve_fit(model,
+                        self.sampleCovs.index,
+                        self.sampleCovs[self.COV_COL],
+                        full_output=True)
+
+
+        # Make sure the warnings are reset
+        warnings.resetwarnings()
+            
 
         # Save the params and the model
         self.curParams = list(params)
@@ -175,7 +197,7 @@ class Kriger(object):
 
         # Return the covariance from fitting the model
         # in case we want to use it for error calcs
-        return cov
+        return cov, e, infoDict
     
     def CalcC(self) -> None:
 
@@ -293,7 +315,8 @@ class Kriger(object):
         W = np.linalg.inv(self.C) @ D
 
         # Sanity check that the weights sum to 1 
-        assert math.isclose(np.sum(W[:numRows, 0]), 1)
+        #print(np.sum(W[:numRows,0]))
+        assert math.isclose(np.sum(W[:numRows, 0]), 1)#, rel_tol=1e-5)
 
         # Return all matrices for testing purposes
         return W, self.C, D
@@ -842,27 +865,46 @@ class Gator(object):
 
             k = krigers[dn]
             k.CalcSemivariogram(binSize=binSize)
-            k.FitSemivariogram(model)
+            cov, e, infoDict = k.FitSemivariogram(model)
             k.CalcC()
             weights[dn] = k.CalcWeights(dn)
 
-        # Now, each entry in weights corresponds to the set of
-        # source samples for that destination node
-
-        # weights[dn] = (W, C, D)
-
-        # Save out the weights for stats
-        for dn in weights:
             W, C, D = weights[dn]
+            rmse = np.sqrt(infoDict['fvec']**2)
 
-            WEIGHT_ROWS.append({'ID': dn.id,
+            # Dict for error investigation
+            investigationDict = {'ID': dn.id,
                                 'Weight avg': np.mean(W[:len(W) - 1, 0]),
                                 'Weight stddev': np.std(W[:len(W) - 1, 0]),
                                 'Lagrange': W[-1,0],
                                 'Error var contribution': W[:,0] @ D[:,0],
                                 'Model variance': C[0,0],
-                                'Error variance': C[0,0]  - (W[:,0] @ D[:,0])})
+                                'Error variance': C[0,0]  - (W[:,0] @ D[:,0]),
+                                'Avg RMSE': np.mean(rmse),
+                                'Median RMSE': np.median(rmse),
+                                'Stddev RMSE': np.std(rmse)}
 
+            # Calculate statiscis for parameter certainty, if possible
+            if not e is None:
+                print(f"Dest {dn.id} threw an optimization warning.\n")
+                investigationDict['Param error mean'] = np.nan
+                investigationDict['Param error median'] = np.nan
+                investigationDict['Param error stddev'] = np.nan
+                                  
+            else:
+                err = np.sqrt(np.diag(cov))
+                investigationDict['Param error mean'] = np.mean(err)
+                investigationDict['Param error median'] = np.median(err)
+                investigationDict['Param error stddev'] = np.std(err)
+
+            WEIGHT_ROWS.append(investigationDict)
+
+
+
+        # Now, each entry in weights corresponds to the set of
+        # source samples for that destination node
+
+        # weights[dn] = (W, C, D)
 
 
         # Add the weights into the samples
