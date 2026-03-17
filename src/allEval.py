@@ -1057,6 +1057,9 @@ def LoadEVRegistration(dataDir: Path, stateAc: str) -> tuple[pd.DataFrame, GEID,
             # Add the state name in, just in case
             resDf['State'] = stateAc
 
+            #print(resDf.shape)
+            #quit()
+
             return resDf, GEID.ZIP, 'ZIP Code', 'Vehicle Count'
 
 
@@ -1760,6 +1763,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     errorDf = pd.merge(errorDf, avgResDf[['GISJOIN', errorCol + '_avg']], on='GISJOIN')
 
     pd.set_option('display.max_rows', 10000000)
+    pd.set_option('display.max_columns', 10000)
     print(errorDf)
 
     # Get pairwise average error differences
@@ -1852,7 +1856,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Plot the error rate against each characterstic
     errorCols = {errorCol+'_a': 'red', errorCol+'_k': 'blue', errorCol+'_p': 'green'}
-    charCols = ['POPULATION', 'POPDENSITY', 'POPLANDDENSITY', 'LANDWATERRATIO', 'LOGPOP']
+    charCols = ['POPULATION', 'POPDENSITY', 'POPLANDDENSITY', 'LANDWATERRATIO', 'LOGPOP', 'ALAND', 'AWATER']
 
     # For investigation, pick specific counties
     if stateAc == 'NY':
@@ -1865,8 +1869,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
         print('\nProblem counties:')
         print(errorDf)
-
-
 
     for characteristic in charCols:
 
@@ -1898,15 +1900,18 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     weightStatsDf = pd.DataFrame(WEIGHT_ROWS)
     curMatchesDf = pd.merge(curMatchesDf, weightStatsDf, on='ID')
 
-    for characteristic in ['Num matches', 'Avg distance', 'Stddev of distance',
+    krigingInvCols = ['Num matches', 'Avg distance', 'Stddev of distance',
                            'Weight avg', 'Weight stddev', 'Lagrange',
                            'Model variance', 'Error variance',
                            'Param error mean', 'Param error median',
                            'Param error stddev', 'Avg RMSE',
-                           'Median RMSE', 'Stddev RMSE']:
+                           'Median RMSE', 'Stddev RMSE']
+    krigingInvCols = ["Avg RMSE", 'Model variance', 'Error variance']
+
+    for characteristic in krigingInvCols:
 
         # TODO: Comment to plot investigation plots
-        break
+        #break
         
         # Make a new figure
         fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -1914,7 +1919,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         # Set labels and font sizes
         plt.xlabel(characteristic, fontsize=FIG_LABEL_FONT_SIZE)
         plt.ylabel('Relative Error', fontsize=FIG_LABEL_FONT_SIZE)
-        plt.title(f'Error vs. {characteristic} for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+        plt.title(f'Error vs. {characteristic} for {stateAc} (Kriging)', fontsize=FIG_TITLE_FONT_SIZE)
 
         # Fix font sizes for axis ticks
         ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
@@ -1927,7 +1932,97 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             names.append(ec)
         
         plt.legend(names)
+    
+    # Also plot the weight stats for interpolation, by method
+    global INTERP_FACTOR_ROWS
+    arealFactors = pd.DataFrame(INTERP_FACTOR_ROWS[EdgeType.AREA])
+    popFactors = pd.DataFrame(INTERP_FACTOR_ROWS[EdgeType.POPULATION])
 
+    # Fix column names for clarity
+    curMatchesDf = curMatchesDf.rename(columns={'Weight avg': 'Kriging Weight Mean',
+                                                'Weight stddev': 'Kriging Weight Std',
+                                                'Weight sum': 'Kriging Weight Sum'})
+    arealFactors = arealFactors.rename(columns={'Weight avg': 'Areal Weight Mean',
+                                                'Weight stddev': 'Areal Weight Std',
+                                                'Percent low': 'Areal Percent Low',
+                                                'Weight sum':  'Areal Weight Sum'})
+    popFactors = popFactors.rename(columns={'Weight avg': 'Population Weight Mean',
+                                            'Weight stddev': 'Population Weight Std',
+                                            'Percent low': 'Population Percent Low',
+                                            'Weight sum': 'Population Weight Sum'})
+    
+    # Join them to the errordf
+    curMatchesDf = pd.merge(curMatchesDf, arealFactors, on='ID')
+    curMatchesDf = pd.merge(curMatchesDf, popFactors, on='ID')
+
+    coverageTypes = {'Areal': 'red',
+               'Kriging': 'blue',
+               'Population': 'black'}
+    
+    interpCols = ['Weight Mean', 'Weight Std', 'Weight Sum']
+
+    # Plot it all
+    for c in interpCols:
+        # Make a new figure
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+        names = []
+        for ct in coverageTypes:
+            curMatchesDf.plot(x=f"{ct} {c}", y=f"{errorCol}_{ct[0].lower()}", kind='scatter', ax=ax, color=coverageTypes[ct], s=10)
+            names.append(ct)
+
+        # Set labels and font sizes
+        plt.xlabel(c, fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Error vs. Factor {c} for {stateAc} per County', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        plt.legend(names)
+
+    # Also plot coverage
+    global INTERP_COVERAGE_ROWS
+    arealCoverage = pd.DataFrame(INTERP_COVERAGE_ROWS[EdgeType.AREA])
+    popCoverage = pd.DataFrame(INTERP_COVERAGE_ROWS[EdgeType.POPULATION])
+
+    arealCoverage = arealCoverage.rename(columns={'Coverage': 'Areal Coverage'})
+    popCoverage = popCoverage.rename(columns={'Coverage': 'Population Coverage'})
+
+    curMatchesDf = pd.merge(curMatchesDf, arealCoverage, on='ID')
+    curMatchesDf = pd.merge(curMatchesDf, popCoverage, on='ID')
+
+
+    # Plot coverage vs error
+    coverageTypes = {'Areal': 'red',
+                    'Population': 'black'}
+    methods = {'Areal': 'red',
+               'Kriging': 'blue',
+                'Population': 'black'}
+    
+    for ct in coverageTypes:
+        # Make a new figure
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+        names = []
+        for m in methods:
+            curMatchesDf.plot(x=f"{ct} Coverage", y=f"{errorCol}_{m[0].lower()}", kind='scatter', ax=ax, color=methods[m], s=50)
+            names.append(m)
+    
+        # Fix labels
+        plt.xlabel(f'{ct} Coverage', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Error vs. {ct} Coverage for {stateAc} per County', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        plt.legend(names)
+
+
+    #print(curMatchesDf)
 
     # Do the same thing, but with the error differences
     errorCols = {'Error Difference: A-K': 'red',
@@ -3012,13 +3107,13 @@ if __name__ == "__main__":
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
 
-    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
 
-    quit()
+    #quit()
     
     errorDfs = {}
-    for stateAc in ['CT','OR','TN','MN','VT','NY']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
@@ -3068,7 +3163,8 @@ if __name__ == "__main__":
         })
 
         # Plot all 4 error columns for this state
-        curDf.boxplot(column=['Areal', 'Kriging', 'Population', 'Averaged'],
+        indCols = ['Areal', 'Kriging', 'Population', 'Averaged']
+        curDf.boxplot(column=indCols,
                       ax=ax, grid=False, boxprops=BP_PROPS, whiskerprops=BP_PROPS,
                       capprops=BP_PROPS, medianprops=BP_PROPS, flierprops=BP_DOT_PROPS)
 
@@ -3085,6 +3181,57 @@ if __name__ == "__main__":
 
         # Save the figure out
         plt.savefig(figDir / Path(f"{stateAc}-boxplot.png"), dpi=600)
+
+        # Plot all errors by minimum error to check agreement on
+        # a new figure
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+        diffCols = {'Error Difference: A-K': 'red',
+                'Error Difference: A-P': 'blue',
+                'Error Difference: P-K': 'green'
+                }
+        
+        curDf['Minimum Error'] = curDf[indCols].min(axis=1)
+
+        names = []
+        for c in diffCols:
+            curDf.plot(x='Minimum Error', y=c, kind='scatter', ax=ax, s=10, color=diffCols[c])
+            names.append(c)
+        plt.legend(names)
+
+        
+        # Fix plot labels and sizes
+        plt.xlabel('Minimum Error', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error Difference (%)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Relative Error Difference Comparison for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Save the figure out
+        plt.savefig(figDir / Path(f"{stateAc}-error-difference.png"), dpi=600)
+
+        # Do the same thing but with raw error percentages
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+        names = []
+        indCols = {'Areal': 'red',
+                   'Kriging': 'blue',
+                   'Population': 'black',
+                   'Averaged': 'orange'}
+        for c in indCols:
+            curDf.plot(x='Minimum Error', y=c, kind='scatter', ax=ax, s=10, color=indCols[c])
+            names.append(c)
+        plt.legend(names)
+
+        # Fix plot labels and sizes
+        plt.xlabel('Minimum Error', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error (%)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Relative Error Comparison for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Save the figure out
+        plt.savefig(figDir / Path(f"{stateAc}-error-vs-min-error.png"), dpi=600)
 
 
         # Concatenate with the other results

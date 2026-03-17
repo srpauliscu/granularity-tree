@@ -25,8 +25,14 @@ import math
 from kGraph import *
 #from src.kGraph import GEID, TID, AggMethod, DeAggMethod, EdgeType
 
+# Kriging tracking variables
 MATCH_STAT_ROWS = []
 WEIGHT_ROWS = []
+
+# Interpolation tracking variables
+INTERP_STAT_ROWS = []
+INTERP_FACTOR_ROWS = {e: [] for e in [EdgeType.AREA, EdgeType.POPULATION]}
+INTERP_COVERAGE_ROWS = {e: [] for e in [EdgeType.AREA, EdgeType.POPULATION]}
 
 # Function for pd.apply to calculate error bound
 def CalculateError(row: pd.Series, origDataCol: str, newDataCol: str):
@@ -809,9 +815,9 @@ class Gator(object):
             for mn in matches:
                 distList.append(distance(dn.centroid, mn.centroid))
 
-            print(f"\nDestination {dn.id} had {len(matches)} matches with the following dist stats:")
-            print(f"Avg distance: {sum(distList) / len(distList)}")
-            print(f"Var of distance: {statistics.stdev(distList)}")
+            #print(f"\nDestination {dn.id} had {len(matches)} matches with the following dist stats:")
+            #print(f"Avg distance: {sum(distList) / len(distList)}")
+            #print(f"Var of distance: {statistics.stdev(distList)}")
 
             newRow = {'ID': dn.id,
                       'Num matches': len(matches),
@@ -876,6 +882,7 @@ class Gator(object):
             investigationDict = {'ID': dn.id,
                                 'Weight avg': np.mean(W[:len(W) - 1, 0]),
                                 'Weight stddev': np.std(W[:len(W) - 1, 0]),
+                                'Weight sum': np.sum(W[:len(W) - 1, 0]),
                                 'Lagrange': W[-1,0],
                                 'Error var contribution': W[:,0] @ D[:,0],
                                 'Model variance': C[0,0],
@@ -1066,29 +1073,36 @@ class Gator(object):
         # Flatten the dataframe for easy grouby operations
         expandedDf = self.FlattenDataframe(sourceDf, allFactors, sourceIdCol, sourceDataCol)
 
-        # If ignoreIncomplete is false, check that each destination is 100% covered
+        # Check that each destination is 100% covered
         # We are assuming the sources are mutually exclusive (since they are the same type)
-        if not ignoreIncomplete:
+        # Just need to add the weights up for each edge for each dest Node
+        allTots = {}
+        for sn in allMatches:
+            for dn in allMatches[sn]:
 
-            # Just need to add the weights up for each edge for each dest Node
-            allTots = {}
-            for sn in allMatches:
-                for dn in allMatches[sn]:
+                # Make a new entry as needed
+                if not dn in allTots:
+                    allTots[dn] = 0
+                
+                allTots[dn] += allMatches[sn][dn]
 
-                    # Make a new entry as needed
-                    if not dn in allTots:
-                        allTots[dn] = 0
-                    
-                    allTots[dn] += allMatches[sn][dn]
+        # Check that they are all close to the value recorded in the graph
+        for dn in allTots:
+            if not (ignoreIncomplete or math.isclose(allTots[dn], dn.values[edgeType], rel_tol=0.1)):
 
-            # Check that they are all close to the value recorded in the graph
-            for dn in allTots:
-                if not math.isclose(allTots[dn], dn.values[edgeType], rel_tol=0.1):
-                    msg = f"Total weight {allTots[dn]} for {dn.id} is invalid.\nFactors: {allTots}\n"
-                    #self.logger.error()
-                    self.logger.error(msg)
-                    raise RuntimeError(msg)
+                # Throw an error if the flag is set
+                msg = f"Total weight {allTots[dn]} for {dn.id} is invalid.\nFactors: {allTots}\n"
+                #self.logger.error()
+                self.logger.error(msg)
+                raise RuntimeError(msg)
 
+            # Otherwise, just track it
+            newRow = {'ID': dn.id,
+                      'Coverage': allTots[dn] / float(dn.values[edgeType])}
+            INTERP_COVERAGE_ROWS[edgeType].append(newRow)
+            
+
+            
         # Return it
         return expandedDf
 
@@ -1190,6 +1204,17 @@ class Gator(object):
         print(f"Mean: {expandedDf[self.FACTOR_COL].mean()}")
         print(f"Median: {expandedDf[self.FACTOR_COL].median()}")
         print(f"Variance: {expandedDf[self.FACTOR_COL].var()}\n\n\n")
+
+        # Additionally, do a per-destination check of weight stats
+        global INTERP_FACTOR_ROWS
+        for did, didDf in expandedDf.groupby(self.DEST_COL):
+            newRow = {'ID': did,
+                      f'Weight avg': didDf[self.FACTOR_COL].mean(),
+                      f'Weight stddev': didDf[self.FACTOR_COL].std(),
+                      f'Percent low': didDf[didDf[self.FACTOR_COL] < .9].shape[0] / float(didDf.shape[0]),
+                      f'Weight sum': didDf[self.FACTOR_COL].sum()}
+            INTERP_FACTOR_ROWS[edgeType].append(newRow)
+
 
         if type(method) == AggMethod:
             resDf = self.Aggregate(expandedDf, sourceDataCol, method,

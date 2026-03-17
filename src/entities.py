@@ -62,9 +62,14 @@ class VariogramModel(Enum):
     Enumeration that defines currently accepted models for fitting
     the semivariogram for kriging.    
     """
+    #GAUSSIAN = lambda x,a,b,c,d: np.where(x <=.00001, d, d+1-a*np.exp(-(((x-b)**2)/(2.*c**2))))
+    #EXPONENTIAL = lambda x,a,b,c: np.where(x <= .00001, c, c + b*(1-np.exp(-x / a)))
+    #LINEAR = lambda x,a,b,c: np.where(x <= .00001, c, np.where(x <= a, c + b*(x / a), c + b))
+    #SPHERICAL = lambda x,a,b,c: np.where(x <= .00001, c, np.where(x <= a, c + b*((3*x)/(2*a) - .5*((x**3)/(a**3))), c + b))
+
     GAUSSIAN = lambda x,a,b,c,d: np.where(x <=.00001, d, d+1-a*np.exp(-(((x-b)**2)/(2.*c**2))))
     EXPONENTIAL = lambda x,a,b,c: np.where(x <= .00001, c, c + b*(1-np.exp(-x / a)))
-    LINEAR = lambda x,a,b,c: np.where(x <= .00001, c, np.where(x <= a, c + b*(x / a)+10, c + b))
+    LINEAR = lambda x,a,b,c: np.where(x <= .00001, c, np.where(x <= a, c + b*(x / a), c + b))
     SPHERICAL = lambda x,a,b,c: np.where(x <= .00001, c, np.where(x <= a, c + b*((3*x)/(2*a) - .5*((x**3)/(a**3))), c + b))
 
 class GEID(StrEnum):
