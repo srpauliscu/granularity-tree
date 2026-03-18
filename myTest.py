@@ -1,6 +1,8 @@
 
 
 
+import warnings
+warnings.filterwarnings('error')
 
 import numpy as np
 from pprint import pprint
@@ -10,7 +12,7 @@ import math
 import geopandas as gpd
 from shapely import centroid, distance
 from shapely.geometry import Polygon, Point, shape, mapping, LineString, MultiPoint
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, OptimizeWarning
 
 from matplotlib import pyplot as plt
 from typing import Callable
@@ -20,6 +22,26 @@ from src.entities import *
 from myTestTwo import DoSomething, FOO
 
 
+
+
+
+a = np.array([-1,-2,-3,-4])
+print(np.sqrt(a**2))
+
+
+
+quit()
+
+try:
+    warnings.warn('warning', OptimizeWarning)
+except OptimizeWarning as e:
+    warnings.resetwarnings()
+    print('asdkjfhsakjdhf')
+    warnings.warn('warning', OptimizeWarning)
+
+
+
+quit()
 
 
 a1 = np.array([[1,2,3,4,5]])

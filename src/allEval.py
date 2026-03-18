@@ -1746,10 +1746,10 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Calculate error
     errorCol = 'RelError'
-    arealResDf[errorCol+'_a'] = np.abs(arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
-    krigingResDf[errorCol+'_k'] = np.abs(krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
-    populationResDf[errorCol + '_p'] = np.abs(populationResDf['EmissionsPerVM_Pop'] - populationResDf['EmissionsPerVM_GT']) / populationResDf['EmissionsPerVM_GT']
-    avgResDf[errorCol + '_avg'] = np.abs(avgResDf['AvgEstEmissions'] - avgResDf['EmissionsPerVM_GT']) / avgResDf['EmissionsPerVM_GT']
+    arealResDf[errorCol+'_a'] = 100.* np.abs(arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
+    krigingResDf[errorCol+'_k'] = 100.*np.abs(krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
+    populationResDf[errorCol + '_p'] = 100.*np.abs(populationResDf['EmissionsPerVM_Pop'] - populationResDf['EmissionsPerVM_GT']) / populationResDf['EmissionsPerVM_GT']
+    avgResDf[errorCol + '_avg'] = 100.*np.abs(avgResDf['AvgEstEmissions'] - avgResDf['EmissionsPerVM_GT']) / avgResDf['EmissionsPerVM_GT']
 
     # Calculate variance of error
     arealVar = arealResDf[errorCol+'_a'].var()
@@ -1808,34 +1808,34 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Print out average and median error difference for each pair of methods
     print(f"\nAreal - Kriging")
-    print(f"Average error difference (in %): {avgErrorDiffAK*100.}")
-    print(f"Median error difference (in %): {medErrorDiffAK*100.}")
+    print(f"Average error difference (in %): {avgErrorDiffAK}")
+    print(f"Median error difference (in %): {medErrorDiffAK}")
     print(f"\nAreal - Population")
-    print(f"Average error difference (in %): {avgErrorDiffAP*100.}")
-    print(f"Median error difference (in %): {medErrorDiffAP*100.}")
+    print(f"Average error difference (in %): {avgErrorDiffAP}")
+    print(f"Median error difference (in %): {medErrorDiffAP}")
     print(f"\nPopulation - Kriging")
-    print(f"Average error difference (in %): {avgErrorDiffPK*100.}")
-    print(f"Median error difference (in %): {medErrorDiffPK*100.}")
+    print(f"Average error difference (in %): {avgErrorDiffPK}")
+    print(f"Median error difference (in %): {medErrorDiffPK}")
 
     print(f"\n\nAveraged - Areal")
-    print(f"Average error difference (in %): {avgErrorDiffAvgA*100.}")
-    print(f"Median error difference (in %): {medErrorDiffAvgA*100.}")
+    print(f"Average error difference (in %): {avgErrorDiffAvgA}")
+    print(f"Median error difference (in %): {medErrorDiffAvgA}")
     print(f"\nAveraged - Kriging")
-    print(f"Average error difference (in %): {avgErrorDiffAvgK*100.}")
-    print(f"Median error difference (in %): {medErrorDiffAvgK*100.}")
+    print(f"Average error difference (in %): {avgErrorDiffAvgK}")
+    print(f"Median error difference (in %): {medErrorDiffAvgK}")
     print(f"\nAveraged - Population")
-    print(f"Average error difference (in %): {avgErrorDiffAvgP*100.}")
-    print(f"Median error difference (in %): {medErrorDiffAvgP*100.}")
+    print(f"Average error difference (in %): {avgErrorDiffAvgP}")
+    print(f"Median error difference (in %): {medErrorDiffAvgP}")
 
     # Print average errors by method
-    print(f"\n\n\nAreal Mean Error (in %): {avgErrorAreal*100.}")
-    print(f"Areal Median Error (in %): {medErrorAreal*100.}")
-    print(f"\nKriging Mean Error (in %): {avgErrorKriging*100.}")
-    print(f"Kriging Median Error (in %): {medErrorKriging*100.}")
-    print(f"\nPopulation Mean Error (in %): {avgErrorPopulation*100.}")
-    print(f"Population Median Error (in %): {medErrorPopulation*100.}")
-    print(f"\nAveraged Estimate Mean Error (in %): {avgErrorAvg*100.}")
-    print(f"Averaged Estimate Median Error (in %): {medErrorAvg*100.}")
+    print(f"\n\n\nAreal Mean Error (in %): {avgErrorAreal}")
+    print(f"Areal Median Error (in %): {medErrorAreal}")
+    print(f"\nKriging Mean Error (in %): {avgErrorKriging}")
+    print(f"Kriging Median Error (in %): {medErrorKriging}")
+    print(f"\nPopulation Mean Error (in %): {avgErrorPopulation}")
+    print(f"Population Median Error (in %): {medErrorPopulation}")
+    print(f"\nAveraged Estimate Mean Error (in %): {avgErrorAvg}")
+    print(f"Averaged Estimate Median Error (in %): {medErrorAvg}")
 
     # Print error variance by method
     print(f"\n\n\nAreal Error Variance: {arealVar}")
@@ -1916,15 +1916,6 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         # Make a new figure
         fig, ax = plt.subplots(figsize=FIG_SIZE)
 
-        # Set labels and font sizes
-        plt.xlabel(characteristic, fontsize=FIG_LABEL_FONT_SIZE)
-        plt.ylabel('Relative Error', fontsize=FIG_LABEL_FONT_SIZE)
-        plt.title(f'Error vs. {characteristic} for {stateAc} (Kriging)', fontsize=FIG_TITLE_FONT_SIZE)
-
-        # Fix font sizes for axis ticks
-        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
-        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
-
         # Plot each error rate
         names = []
         for ec in errorCols:
@@ -1932,6 +1923,18 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             names.append(ec)
         
         plt.legend(names)
+
+        # Set labels and font sizes
+        plt.xlabel(characteristic, fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Error (%)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Error vs. {characteristic} for {stateAc} (Kriging)', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix font sizes for axis ticks
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Save out the figure
+        plt.savefig(figDir / Path(f"{stateAc}-kriging-{characteristic.replace(" ","")}"), dpi=600)
     
     # Also plot the weight stats for interpolation, by method
     global INTERP_FACTOR_ROWS
@@ -1963,6 +1966,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Plot it all
     for c in interpCols:
+        break
         # Make a new figure
         fig, ax = plt.subplots(figsize=FIG_SIZE)
 
@@ -2007,7 +2011,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
         names = []
         for m in methods:
-            curMatchesDf.plot(x=f"{ct} Coverage", y=f"{errorCol}_{m[0].lower()}", kind='scatter', ax=ax, color=methods[m], s=50)
+            curMatchesDf.plot(x=f"{ct} Coverage", y=f"{errorCol}_{m[0].lower()}", kind='scatter', ax=ax, color=methods[m], s=25)
             names.append(m)
     
         # Fix labels
@@ -2020,6 +2024,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         plt.legend(names)
+
+        plt.savefig(figDir / Path(f"{stateAc}-{ct}-coverage.png"), dpi=600)
 
 
     #print(curMatchesDf)
@@ -2207,6 +2213,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         return errorDf, errorCol
 
     # Sort for better plotting
+    zoomedFinalDfs = {}
     for k in joinedFinalDfs:
 
         if 'Pop-based' in k:
@@ -2214,6 +2221,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             joinedFinalDfs[k] = joinedFinalDfs[k].rename(columns={'EV_Count_Pop': 'EV_Count'})
         
         joinedFinalDfs[k] = joinedFinalDfs[k].sort_values('EV_Count')
+
+        # Make a subset for plotting smaller values more clearly
+        zoomedFinalDfs[k] = joinedFinalDfs[k][joinedFinalDfs[k]['EV_Count'] <= 250]
 
     # Set up colors for lines
     colors = {}
@@ -2236,11 +2246,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             continue
         if 'Averaged' in k:
             curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
-            #curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='scatter', ax=ax, color=colors[k], s=50)
 
         else:
             curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
-            #curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='scatter', ax=ax, color=colors[k], s=50)
 
         names.append(k)
 
@@ -2261,6 +2269,39 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Save the figure
     plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs.png"), dpi=600)
+
+    # Repeat, but with the zoomed in subset
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    names = []
+    for k in zoomedFinalDfs:
+        curDf = zoomedFinalDfs[k]
+        if 'Pop-based' in k:
+            continue
+        if 'Averaged' in k:
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+
+        else:
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+
+        names.append(k)
+    
+    # Plot the ground truth as well
+    zoomedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2, marker='o', ms=10)
+    names.append('Ground Truth')
+    ax.legend(names, fontsize=FIG_MAJOR_AXIS_TICK_SIZE)
+
+    # Set labels and font sizes
+    plt.xlabel('EV Count', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Emissions per VM (MT of CO2e/mi)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title(f'Total Emissions per VM by EV Count for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+    # Fix font sizes for axis ticks
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+    # Save the figure
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-zoomed.png"), dpi=600)
+
 
     # Do the same for the pop-based EV registrations, if applicable
     if not regsResPopDf is None:
@@ -3113,7 +3154,7 @@ if __name__ == "__main__":
     #quit()
     
     errorDfs = {}
-    for stateAc in ['MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['NY']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
@@ -3149,7 +3190,7 @@ if __name__ == "__main__":
             curDf[c] = curDf[c].astype(float)
 
             # Multiply by 100 to get percentage error
-            curDf[c] = curDf[c]*100.
+            #curDf[c] = curDf[c]*100.
 
         # Add the state in for groupby later
         curDf['STATE'] = stateAc
@@ -3218,7 +3259,7 @@ if __name__ == "__main__":
                    'Population': 'black',
                    'Averaged': 'orange'}
         for c in indCols:
-            curDf.plot(x='Minimum Error', y=c, kind='scatter', ax=ax, s=10, color=indCols[c])
+            curDf.plot(x='Minimum Error', y=c, kind='scatter', ax=ax, s=25, color=indCols[c])
             names.append(c)
         plt.legend(names)
 
@@ -3250,5 +3291,6 @@ if __name__ == "__main__":
 
     
     plt.show()
+    print("All done!")
 
     #RainVsChargingUsage(Path('./evaluation/weather'))
