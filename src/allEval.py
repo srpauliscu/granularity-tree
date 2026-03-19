@@ -2893,20 +2893,30 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     fig, ax = plt.subplots(figsize=FIG_SIZE)
 
-    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, color='red', label='Areal Overlap', lw=2)
-    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, kind='scatter', color='red', s=50)
+    arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax,
+                      color='red', label='Areal Overlap', lw=2,
+                      marker='o', ms=10)
+    #arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, kind='scatter', color='red', s=50)
 
-    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, color='blue', label='Kriging', lw=2)
-    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, kind='scatter', color='blue', s=50)
+    krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax,
+                        color='blue', label='Kriging', lw=2,
+                        marker='o', ms=10)
+    #krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, kind='scatter', color='blue', s=50)
 
-    popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='line', color='black', label='Pop. Overlap', lw=2)
-    popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='scatter', color='black', s=50)
+    popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax,
+                    kind='line', color='black', label='Pop. Overlap', lw=2,
+                    marker='o', ms=10)
+    #popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='scatter', color='black', s=50)
 
-    avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='line', color='orange', label='Averaged Est.', lw=2)
-    avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='scatter', color='orange', s=50)
+    avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax,
+                    kind='line', color='orange', label='Averaged Est.', lw=2,
+                    marker='o', ms=10)
+    #avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='scatter', color='orange', s=50)
 
-    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='line', color='green', label='Ground Truth', lw=2)
-    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='scatter', color='green', s=50)
+    gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax,
+                   kind='line', color='green', label='Ground Truth', lw=2,
+                   marker='o', ms=10)
+    #gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='scatter', color='green', s=50)
 
 
 
@@ -3148,10 +3158,10 @@ if __name__ == "__main__":
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
 
-    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
 
-    #quit()
+    quit()
     
     errorDfs = {}
     for stateAc in ['NY']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
