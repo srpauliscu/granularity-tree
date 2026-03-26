@@ -1911,7 +1911,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     for characteristic in krigingInvCols:
 
         # TODO: Comment to plot investigation plots
-        #break
+        break
         
         # Make a new figure
         fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -1985,6 +1985,9 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         plt.legend(names)
+
+        # Save it out
+        plt.savefig(figDir / Path(f"{stateAc}-factor-{c.replace(" ", "")}"), dpi=600)
 
     # Also plot coverage
     global INTERP_COVERAGE_ROWS
@@ -2061,6 +2064,10 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
             names.append(ec)
         
         plt.legend(names)
+
+        plt.savefig(figDir / Path(f"{stateAc}-e-difference-{characteristic.replace(" ","")}"), dpi=600)
+
+
 
  
     # Now, we want the EVs at the county level
@@ -2214,6 +2221,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Sort for better plotting
     zoomedFinalDfs = {}
+    moreZoomedFinalDfs = {}
     for k in joinedFinalDfs:
 
         if 'Pop-based' in k:
@@ -2224,6 +2232,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
         # Make a subset for plotting smaller values more clearly
         zoomedFinalDfs[k] = joinedFinalDfs[k][joinedFinalDfs[k]['EV_Count'] <= 250]
+        moreZoomedFinalDfs[k] = joinedFinalDfs[k][joinedFinalDfs[k]['EV_Count'] <= 50]
 
     # Set up colors for lines
     colors = {}
@@ -2253,8 +2262,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         names.append(k)
 
     # Plot the ground truth as well
-    joinedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2, marker='o', ms=10)
-    names.append('Ground Truth')
+    #joinedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2, marker='o', ms=10)
+    #names.append('Ground Truth')
     ax.legend(names, fontsize=FIG_MAJOR_AXIS_TICK_SIZE)
 
     # Set labels and font sizes
@@ -2286,8 +2295,8 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         names.append(k)
     
     # Plot the ground truth as well
-    zoomedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2, marker='o', ms=10)
-    names.append('Ground Truth')
+    #zoomedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2, marker='o', ms=10)
+    #names.append('Ground Truth')
     ax.legend(names, fontsize=FIG_MAJOR_AXIS_TICK_SIZE)
 
     # Set labels and font sizes
@@ -2301,6 +2310,38 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # Save the figure
     plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-zoomed.png"), dpi=600)
+
+    # Repeat with more zoomed in
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    names = []
+    for k in moreZoomedFinalDfs:
+        curDf = moreZoomedFinalDfs[k]
+        if 'Pop-based' in k:
+            continue
+        if 'Averaged' in k:
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+
+        else:
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+
+        names.append(k)
+    
+    # Plot the ground truth as well
+    #moreZoomedFinalDfs['Areal'].plot(x='EV_Count', y='EmissionsPerVM_GT', kind='line', ax=ax, color='green', lw=2, marker='o', ms=10)
+    #names.append('Ground Truth')
+    ax.legend(names, fontsize=FIG_MAJOR_AXIS_TICK_SIZE)
+
+    # Set labels and font sizes
+    plt.xlabel('EV Count', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('Emissions per VM (MT of CO2e/mi)', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title(f'Total Emissions per VM by EV Count for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+    # Fix font sizes for axis ticks
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+    # Save the figure
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-more-zoomed.png"), dpi=600)
 
 
     # Do the same for the pop-based EV registrations, if applicable
@@ -3158,10 +3199,10 @@ if __name__ == "__main__":
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
 
-    IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
+    #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
 
-    quit()
+    #quit()
     
     errorDfs = {}
     for stateAc in ['NY']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
@@ -3283,6 +3324,17 @@ if __name__ == "__main__":
 
         # Save the figure out
         plt.savefig(figDir / Path(f"{stateAc}-error-vs-min-error.png"), dpi=600)
+
+        # Plot standard deviation of errors vs. minimum error (binned)
+
+        # First, calculate bins of, say, size 20
+        curDf['Minimum Error Bin'] = np.floor(curDf['Minimum Error'] / 20.) * 20.
+
+        # Calculate stddev of the three error columns
+        curDf['Std of Error'] = curDf[['Areal', 'Population', 'Kriging']].std(axis=1, ddof=0)
+        
+
+
 
 
         # Concatenate with the other results
