@@ -6,6 +6,7 @@ import time
 import matplotlib
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from sklearn.metrics import r2_score
 
 # Get functions for loading the NTDAS data for CS 3
 import ntdas
@@ -3018,6 +3019,24 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     plt.savefig(figDir / Path("income-est-boxplot.png"))
 
+    # Also plot the stddev of the errors by minimum error
+    colNames = list(colMapper.values())
+    errorDf['Minimum Error'] = errorDf[colNames].min(axis=1)
+    errorDf['Std of Error'] = errorDf[['Areal', 'Kriging', 'Population']].std(axis=1, ddof=0)
+
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    errorDf.plot(x='Minimum Error', y='Std of Error', kind='scatter', ax=ax, s=10, color='red')
+
+
+    
+    # Fix plot labels and sizes
+    plt.xlabel('Minimum Error', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.ylabel('% Error Std', fontsize=FIG_LABEL_FONT_SIZE)
+    plt.title(f'Standard Deviation of Income Prediction Error', fontsize=FIG_TITLE_FONT_SIZE)
+
+    ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+    ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
 
     plt.show()
 
@@ -3205,7 +3224,7 @@ if __name__ == "__main__":
     #quit()
     
     errorDfs = {}
-    for stateAc in ['NY']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['OR', 'NY']:#['NY']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
@@ -3327,13 +3346,111 @@ if __name__ == "__main__":
 
         # Plot standard deviation of errors vs. minimum error (binned)
 
+        # Attempt to fit three types of curves: linear, log, and exponential
+        models = {#lambda x, a, b: a*x + b: 'red',
+                  #lambda x, a, b, c: a*np.emath.logn(b, x) + c: 'blue',
+                  lambda x, a, b, c, d: a*np.power(b, x - c) + d: 'red'}
+
         # First, calculate bins of, say, size 20
         curDf['Minimum Error Bin'] = np.floor(curDf['Minimum Error'] / 20.) * 20.
 
         # Calculate stddev of the three error columns
-        curDf['Std of Error'] = curDf[['Areal', 'Population', 'Kriging']].std(axis=1, ddof=0)
+        cols = ['Areal', 'Population', 'Kriging']
+        diffCols = ['Error Difference: A-K', 'Error Difference: A-P', 'Error Difference: P-K']
+        #curDf['Minimum Error'] = curDf[cols].min(axis=1)
+        curDf['Minimum Error Difference'] = curDf[diffCols].min(axis=1).abs()
+        curDf['Std of Error'] = curDf[cols].std(axis=1, ddof=0)
+
+
+        # Plot minimum error difference vs. minimum error
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+        curDf.plot(x='Minimum Error Difference', y='Minimum Error', ax=ax, kind='scatter', s=50, color='red')
+
+        # Fit curves
+        for m in models:
+            params, _, _, _, _ = curve_fit(m, curDf['Minimum Error Difference'], curDf['Minimum Error'], full_output=True)
+
+            # Generate data to plot the line
+            x = [i for i in np.arange(.01, curDf['Minimum Error Difference'].max(), .01)]
+            y = [m(i, *params) for i in x]
+
+            # Plot the line
+            plt.plot(x, y, color=models[m], lw=2)
+
+            # Calculate r-squared
+            yPred = m(curDf['Minimum Error Difference'], *params)
+            r2 = r2_score(curDf['Minimum Error'], yPred)
+
+
+            name = None
+            if len(params) == 2:
+                name = "Linear"
+            elif len(params) == 3:
+                name = "Log"
+            elif len(params) == 4:
+                name = "Exponential"
+
+            print(f"Error Difference R2 for {name} is {r2}")
         
 
+        # Fix plot labels and sizes
+        plt.xlabel('Minimum Error Difference (%)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Minimum Error (%)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Min. Error Difference vs. Min. Error for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+        
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        plt.savefig(figDir / Path(f"{stateAc}-min-error-difference-vs-min-error.png"), dpi=600)
+
+
+        # Cut out any outliers
+        #curDf = curDf[curDf['Std of Error'] <= 15.]
+
+        # Plot the stddev, grouped into bins
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+        curDf.plot(x='Minimum Error', y='Std of Error', kind='scatter', s=10, ax=ax, color='red')
+        #curDf.boxplot('Std of Error', by='Minimum Error Bin', ax=ax,
+        #              grid=False, boxprops=BP_PROPS, whiskerprops=BP_PROPS,
+        #              capprops=BP_PROPS, medianprops=BP_PROPS, flierprops=BP_DOT_PROPS)
+        
+        
+        for m in models:
+            params, _, _, _, _ = curve_fit(m, curDf['Minimum Error'], curDf['Std of Error'], full_output=True)
+
+            # Generate data to plot the line
+            x = [i for i in np.arange(.01, curDf['Minimum Error'].max(), .01)]
+            y = [m(i, *params) for i in x]
+
+            # Plot the line
+            plt.plot(x, y, color=models[m])
+
+            # Calculate r-squared
+            yPred = m(curDf['Minimum Error'], *params)
+            r2 = r2_score(curDf['Std of Error'], yPred)
+
+
+            name = None
+            if len(params) == 2:
+                name = "Linear"
+            elif len(params) == 3:
+                name = "Log"
+            elif len(params) == 4:
+                name = "Exponential"
+
+            print(f"R2 for {name} is {r2}")
+        
+        
+
+        # Fix plot labels and sizes
+        plt.xlabel('Minimum Error Bin', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('% Error Std', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Standard Devition of Errors for {ACRO_TO_STATE[stateAc]}', fontsize=FIG_TITLE_FONT_SIZE)
+        
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        plt.savefig(figDir / Path(f"{stateAc}-std-of-errors.png"), dpi=600)
 
 
 
