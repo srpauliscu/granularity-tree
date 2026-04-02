@@ -30,6 +30,8 @@ FIG_TITLE_FONT_SIZE = 48#32
 FIG_MAJOR_AXIS_TICK_SIZE = 24#16
 FIG_MINOR_AXIS_TICK_SIZE = 21#14
 
+FIG_DPI = 200
+
 LW = 3
 BP_PROPS = dict(linewidth=LW)
 BP_DOT_PROPS = dict(marker='o', markersize=12, markeredgewidth=3)
@@ -552,7 +554,7 @@ def TemporalEval(dirPath: Path):
     if not figDir.exists():
         figDir.mkdir()
 
-    plt.savefig(figDir / Path("daily-charger-energy.png"))
+    plt.savefig(figDir / Path("daily-charger-energy.png"), dpi=FIG_DPI)
     #plt.show()
     
     # Begin plotting
@@ -581,7 +583,7 @@ def TemporalEval(dirPath: Path):
     if not figDir.exists():
         figDir.mkdir()
 
-    plt.savefig(figDir / Path("monthly-charger-energy.png"))
+    plt.savefig(figDir / Path("monthly-charger-energy.png"), dpi=FIG_DPI)
     plt.show()
 
 def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
@@ -839,7 +841,7 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
         plotCount += 1
 
-        plt.savefig(f"./evaluation/st/figures/{ntdas.DENVER_SD_IDS[lv]}.png", dpi=400)
+        plt.savefig(f"./evaluation/st/figures/{ntdas.DENVER_SD_IDS[lv]}.png", dpi=FIG_DPI)
 
         # Clear figures and axes for memory issues
         plt.clf()
@@ -1935,7 +1937,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save out the figure
-        plt.savefig(figDir / Path(f"{stateAc}-kriging-{characteristic.replace(" ","")}"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-kriging-{characteristic.replace(" ","")}"), dpi=FIG_DPI)
     
     # Also plot the weight stats for interpolation, by method
     global INTERP_FACTOR_ROWS
@@ -1988,7 +1990,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         plt.legend(names)
 
         # Save it out
-        plt.savefig(figDir / Path(f"{stateAc}-factor-{c.replace(" ", "")}"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-factor-{c.replace(" ", "")}"), dpi=FIG_DPI)
 
     # Also plot coverage
     global INTERP_COVERAGE_ROWS
@@ -2029,7 +2031,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
         plt.legend(names)
 
-        plt.savefig(figDir / Path(f"{stateAc}-{ct}-coverage.png"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-{ct}-coverage.png"), dpi=FIG_DPI)
 
 
     #print(curMatchesDf)
@@ -2066,7 +2068,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         
         plt.legend(names)
 
-        plt.savefig(figDir / Path(f"{stateAc}-e-difference-{characteristic.replace(" ","")}"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-e-difference-{characteristic.replace(" ","")}"), dpi=FIG_DPI)
 
 
 
@@ -2278,7 +2280,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
 
     # Save the figure
-    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs.png"), dpi=600)
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs.png"), dpi=FIG_DPI)
 
     # Repeat, but with the zoomed in subset
     fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -2310,7 +2312,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
     # Save the figure
-    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-zoomed.png"), dpi=600)
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-zoomed.png"), dpi=FIG_DPI)
 
     # Repeat with more zoomed in
     fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -2342,7 +2344,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
     # Save the figure
-    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-more-zoomed.png"), dpi=600)
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-more-zoomed.png"), dpi=FIG_DPI)
 
 
     # Do the same for the pop-based EV registrations, if applicable
@@ -2374,7 +2376,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         axp.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
             
 
-        plt.savefig(figDir / Path(f"{stateAc}-emissions-pop-evs.png"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-emissions-pop-evs.png"), dpi=FIG_DPI)
     
     print(f'\nFinished {stateAc} analysis.\n')
 
@@ -2982,7 +2984,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     if not figDir.exists():
         figDir.mkdir()
 
-    plt.savefig(figDir / Path("policies-vs-income.png"))
+    plt.savefig(figDir / Path("policies-vs-income.png"), dpi=FIG_DPI)
 
     # We also want to get a boxplot for the errors
     
@@ -3017,7 +3019,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
-    plt.savefig(figDir / Path("income-est-boxplot.png"))
+    plt.savefig(figDir / Path("income-est-boxplot.png"), dpi=FIG_DPI)
 
     # Also plot the stddev of the errors by minimum error
     colNames = list(colMapper.values())
@@ -3224,7 +3226,7 @@ if __name__ == "__main__":
     #quit()
     
     errorDfs = {}
-    for stateAc in ['OR', 'NY']:#['NY']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['VT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
@@ -3291,7 +3293,7 @@ if __name__ == "__main__":
         #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save the figure out
-        plt.savefig(figDir / Path(f"{stateAc}-boxplot.png"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-boxplot.png"), dpi=FIG_DPI)
 
         # Plot all errors by minimum error to check agreement on
         # a new figure
@@ -3319,7 +3321,7 @@ if __name__ == "__main__":
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save the figure out
-        plt.savefig(figDir / Path(f"{stateAc}-error-difference.png"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-error-difference.png"), dpi=FIG_DPI)
 
         # Do the same thing but with raw error percentages
         fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -3342,7 +3344,7 @@ if __name__ == "__main__":
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save the figure out
-        plt.savefig(figDir / Path(f"{stateAc}-error-vs-min-error.png"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-error-vs-min-error.png"), dpi=FIG_DPI)
 
         # Plot standard deviation of errors vs. minimum error (binned)
 
@@ -3401,7 +3403,7 @@ if __name__ == "__main__":
         ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
-        plt.savefig(figDir / Path(f"{stateAc}-min-error-difference-vs-min-error.png"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-min-error-difference-vs-min-error.png"), dpi=FIG_DPI)
 
 
         # Cut out any outliers
@@ -3450,7 +3452,7 @@ if __name__ == "__main__":
         ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
-        plt.savefig(figDir / Path(f"{stateAc}-std-of-errors.png"), dpi=600)
+        plt.savefig(figDir / Path(f"{stateAc}-std-of-errors.png"), dpi=FIG_DPI)
 
 
 
