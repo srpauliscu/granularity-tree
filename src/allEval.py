@@ -24,17 +24,19 @@ matplotlib.use('qt5agg')
 FIG_SIZE_FACTOR = 3
 FIG_SIZE = (6.4*FIG_SIZE_FACTOR, 4.8*FIG_SIZE_FACTOR)
 
-FIG_LABEL_FONT_SIZE = 36#24
-FIG_TITLE_FONT_SIZE = 48#32
+FIG_LABEL_FONT_SIZE = 40#36#24
+FIG_TITLE_FONT_SIZE = 56#48#32
 
-FIG_MAJOR_AXIS_TICK_SIZE = 24#16
-FIG_MINOR_AXIS_TICK_SIZE = 21#14
+FIG_MAJOR_AXIS_TICK_SIZE = 28#24#16
+FIG_MINOR_AXIS_TICK_SIZE = 23#21#14
 
 FIG_DPI = 200
 
-LW = 3
+LW = 5#3
 BP_PROPS = dict(linewidth=LW)
 BP_DOT_PROPS = dict(marker='o', markersize=12, markeredgewidth=3)
+
+PD_PLOT_MS = 15#10
 
 
 # State acronym to FIPS code map
@@ -554,7 +556,7 @@ def TemporalEval(dirPath: Path):
     if not figDir.exists():
         figDir.mkdir()
 
-    plt.savefig(figDir / Path("daily-charger-energy.png"), dpi=FIG_DPI)
+    plt.savefig(figDir / Path("daily-charger-energy.svg"))#, dpi=FIG_DPI)
     #plt.show()
     
     # Begin plotting
@@ -583,7 +585,7 @@ def TemporalEval(dirPath: Path):
     if not figDir.exists():
         figDir.mkdir()
 
-    plt.savefig(figDir / Path("monthly-charger-energy.png"), dpi=FIG_DPI)
+    plt.savefig(figDir / Path("monthly-charger-energy.svg"))#, dpi=FIG_DPI)
     plt.show()
 
 def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
@@ -841,7 +843,7 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
 
         plotCount += 1
 
-        plt.savefig(f"./evaluation/st/figures/{ntdas.DENVER_SD_IDS[lv]}.png", dpi=FIG_DPI)
+        plt.savefig(f"./evaluation/st/figures/{ntdas.DENVER_SD_IDS[lv]}.svg")#, dpi=FIG_DPI)
 
         # Clear figures and axes for memory issues
         plt.clf()
@@ -2031,7 +2033,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
         plt.legend(names)
 
-        plt.savefig(figDir / Path(f"{stateAc}-{ct}-coverage.png"), dpi=FIG_DPI)
+        plt.savefig(figDir / Path(f"{stateAc}-{ct}-coverage.svg"))#, dpi=FIG_DPI)
 
 
     #print(curMatchesDf)
@@ -2280,7 +2282,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
 
     # Save the figure
-    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs.png"), dpi=FIG_DPI)
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs.svg"))#, dpi=FIG_DPI)
 
     # Repeat, but with the zoomed in subset
     fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -2312,7 +2314,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
     # Save the figure
-    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-zoomed.png"), dpi=FIG_DPI)
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-zoomed.svg"))#, dpi=FIG_DPI)
 
     # Repeat with more zoomed in
     fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -2344,7 +2346,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
     # Save the figure
-    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-more-zoomed.png"), dpi=FIG_DPI)
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-more-zoomed.svg"))#, dpi=FIG_DPI)
 
 
     # Do the same for the pop-based EV registrations, if applicable
@@ -2376,7 +2378,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         axp.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
             
 
-        plt.savefig(figDir / Path(f"{stateAc}-emissions-pop-evs.png"), dpi=FIG_DPI)
+        plt.savefig(figDir / Path(f"{stateAc}-emissions-pop-evs.svg"))#, dpi=FIG_DPI)
     
     print(f'\nFinished {stateAc} analysis.\n')
 
@@ -2938,28 +2940,28 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     fig, ax = plt.subplots(figsize=FIG_SIZE)
 
     arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax,
-                      color='red', label='Areal Overlap', lw=2,
-                      marker='o', ms=10)
+                      color='red', label='Areal Overlap', lw=LW,
+                      marker='o', ms=PD_PLOT_MS)
     #arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, kind='scatter', color='red', s=50)
 
     krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax,
-                        color='blue', label='Kriging', lw=2,
-                        marker='o', ms=10)
+                        color='blue', label='Kriging', lw=LW,
+                        marker='o', ms=PD_PLOT_MS)
     #krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, kind='scatter', color='blue', s=50)
 
     popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax,
-                    kind='line', color='black', label='Pop. Overlap', lw=2,
-                    marker='o', ms=10)
+                    kind='line', color='black', label='Pop. Overlap', lw=LW,
+                    marker='o', ms=PD_PLOT_MS)
     #popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='scatter', color='black', s=50)
 
     avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax,
-                    kind='line', color='orange', label='Averaged Est.', lw=2,
-                    marker='o', ms=10)
+                    kind='line', color='orange', label='Averaged Est.', lw=LW,
+                    marker='o', ms=PD_PLOT_MS)
     #avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='scatter', color='orange', s=50)
 
     gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax,
-                   kind='line', color='green', label='Ground Truth', lw=2,
-                   marker='o', ms=10)
+                   kind='line', color='green', label='Ground Truth', lw=LW,
+                   marker='o', ms=PD_PLOT_MS)
     #gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='scatter', color='green', s=50)
 
 
@@ -2984,7 +2986,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     if not figDir.exists():
         figDir.mkdir()
 
-    plt.savefig(figDir / Path("policies-vs-income.png"), dpi=FIG_DPI)
+    plt.savefig(figDir / Path("policies-vs-income.svg"))#, dpi=FIG_DPI)
 
     # We also want to get a boxplot for the errors
     
@@ -3019,7 +3021,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
-    plt.savefig(figDir / Path("income-est-boxplot.png"), dpi=FIG_DPI)
+    plt.savefig(figDir / Path("income-est-boxplot.svg"))#, dpi=FIG_DPI)
 
     # Also plot the stddev of the errors by minimum error
     colNames = list(colMapper.values())
@@ -3215,7 +3217,7 @@ if __name__ == "__main__":
     
     #SpatialEval(Path('./evaluation/spatial'), loadGraph=True)
 
-    #TemporalEval(Path('./evaluation/temporal'))
+    TemporalEval(Path('./evaluation/temporal'))
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
@@ -3223,7 +3225,7 @@ if __name__ == "__main__":
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
 
-    #quit()
+    quit()
     
     errorDfs = {}
     for stateAc in ['VT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
@@ -3293,7 +3295,7 @@ if __name__ == "__main__":
         #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save the figure out
-        plt.savefig(figDir / Path(f"{stateAc}-boxplot.png"), dpi=FIG_DPI)
+        plt.savefig(figDir / Path(f"{stateAc}-boxplot.svg"))#, dpi=FIG_DPI)
 
         # Plot all errors by minimum error to check agreement on
         # a new figure
@@ -3321,7 +3323,7 @@ if __name__ == "__main__":
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save the figure out
-        plt.savefig(figDir / Path(f"{stateAc}-error-difference.png"), dpi=FIG_DPI)
+        plt.savefig(figDir / Path(f"{stateAc}-error-difference.svg"))#, dpi=FIG_DPI)
 
         # Do the same thing but with raw error percentages
         fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -3344,7 +3346,7 @@ if __name__ == "__main__":
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save the figure out
-        plt.savefig(figDir / Path(f"{stateAc}-error-vs-min-error.png"), dpi=FIG_DPI)
+        plt.savefig(figDir / Path(f"{stateAc}-error-vs-min-error.svg"))#, dpi=FIG_DPI)
 
         # Plot standard deviation of errors vs. minimum error (binned)
 
@@ -3403,7 +3405,7 @@ if __name__ == "__main__":
         ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
-        plt.savefig(figDir / Path(f"{stateAc}-min-error-difference-vs-min-error.png"), dpi=FIG_DPI)
+        plt.savefig(figDir / Path(f"{stateAc}-min-error-difference-vs-min-error.svg"))#, dpi=FIG_DPI)
 
 
         # Cut out any outliers
@@ -3452,7 +3454,7 @@ if __name__ == "__main__":
         ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
         ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
-        plt.savefig(figDir / Path(f"{stateAc}-std-of-errors.png"), dpi=FIG_DPI)
+        plt.savefig(figDir / Path(f"{stateAc}-std-of-errors.svg"))#, dpi=FIG_DPI)
 
 
 

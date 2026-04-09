@@ -24,6 +24,25 @@ from myTestTwo import DoSomething, FOO
 
 
 
+a = 3
+b = 2
+print(eval("a < b"))
+
+quit()
+
+
+df = pd.DataFrame({"col1": [1,2,3], "col2": [4,5,6], "col3": [7,18,9]})
+
+df['stddev'] = df[['col1', 'col2', 'col3']].std(axis=1, ddof=0)
+
+print(df)
+
+print(np.std([2, 5, 18]))
+
+
+
+quit()
+
 
 a = np.array([-1,-2,-3,-4])
 print(np.sqrt(a**2))
