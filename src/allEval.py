@@ -33,8 +33,8 @@ FIG_MINOR_AXIS_TICK_SIZE = 23#21#14
 FIG_DPI = 200
 
 LW = 5#3
-BP_PROPS = dict(linewidth=LW)
-BP_DOT_PROPS = dict(marker='o', markersize=12, markeredgewidth=3)
+BP_PROPS = dict(linewidth=LW+1)
+BP_DOT_PROPS = dict(marker='o', markersize=24, markeredgewidth=4)
 
 PD_PLOT_MS = 15#10
 
@@ -1583,7 +1583,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Get a gator object
     gator = Gator(graph, Path(f'./logs/EmissionsPCGator{stateAc}.log'))
 
-    # Sum the total emissions for each row
+    # Sum the s for each row
     eCols = [c for c in cityEmissions.columns if 'Emissions' in c]
     cityEmissions['TotalEmissions'] = cityEmissions[eCols].sum(axis=1)
     countyEmissions['TotalEmissions'] = countyEmissions[eCols].sum(axis=1)
@@ -2259,10 +2259,10 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         if 'Pop-based' in k:
             continue
         if 'Averaged' in k:
-            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
 
         else:
-            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
 
         names.append(k)
 
@@ -2292,10 +2292,10 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         if 'Pop-based' in k:
             continue
         if 'Averaged' in k:
-            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
 
         else:
-            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
 
         names.append(k)
     
@@ -2324,10 +2324,10 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         if 'Pop-based' in k:
             continue
         if 'Averaged' in k:
-            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
 
         else:
-            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=2, marker='o', ms=10)
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
 
         names.append(k)
     
@@ -3217,7 +3217,7 @@ if __name__ == "__main__":
     
     #SpatialEval(Path('./evaluation/spatial'), loadGraph=True)
 
-    TemporalEval(Path('./evaluation/temporal'))
+    #TemporalEval(Path('./evaluation/temporal'))
 
     #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
@@ -3225,10 +3225,10 @@ if __name__ == "__main__":
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
 
-    quit()
+    #quit()
     
     errorDfs = {}
-    for stateAc in ['VT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
@@ -3368,7 +3368,7 @@ if __name__ == "__main__":
 
         # Plot minimum error difference vs. minimum error
         fig, ax = plt.subplots(figsize=FIG_SIZE)
-        curDf.plot(x='Minimum Error Difference', y='Minimum Error', ax=ax, kind='scatter', s=50, color='red')
+        curDf.plot(x='Minimum Error Difference', y='Minimum Error', ax=ax, kind='scatter', s=75, color='red')
 
         # Fit curves
         for m in models:
@@ -3379,7 +3379,7 @@ if __name__ == "__main__":
             y = [m(i, *params) for i in x]
 
             # Plot the line
-            plt.plot(x, y, color=models[m], lw=2)
+            plt.plot(x, y, color=models[m], lw=LW)
 
             # Calculate r-squared
             yPred = m(curDf['Minimum Error Difference'], *params)
