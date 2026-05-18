@@ -1749,12 +1749,42 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     populationResDf = pd.merge(populationResDf, countyGt, left_index=True, right_on='GISJOIN')
     avgResDf = pd.merge(avgResDf, countyGt, on='GISJOIN')
 
+
+    # Calculate bias
+    biasCol = 'Bias'
+    arealResDf[biasCol+'_a'] = arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']
+    krigingResDf[biasCol+'_k'] = krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']
+    populationResDf[biasCol+'_p'] = populationResDf['EmissionsPerVM_Pop'] - populationResDf['EmissionsPerVM_GT']
+    avgResDf[biasCol+'_avg'] = avgResDf['AvgEstEmissions'] - avgResDf['EmissionsPerVM_GT']
+
+    arealBias = arealResDf[biasCol+'_a'].mean()
+    krigingBias = krigingResDf[biasCol+'_k'].mean()
+    popBias = populationResDf[biasCol+'_p'].mean()
+    avgBias = avgResDf[biasCol+'_avg'].mean()
+
+    # Print the biases
+    secSep = "\n\n-------------------------------------------\n\n"
+    print(secSep)
+    print(f"The biases for {stateAc} are:\n")
+    print(f"Areal: {arealBias}")
+    print(f"Kriging: {krigingBias}")
+    print(f"Population: {popBias}")
+    print(f"Avg: {avgBias}")
+    print(secSep)
+
     # Calculate error
     errorCol = 'RelError'
     arealResDf[errorCol+'_a'] = 100.* np.abs(arealResDf['EmissionsPerVM'] - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
     krigingResDf[errorCol+'_k'] = 100.*np.abs(krigingResDf['EmissionsPerVM_est'] - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
     populationResDf[errorCol + '_p'] = 100.*np.abs(populationResDf['EmissionsPerVM_Pop'] - populationResDf['EmissionsPerVM_GT']) / populationResDf['EmissionsPerVM_GT']
     avgResDf[errorCol + '_avg'] = 100.*np.abs(avgResDf['AvgEstEmissions'] - avgResDf['EmissionsPerVM_GT']) / avgResDf['EmissionsPerVM_GT']
+
+
+    # Calculate error after fixing bias
+    arealResDf[errorCol+'_a_unbiased'] = 100. * np.abs((arealResDf['EmissionsPerVM'] - arealBias) - arealResDf['EmissionsPerVM_GT']) / arealResDf['EmissionsPerVM_GT']
+    krigingResDf[errorCol+'_k_unbiased'] = 100. * np.abs((krigingResDf['EmissionsPerVM_est'] - krigingBias) - krigingResDf['EmissionsPerVM_GT']) / krigingResDf['EmissionsPerVM_GT']
+    populationResDf[errorCol + '_p_unbiased'] = 100. * np.abs((populationResDf['EmissionsPerVM_Pop'] - popBias) - populationResDf['EmissionsPerVM_GT']) / populationResDf['EmissionsPerVM_GT']
+    avgResDf[errorCol + '_avg_unbiased'] = 100. * np.abs((avgResDf['AvgEstEmissions'] - avgBias) - avgResDf['EmissionsPerVM_GT']) / avgResDf['EmissionsPerVM_GT']
 
     # Calculate variance of error
     arealVar = arealResDf[errorCol+'_a'].var()
@@ -1763,13 +1793,14 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     avgVar = avgResDf[errorCol + '_avg'].var()
 
     # Join the results to compare directly
-    errorDf = pd.merge(arealResDf[['GISJOIN', errorCol + '_a']], krigingResDf[['GISJOIN', errorCol +'_k']], on='GISJOIN')
-    errorDf = pd.merge(errorDf, populationResDf[['GISJOIN', errorCol + '_p']], on='GISJOIN')
-    errorDf = pd.merge(errorDf, avgResDf[['GISJOIN', errorCol + '_avg']], on='GISJOIN')
+    errorDf = pd.merge(arealResDf[['GISJOIN', errorCol + '_a', errorCol + '_a_unbiased']], krigingResDf[['GISJOIN', errorCol +'_k', errorCol + '_k_unbiased']], on='GISJOIN')
+    errorDf = pd.merge(errorDf, populationResDf[['GISJOIN', errorCol + '_p', errorCol + '_p_unbiased']], on='GISJOIN')
+    errorDf = pd.merge(errorDf, avgResDf[['GISJOIN', errorCol + '_avg', errorCol + '_avg_unbiased']], on='GISJOIN')
+
 
     pd.set_option('display.max_rows', 10000000)
     pd.set_option('display.max_columns', 10000)
-    print(errorDf)
+    #print(errorDf)
 
     # Get pairwise average error differences
     errorDf['Error Difference: A-K'] = errorDf[errorCol + '_a'] - errorDf[errorCol + '_k']
@@ -3228,7 +3259,7 @@ if __name__ == "__main__":
     #quit()
     
     errorDfs = {}
-    for stateAc in ['CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['CT', 'TN']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
@@ -3274,7 +3305,12 @@ if __name__ == "__main__":
             errorCol+'_a': 'Areal',
             errorCol+'_k': 'Kriging',
             errorCol+'_p': 'Population',
-            errorCol+'_avg': 'Averaged'
+            errorCol+'_avg': 'Averaged',
+            
+            errorCol + '_a_unbiased': 'Areal (U)',
+            errorCol + '_k_unbiased': 'Kriging (U)',
+            errorCol + '_p_unbiased': 'Population (U)',
+            errorCol + '_avg_unbiased': 'Averaged (U)'
         })
 
         # Plot all 4 error columns for this state
@@ -3295,7 +3331,31 @@ if __name__ == "__main__":
         #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
 
         # Save the figure out
-        plt.savefig(figDir / Path(f"{stateAc}-boxplot.svg"))#, dpi=FIG_DPI)
+        plt.savefig(figDir / Path(f"{stateAc}-boxplot.svg"))#, dpi=FIG_DPI)]
+        
+        # Repeat with the unbiased results
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
+        indCols = ['Areal (U)', 'Kriging (U)', 'Population (U)', 'Averaged (U)']
+        curDf.boxplot(column=indCols,
+                      ax=ax, grid=False, boxprops=BP_PROPS, whiskerprops=BP_PROPS,
+                      capprops=BP_PROPS, medianprops=BP_PROPS, flierprops=BP_DOT_PROPS)
+
+
+        # Fix plot labels and sizes
+        plt.xlabel('Change of Support Method', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.ylabel('Relative Unbiased Error (%)', fontsize=FIG_LABEL_FONT_SIZE)
+        plt.title(f'Relative Unbiased Error for {ACRO_TO_STATE[stateAc]}', fontsize=FIG_TITLE_FONT_SIZE)
+
+        ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+        ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+        
+        #ax.legend(fontsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+        # Save the figure out
+        plt.savefig(figDir / Path(f"{stateAc}-boxplot-unbiased.svg"))#, dpi=FIG_DPI)]
+
+        continue
+
 
         # Plot all errors by minimum error to check agreement on
         # a new figure
