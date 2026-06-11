@@ -2253,7 +2253,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
     # We only need to plot the actual results for new york
     if not stateAc == 'NY':
-        return errorDf, errorCol
+        return [errorDf, errorCol], [arealResDf, krigingResDf, populationResDf, avgResDf]
 
     # Sort for better plotting
     zoomedFinalDfs = {}
@@ -2413,7 +2413,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     
     print(f'\nFinished {stateAc} analysis.\n')
 
-    return errorDf, errorCol
+    return [errorDf, errorCol], [arealResDf, krigingResDf, populationResDf, avgResDf]
 
 
 def ExtractFIPSFromGEOID(row: pd.Series, geoIdCol: str) -> str:
@@ -3259,9 +3259,10 @@ if __name__ == "__main__":
     #quit()
     
     errorDfs = {}
-    for stateAc in ['CT', 'TN']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    resDfs = {}
+    for stateAc in ['OR', 'TN', 'CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
-        errorDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
+        errorDfs[stateAc], resDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
     
     # Plot a boxplot of all the errors
@@ -3283,12 +3284,48 @@ if __name__ == "__main__":
     FIG_MAJOR_AXIS_TICK_SIZE *= factor
     FIG_MINOR_AXIS_TICK_SIZE *= factor
 
+    # For clarity's sake
+    plt.cla()
+    plt.close()
+
     for stateAc in errorDfs:
 
-        # New figure for each state since the scales are mismatched
-        fig, ax = plt.subplots(figsize=FIG_SIZE)
-
         curDf, errorCol = errorDfs[stateAc]
+
+        avgResDf: pd.DataFrame # For autofill
+        arealResDf, krigingResDf, populationResDf, avgResDf = resDfs[stateAc]
+
+        # The avgResDf has all results, so just look at that
+
+
+        # Form a dict for easy iteration
+        resCols = {"Areal": "EmissionsPerVM",
+                   "Kriging": "EmissionsPerVM_est",
+                   "Population": "EmissionsPerVM_Pop",
+                   "Averaged": "AvgEstEmissions"}
+        
+        for method in resCols:
+            col = resCols[method]
+
+            # Make a new figure
+            fig, ax = plt.subplots(figsize=FIG_SIZE)
+            
+            # Fix plot labels and sizes
+            plt.xlabel('Emissions Per VM', fontsize=FIG_LABEL_FONT_SIZE)
+            #plt.ylabel('Emissions Per VM', fontsize=FIG_LABEL_FONT_SIZE)
+            plt.title(f'{method} Emissions Per VM for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+            ax.tick_params(axis='both', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+            ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
+
+            # Histogram of the results
+            avgResDf.hist(col, ax=ax, bins=30)
+            plt.title(f'{method} Emissions Per VM for {stateAc}', fontsize=FIG_TITLE_FONT_SIZE)
+
+            plt.savefig(figDir / Path(f"{stateAc}-{method}-histogram.svg"))#, dpi=FIG_DPI)]
+
+
+        continue
 
         # All columns except the first should be floats
         for c in curDf.columns[1:]:
@@ -3315,6 +3352,7 @@ if __name__ == "__main__":
 
         # Plot all 4 error columns for this state
         indCols = ['Areal', 'Kriging', 'Population', 'Averaged']
+        fig, ax = plt.subplots(figsize=FIG_SIZE)
         curDf.boxplot(column=indCols,
                       ax=ax, grid=False, boxprops=BP_PROPS, whiskerprops=BP_PROPS,
                       capprops=BP_PROPS, medianprops=BP_PROPS, flierprops=BP_DOT_PROPS)

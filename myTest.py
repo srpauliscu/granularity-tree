@@ -22,6 +22,28 @@ from src.entities import *
 from myTestTwo import DoSomething, FOO
 
 
+def MyFunc():
+
+    return [1,2], [3,4,5,6]
+
+
+d1 = {}
+d2 = {}
+for c in ['a', 'b']:
+    d1[c], d2[c] = MyFunc()
+
+for c in ['a', 'b']:
+    v1, v2 = d1[c]
+
+    v6: int
+    v3, v4, v5, v6 = d2[c]
+
+    print(v1, v2, v3, v4, v5, v6)
+
+
+
+quit()
+
 
 
 a = 3
