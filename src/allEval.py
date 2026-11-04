@@ -597,7 +597,7 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     Scenario: Planning new bus routes and we want to know traffic trends.
 
     Want: Traffic density by school district (avg speed reduction per hour per district)
-    Have: Average speed data for vehicleimport tqdms during travel at individual TSs where location
+    Have: Average speed data for vehicle during travel at individual TSs where location
     is given by ZIP code
     
     Need: Avg speed reduction per hour, group by school district via areal overlap
@@ -618,7 +618,9 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     # Let's start with specific dates of data
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=6, hour=0, minute=0, second=0)
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
+    #dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=14, hour=0, minute=0, second=0)
+    
     vehicleDf = vehicleDf[vehicleDf[ntdas.TIMESTAMP_COL] < dateCutoff]
 
     # We only want Denver ZIP codes for the roads
@@ -2971,28 +2973,28 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     fig, ax = plt.subplots(figsize=FIG_SIZE)
 
     arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax,
-                      color='red', label='Areal Overlap', lw=LW,
-                      marker='o', ms=PD_PLOT_MS)
+                      kind='scatter', color='red', label='Areal Overlap', lw=LW,
+                      marker='o')#, ms=PD_PLOT_MS)
     #arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, kind='scatter', color='red', s=50)
 
     krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax,
-                        color='blue', label='Kriging', lw=LW,
-                        marker='o', ms=PD_PLOT_MS)
+                        kind='scatter', color='blue', label='Kriging', lw=LW,
+                        marker='o')#, ms=PD_PLOT_MS)
     #krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, kind='scatter', color='blue', s=50)
 
     popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax,
-                    kind='line', color='black', label='Pop. Overlap', lw=LW,
-                    marker='o', ms=PD_PLOT_MS)
+                    kind='scatter', color='black', label='Pop. Overlap', lw=LW,
+                    marker='o')#, ms=PD_PLOT_MS)
     #popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='scatter', color='black', s=50)
 
     avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax,
-                    kind='line', color='orange', label='Averaged Est.', lw=LW,
-                    marker='o', ms=PD_PLOT_MS)
+                    kind='scatter', color='orange', label='Averaged Est.', lw=LW,
+                    marker='o')#, ms=PD_PLOT_MS)
     #avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='scatter', color='orange', s=50)
 
     gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax,
-                   kind='line', color='green', label='Ground Truth', lw=LW,
-                   marker='o', ms=PD_PLOT_MS)
+                   kind='scatter', color='green', label='Ground Truth', lw=LW,
+                   marker='o')#, ms=PD_PLOT_MS)
     #gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='scatter', color='green', s=50)
 
 
@@ -3250,13 +3252,13 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
 
-    #quit()
+    quit()
     
     errorDfs = {}
     resDfs = {}

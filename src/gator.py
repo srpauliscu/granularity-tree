@@ -1011,6 +1011,10 @@ class Gator(object):
         allMatches = {}
         for sn in sourceNodes:
 
+            # Optimize: no need to get matches of the same source node twice
+            if sn in allMatches:
+                continue
+
             # Get the matching dest nodes
             matches = self.kGraph.GetMatches(sn, destNodes, edgeType)
             allMatches[sn] = matches
@@ -1519,7 +1523,6 @@ class Gator(object):
         # Concat them into one dataframe
         concatDf = pd.concat(allRows)
 
-
         # Do the spatial scaling now
         if type(sMethod) == AggMethod:
             resDf = self.Aggregate(concatDf, self.VALUE_FACTOR_COL, sMethod,
@@ -1533,6 +1536,8 @@ class Gator(object):
             self.logger.error(msg)
             raise TypeError(msg)
         
+        quit()
+
         # Rename it to match the original columns
         resDf.index = resDf.index.set_names({
             self.S_DEST_COL: sourceSIdCol,
