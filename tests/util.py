@@ -341,8 +341,13 @@ def GetGatorSamples(gator: Gator, sampleSize: int, idCol: str, dataCol: str) \
 
 
 def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
-                           unit: TID = TID.HOUR) \
+                           unit: TID = TID.HOUR, maxBlocks: int = 16, missingChance: float = -1) \
     -> tuple[pd.DataFrame, pd.DataFrame]:
+
+    # We selected the minute as the smallest unit here, so
+    # we can't generate second-based data
+    if unit == TID.SECOND:
+        raise RuntimeError(f'Must use at least MINUTES for generating temporal sample.')
 
     # Use this function to generate temporal test data
 
@@ -351,6 +356,7 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
     curStartTs = startTs
     argDict = {TID_TO_STRING[unit]: 1}
     ONE_UNIT = pd.DateOffset(**argDict)
+
     UNIT_TO_SEC_FACTOR = ((curStartTs + ONE_UNIT) - curStartTs).total_seconds()
 
     # Generate the test data in blocks of units that are subdivided
@@ -358,17 +364,24 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
 
     while curStartTs < endTs:
 
-        # Generate a random length
-        numUnits = 5#random.randint(1,16)
+        numBlocks = np.random.randint(5, maxBlocks)
 
         # Get the end point
-        nextEndTs = min(curStartTs + (ONE_UNIT * numUnits), endTs)
+        nextEndTs = min(curStartTs + (ONE_UNIT * numBlocks), endTs)
         numUnits = (nextEndTs - curStartTs).total_seconds() / UNIT_TO_SEC_FACTOR
+
+        # Decide whether to generate data for this block
+        if np.random.random() < missingChance:
+
+            # Increment the counter and continue
+            curStartTs = nextEndTs
+            continue
+
 
         # Generate some random data for it
         value = random.randint(1, 100)*numUnits
 
-        # Each hour in the interval will evenly split the value
+        # Each block in the interval will evenly split the value
         lastTs = curStartTs
         curKeyRows = []
         while lastTs < nextEndTs:# and len(curKeyRows) <= numUnits:
@@ -403,6 +416,13 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
         nextIntervalTs = None
         curSampleRows = []
         minIntervals = 4
+        maxPossibleIntervals = int((UNIT_TO_SEC_FACTOR / 60.) * numUnits)
+        if maxPossibleIntervals == 0:
+
+            # Rare occurance when seconds are specified, since minute is our highest granularity
+            # for generating these tests (for the sake of runtime)
+            raise RuntimeError("Do not specify a number of seconds other than 0 for starting and ending timestamps.")
+
         while lastIntervalTs < nextEndTs:
 
             # Initialize a new row
@@ -410,8 +430,12 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
 
             # Get the next endpoint based on a random number of mins
             # We should have multiple intervals per chunk
-            numMins = random.randint(1, int((UNIT_TO_SEC_FACTOR / 60.) * numUnits / minIntervals))
 
+            # Account for a final block that has insuffient size for minInterval number of units
+            if maxPossibleIntervals < minIntervals:
+                numMins = maxPossibleIntervals
+            else:
+                numMins = random.randint(1, int(maxPossibleIntervals / minIntervals))
 
             # Cut off the last interval so as to not mess with future intervals
             nextIntervalTs = min(lastIntervalTs + pd.Timedelta(numMins, unit=TID.MINUTE.value), nextEndTs)
@@ -438,7 +462,15 @@ def GenerateTemporalSample(startTs: pd.Timestamp, endTs: pd.Timestamp,
 
         # Make sure each interval value is realistic
         for row in curSampleRows:
-            assert row[T_DATA_COL] <= (value * (1./minIntervals))
+            if maxPossibleIntervals < minIntervals:
+                print(row[T_DATA_COL])
+                print(value)
+                print(maxPossibleIntervals)
+                print(minIntervals)
+                print('\n')
+                assert math.isclose(row[T_DATA_COL], value)
+            else:
+                assert row[T_DATA_COL] <= (value * (1./minIntervals))
 
         
         # Add the rows to their respective lists

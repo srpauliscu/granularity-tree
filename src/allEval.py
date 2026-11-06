@@ -618,8 +618,8 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
     # Let's start with specific dates of data
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=6, hour=0, minute=0, second=0)
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
-    #dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=14, hour=0, minute=0, second=0)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
+    #dateCutoff = pd.Timestamp(year=2020, month=10, day=14, hour=0, minute=0, second=0)
     
     vehicleDf = vehicleDf[vehicleDf[ntdas.TIMESTAMP_COL] < dateCutoff]
 
