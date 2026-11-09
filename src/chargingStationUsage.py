@@ -106,7 +106,7 @@ def LoadCSUData(filepath: Path, nrows: int = 1000) -> tuple[pd.DataFrame, list]:
     return csuDf, cols
 
 
-def main(load: bool = True, overwrite: bool = True, relTol: float = .00001):
+def PlotPowerProfiles(load: bool = True, overwrite: bool = True, relTol: float = .00001):
 
     # We don't actually need a graph object since the edges
     # are calculated dynamically
@@ -262,7 +262,7 @@ def manualMain(load: bool = True, overwrite: bool = True, relTol: float = .00001
 if __name__ == "__main__":
 
     #manualMain()
-    main()
+    PlotPowerProfiles()
 
 
 

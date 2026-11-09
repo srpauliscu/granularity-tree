@@ -114,7 +114,7 @@ def LoadSavedDFs(parentDir: Path) -> tuple[pd.DataFrame, gpd.GeoDataFrame, pd.Da
 
 
 
-def main(load: bool = True, overwrite: bool = False):
+def PlotPowerProfiles(load: bool = True, overwrite: bool = False):
 
     # Get the data
     dataDir = Path("./data/ntdas")
@@ -375,4 +375,4 @@ def main(load: bool = True, overwrite: bool = False):
 
 
 if __name__ == "__main__":
-    main()
+    PlotPowerProfiles()

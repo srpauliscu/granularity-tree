@@ -651,12 +651,12 @@ class GranularityGraph(object):
 ''' 
 
 # Dead simple test
-def main():
+def PlotPowerProfiles():
 
     graph = GranularityGraph('test', Path('./logs/test.log'))
 
 if __name__ == "__main__":
-    main()
+    PlotPowerProfiles()
 
 
 
