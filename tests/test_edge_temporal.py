@@ -46,6 +46,37 @@ def testTemporalGeneration():
 
     sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
 
+@pytest.mark.equalize
+def testConservation():
+
+    # Specific test to show that the total values are preserved
+    # through the CoS SUM operation.
+
+    # Generate the sample
+    startTs = pd.Timestamp(year=2020, month=1, day=1, hour=0, minute=0, second=0)
+    endTs = pd.Timestamp(year=2020, month=4, day=10, hour=0, minute=0, second=0)
+
+    sampleDf, answerKeyDf = GenerateTemporalSample(startTs, endTs)
+
+    # Get a gator for aggregating
+    gator = Gator(None, Path('./logs/testConservation.log'))
+
+    # Test a few different levels
+    levels = [TID.HOUR, TID.DAY, TID.MONTH]
+
+    resDfDict = {}
+    for unit in levels:
+        resDfDict[unit] = gator.TemporalEqualize(sampleDf, unit, T_INTERVAL_COL,
+                                                 T_DATA_COL, AggMethod.SUM)
+        
+    # Take the sum of the original sampleDf
+    gtSum = sampleDf[T_DATA_COL].sum()
+
+    # Get the sums at each unit and compare
+    for unit in levels:
+        curSum = resDfDict[unit][T_DATA_COL].sum()
+
+        assert math.isclose(curSum, gtSum)
 
 @pytest.mark.equalize
 def testHourlyBoundary():
@@ -269,4 +300,4 @@ def testMissingTimes():
 
 
 if __name__ == "__main__":
-    main()
+    PlotPowerProfiles()
