@@ -37,11 +37,15 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import scipy.integrate as integrate
+from tqdm import tqdm
+import pickle
 
 matplotlib.use('qt5agg')
 
 
 from gator import *
+from allEval import FIG_DPI, FIG_LABEL_FONT_SIZE, FIG_MAJOR_AXIS_TICK_SIZE, FIG_MINOR_AXIS_TICK_SIZE,\
+FIG_SIZE, FIG_SIZE_FACTOR, FIG_TITLE_FONT_SIZE
 
 
 # Power functions at different levels for integration
@@ -217,6 +221,11 @@ def CCCVPower(level: Literal[1,2,3], tau: float = 100.) -> Callable[[float], flo
 PROFILE_GENERATORS = {'naive': ConstantPower,
                       'cccv': CCCVPower}
 
+# Taus to get matching total energy
+TAUS = {1: -1,
+        2: 130,
+        3: 15.5}
+
 START_TS = pd.Timestamp(year=2019, month=10, day=1, hour=0, minute=0, second=0, tz='US/Pacific')
 END_TS = pd.Timestamp(year=2019, month=10, day=10, hour=0, minute=0, second=0, tz='US/Pacific')
 NUM_ROWS = 100000
@@ -229,21 +238,31 @@ CUTOFF80 = {1: 45*60,
 
 def GenerateInstances(outDir: Path, powerLevels: list[Literal[1,2,3]]):
 
+    print('\nGenerating instances...')
+
     # Generate random charging instances for sensitivity testing
     
     # Generate each power level separately
     for pl in powerLevels:
 
+        print(f'\nPower level {pl}:')
+
         # Generate the appropriate power curves
         curProfiles = []
         for ppk in PROFILE_GENERATORS:
-            curProfiles.append(PROFILE_GENERATORS[ppk](pl))
+            
+            if 'cccv' in ppk:
+                # Pass in the correct tau
+                curProfiles.append(PROFILE_GENERATORS[ppk](pl, TAUS[pl]))
+
+            else:
+                curProfiles.append(PROFILE_GENERATORS[ppk](pl))
 
         
         # Use the start and end ts to generate a bunch of random instances
         maxTd = int((END_TS - START_TS).total_seconds())
         allRows = []
-        for i in range(NUM_ROWS):
+        for i in tqdm(range(NUM_ROWS)):
 
             # Get a random timedelta between 0 and maxTd
             curTd = np.random.randint(0, maxTd)
@@ -259,7 +278,8 @@ def GenerateInstances(outDir: Path, powerLevels: list[Literal[1,2,3]]):
             curLen = pd.Timedelta(seconds=np.random.randint(5*60, 8*60*60))
 
             # Cut off the session if 80% is reached
-            tMax = pd.Timedelta(minutes=int(.80*CUTOFF80[pl]))
+            cutoffP = 1.25#.80
+            tMax = pd.Timedelta(minutes=int(cutoffP*CUTOFF80[pl]))
             if curT0 + curLen > tMax:
                 curLen = tMax - curT0
 
@@ -299,7 +319,10 @@ def PlotPowerProfiles(powerLevels: list[Literal[1,2,3]]):
         # Get functions for naive and CCCV profiles
         # This is in W/min
         nProfile = ConstantPower(pl)
-        cccvProfile = CCCVPower(pl, tau=100)
+
+        # Use the tau that gets the total energy usage of
+        # each profile to be roughly equivalent
+        cccvProfile = CCCVPower(pl, tau=TAUS[pl])
 
         # Plot them for now
         allX = np.linspace(0, int(CUTOFF80[pl]*1.25), num=5000)
@@ -314,6 +337,8 @@ def PlotPowerProfiles(powerLevels: list[Literal[1,2,3]]):
         fig, ax = plt.subplots()
         plt.plot(allX, ny)
         plt.plot(allX, cccvy)
+        
+        plt.title(f'Power level {pl}')
 
         ni = integrate.quad(nProfile, min(allX), max(allX))[0] / (1000*60)
         cccvi = integrate.quad(cccvProfile, min(allX), max(allX))[0] / (1000*60)
@@ -330,6 +355,8 @@ def PlotPowerProfiles(powerLevels: list[Literal[1,2,3]]):
 
 def CompareProfiles(dataDir: Path, powerLevels: list[Literal[1,2,3]]):
 
+    print('\nComparing profiles...')
+
     # We can use one Gator object for the whole thing
     gator = Gator(None, Path('./logs/sensitivityTesting.log'))
 
@@ -343,7 +370,7 @@ def CompareProfiles(dataDir: Path, powerLevels: list[Literal[1,2,3]]):
     for pl in powerLevels:
 
         # Load the corresponding sample data
-        curDf = pd.read_csv(dataDir / Path(f'powerLevel{pl}.csv'), nrows=1000)
+        curDf = pd.read_csv(dataDir / Path(f'powerLevel{pl}.csv'))#, nrows=1000)
 
         # We need to generate the actual interval objects
         curDf[startTsCol] = pd.to_datetime(curDf[startTsCol])
@@ -384,16 +411,16 @@ def CompareProfiles(dataDir: Path, powerLevels: list[Literal[1,2,3]]):
                         continue
 
                     # Skip pairs we've already done
-                    if (f'{ppk0}_{ppk1}' in curComparisonDf.columns or
-                        f'{ppk1}_{ppk0}' in curComparisonDf.columns):
+                    if (f'{ppk0}-{ppk1}' in curComparisonDf.columns or
+                        f'{ppk1}-{ppk0}' in curComparisonDf.columns):
                         continue
 
                     # Do a simple subtraction
-                    curComparisonDf[f'{ppk0}_{ppk1}'] = curComparisonDf[ppk0] - curComparisonDf[ppk1]
+                    curComparisonDf[f'{ppk0}-{ppk1}'] = curComparisonDf[ppk0] - curComparisonDf[ppk1]
 
             # Plot the comparisons?
             
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=FIG_SIZE)
             for c in curComparisonDf.columns:
                 
                 # Skip the non-result columns
@@ -404,9 +431,29 @@ def CompareProfiles(dataDir: Path, powerLevels: list[Literal[1,2,3]]):
                 curComparisonDf.plot(y=c, ax=ax, lw=2)
 
                 # Beautify
-                plt.xlabel('Date')
-                plt.ylabel('Difference (kWh)')
-                plt.title(f'Power Level {pl}, {timeType.name}')
+                plt.xlabel('Date (day)', fontsize=FIG_LABEL_FONT_SIZE, labelpad=-35)
+                plt.ylabel('Difference (kWh)', fontsize=FIG_LABEL_FONT_SIZE)
+                plt.title(f'Power Level {pl}, {timeType.name}', fontsize=FIG_TITLE_FONT_SIZE)
+
+                ax.tick_params(axis='x', which='both', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+                ax.tick_params(axis='y', which='both', labelsize=FIG_MAJOR_AXIS_TICK_SIZE)
+
+                plt.legend(fontsize=FIG_MAJOR_AXIS_TICK_SIZE, loc='upper center')
+
+            # Save out the plots
+            outDir = dataDir / Path(f'powerLevel{pl}')
+            if not outDir.exists():
+                outDir.mkdir(parents=True)
+            
+            plt.savefig(outDir / Path(f'{timeType.name}.svg'), dpi=300)
+            plt.savefig(outDir / Path(f'{timeType.name}.png'), dpi=300)
+
+            with open(outDir / Path(f'{timeType.name}.pickle'), 'wb') as f:
+                pickle.dump(fig, f)
+
+
+
+
 
 
     plt.show()
@@ -415,11 +462,11 @@ def CompareProfiles(dataDir: Path, powerLevels: list[Literal[1,2,3]]):
 
 if __name__ == "__main__":
     
-    powerLevels: list[Literal[1,2,3]] = [2,3]
+    powerLevels: list[Literal[1,2,3]] = [1,2,3]
 
     dataDir = Path.cwd() / Path('./data/sensitivitySamples')
 
-    #GenerateInstances(dataDir, powerLevels)
+    GenerateInstances(dataDir, powerLevels)
 
     #PlotPowerProfiles(powerLevels)
 
