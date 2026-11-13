@@ -34,6 +34,15 @@ The data used for this case study was provided by [NTDAS](https://ntdas.ieee.org
 
 ## Case Study 3: Income vs. Green Policies
 
+The state policy information was obtained from [XChange](https://www.climatepolicydashboard.org/policies), selecting the "download all policy data" option.  The income data was obtained from [the Census Bureau](https://data.census.gov/table?q=income&g=010XX00US$0500000&y=2024).  This link leads specifically to the county version; the state version can be selected by changing the filters.
+
+## Case Study 4: Vehicle emissions
+
+The population data used to build the graphs are linked above.  The original link we obtained emissions data from appears to now be defunct, but there is an identically named dataset published by the same source on the same website [here](https://catalog.data.gov/dataset/city-and-county-energy-profiles?from_hint=eyJxIjoiY2l0eSBhbmQgY291bnR5IGVuZXJneSBwcm9maWxlcyIsInNvcnQiOiJyZWxldmFuY2UifQ%3D%3D).  This appears to be the same data, though there is no guarantee.
+
+
+We obtained ZIP code-level registration for Minnesota, Oregon, and Vermont and county-level registration for Tennessee from [AtlasHub](https://www.atlasevhub.com/market-data/state-ev-registration-data/), ZIP-code level registration for New York from [NYSERDA](https://www.nyserda.ny.gov/All-Programs/Drive-Clean-Rebate-For-Electric-Cars-Program/Rebate-Data/Data-on-Electric-Vehicles-and-Charging-Stations) (to get the correct years), and city-level registration for Connecticut from [Data.gov](https://catalog.data.gov/dataset/electric-vehicle-registration-data).
+
 
 # License
 
