@@ -166,6 +166,9 @@ def RunSampleAnalysis(dataFile: Path = Path('./data/ntdas/dummySample.csv'),
     
     # Swap the ordering of the multiindex
     resDf = resDf.swaplevel().sort_index(level=0, inplace=False)
+
+    # Save it out
+    #resDf.to_csv(dataFile.parent / Path('exampleResults.csv'))
     
     dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     # Plot the speeds for a random GISJOIN ID
@@ -227,7 +230,7 @@ def RunSampleAnalysis(dataFile: Path = Path('./data/ntdas/dummySample.csv'),
 
 
         # Fix the legend label
-        ax.legend(newHandleList, dayOrder, fontsize=28, loc='upper center')
+        ax.legend(newHandleList, dayOrder, fontsize=28, loc='lower center')
 
         # Add lines for the times
         xticks = ax.get_xticks()

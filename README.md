@@ -1,8 +1,6 @@
 # Granularity Tree
 Codebase for a knowledge graph-based approach for spatio-temporal data fusion.
 
-## Current Version: 1.0.0
-
 # Data
 
 The four case studies, with the exception of Case Study 2, relied exclusively on publically available data.  Below are links to individual datasets used in all case studies.
@@ -30,7 +28,7 @@ For the EV charging data, we used data for the city of [Palo Alto](https://www.k
 
 ## Case Study 2: Traffic Patterns
 
-The data used for this case study was provided by [NTDAS](https://ntdas.ieee.org/).  This is the only commercial dataset used in this manuscript.  In lieu of providing the raw data, which is against licensing terms, we have provided a sample dataset with dummy data that can be used to run the example.
+The data used for this case study was provided by [NTDAS](https://ntdas.ieee.org/).  This is the only commercial dataset used in this manuscript.  In lieu of providing the raw data, which is against licensing terms, we have provided a sample dataset with dummy data that can be used to run the example.  See instructions below.
 
 ## Case Study 3: Income vs. Green Policies
 
@@ -42,6 +40,21 @@ The population data used to build the graphs are linked above.  The original lin
 
 
 We obtained ZIP code-level registration for Minnesota, Oregon, and Vermont and county-level registration for Tennessee from [AtlasHub](https://www.atlasevhub.com/market-data/state-ev-registration-data/), ZIP-code level registration for New York from [NYSERDA](https://www.nyserda.ny.gov/All-Programs/Drive-Clean-Rebate-For-Electric-Cars-Program/Rebate-Data/Data-on-Electric-Vehicles-and-Charging-Stations) (to get the correct years), and city-level registration for Connecticut from [Data.gov](https://catalog.data.gov/dataset/electric-vehicle-registration-data).
+
+
+# Example
+
+While the code for all case studies as well as links to the data are provided, we have also provided a bare-minimum working example.  This example can be found in [example.py](./src/example.py).
+
+This example mimics Case Study 2.  We have provided sample data in [dummySample.csv](./data/ntdas/dummySample.csv) that reflects some of the information contained in the actual NTDAS dataset used.  It is important to note, however, that **this is randomly generated data.**  As the NTDAS dataset is commercial, we cannot provide the actual raw data, so we have generated arbitrary data for the sample.  The generation method is also found in [example.py](./src/example.py), though the current dummySample.csv file was used to generate the following plot:
+
+![exampleFigure](./exampleFigure.png)
+
+The full results of the data displayed in this plot as well as all other Colorado school districs included in the sample can be found in [exampleResults.csv](./data/ntdas/exampleResults.csv).
+
+We encourage the user to start by trying to run the example, the graph of which is also provided, in the [STEvalGraph](./graphs/STEvalGraph/) directory.  The user is then encouraged to look at [allEval.py](./src/allEval.py) for code on how each case study was run, as those provide more complex examples.
+
+
 
 
 # License

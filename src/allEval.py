@@ -698,7 +698,7 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         # Get a gator object
         gator = Gator(graph, Path('./logs/STEvalGator.log'))
 
-        # Drop uneeded columns before the join
+        # Drop unneeded columns before the join
         roadDf = roadDf[[ntdas.SEG_ID_COL, "GISJOIN"]]
 
         # Before aggregation, we need to do a join

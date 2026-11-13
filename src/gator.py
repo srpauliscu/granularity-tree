@@ -1536,8 +1536,6 @@ class Gator(object):
             self.logger.error(msg)
             raise TypeError(msg)
         
-        quit()
-
         # Rename it to match the original columns
         resDf.index = resDf.index.set_names({
             self.S_DEST_COL: sourceSIdCol,
