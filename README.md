@@ -44,7 +44,12 @@ We obtained ZIP code-level registration for Minnesota, Oregon, and Vermont and c
 
 # Example
 
-While the code for all case studies as well as links to the data are provided, we have also provided a bare-minimum working example.  This example can be found in [example.py](./src/example.py).
+While the code for all case studies as well as links to the data are provided, we have also provided a bare-minimum working example.  This example can be found in [example.py](./src/example.py).  All of the filepaths used in the example are relative to the main repository directory.  To run the example, we suggest the user use Anaconda with the provided [env.yml](./env.yaml) to install the necessary packages.  We ran this code on Ubuntu 24.02.2.  To run the example, the following commands must be run:
+
+```
+conda create --file env.yml
+python ./src/example.py
+```
 
 This example mimics Case Study 2.  We have provided sample data in [dummySample.csv](./data/ntdas/dummySample.csv) that reflects some of the information contained in the actual NTDAS dataset used.  It is important to note, however, that **this is randomly generated data.**  As the NTDAS dataset is commercial, we cannot provide the actual raw data, so we have generated arbitrary data for the sample.  The generation method is also found in [example.py](./src/example.py), though the current dummySample.csv file was used to generate the following plot:
 
