@@ -2272,17 +2272,31 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         zoomedFinalDfs[k] = joinedFinalDfs[k][joinedFinalDfs[k]['EV_Count'] <= 250]
         moreZoomedFinalDfs[k] = joinedFinalDfs[k][joinedFinalDfs[k]['EV_Count'] <= 50]
 
-    # Set up colors for lines
+    # Set up colors, shapes, and LWs for lines
     colors = {}
+    shapes = {}
+    lws = {}
     for k in joinedFinalDfs:
         if 'Areal' in k:
             colors[k] = 'red'
+            shapes[k] = '^'
+            lws[k] = LW*3
+
         elif 'Kriging' in k:
             colors[k] = 'blue'
+            shapes[k] = '2'
+            lws[k] = LW*3.5
+
         elif 'Population' in k:
             colors[k] = 'black'
+            shapes[k] = 's'
+            lws[k] = LW*2.5
+
         elif 'Averaged' in k:
             colors[k] = 'orange'
+            shapes[k] = 'd'
+            lws[k] = LW*2.5
+   
     
     # Plot the areal-based EV results first
     fig, ax = plt.subplots(figsize=FIG_SIZE)
@@ -2292,10 +2306,12 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         if 'Pop-based' in k:
             continue
         if 'Averaged' in k:
-            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
+            #curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='scatter', ax=ax, color=colors[k], lw=lws[k], marker=shapes[k])
 
         else:
-            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
+            #curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='scatter', ax=ax, color=colors[k], lw=lws[k], marker=shapes[k])
 
         names.append(k)
 
@@ -2315,6 +2331,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
 
 
     # Save the figure
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs.png"), dpi=FIG_DPI)
     plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs.svg"))#, dpi=FIG_DPI)
 
     # Repeat, but with the zoomed in subset
@@ -2325,10 +2342,13 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         if 'Pop-based' in k:
             continue
         if 'Averaged' in k:
-            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
+            #curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
+            curDf.plot(x='EV_Count', y='AvgEstEmissions', kind='scatter', ax=ax, color=colors[k], lw=lws[k], marker=shapes[k])
 
         else:
-            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
+            #curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='line', ax=ax, color=colors[k], lw=LW, marker='o', ms=PD_PLOT_MS)
+            curDf.plot(x='EV_Count', y='EmissionsPerVM', kind='scatter', ax=ax, color=colors[k], lw=lws[k], marker=shapes[k])
+
 
         names.append(k)
     
@@ -2347,6 +2367,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     ax.tick_params(axis='both', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
 
     # Save the figure
+    plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-zoomed.png"), dpi=FIG_DPI)
     plt.savefig(figDir / Path(f"{stateAc}-emissions-areal-evs-zoomed.svg"))#, dpi=FIG_DPI)
 
     # Repeat with more zoomed in
@@ -2829,9 +2850,6 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     incomeByStateDf['MedianHouseholdIncome_GT'] = incomeByStateDf['MedianHouseholdIncome_GT'].astype(float)
 
     # Generate a combined dataset that averages all estimates together
-    print(arealResDf)
-    print(krigingResDf)
-    print(popResDf)
     avgResDf = pd.merge(arealResDf, krigingResDf, left_index=True, right_on='GISJOIN')
     print(avgResDf)
     avgResDf = pd.merge(avgResDf, popResDf, left_on='GISJOIN', right_index=True)
@@ -2973,27 +2991,27 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     fig, ax = plt.subplots(figsize=FIG_SIZE)
 
     arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax,
-                      kind='scatter', color='red', label='Areal Overlap', lw=LW,
-                      marker='o')#, ms=PD_PLOT_MS)
+                      kind='scatter', color='red', label='Areal Overlap', lw=LW*3,
+                      marker='^')#, ms=PD_PLOT_MS)
     #arealFinalDf.plot(y='MedianHouseholdIncome', x='Num Policies', ax=ax, kind='scatter', color='red', s=50)
 
     krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax,
-                        kind='scatter', color='blue', label='Kriging', lw=LW,
-                        marker='o')#, ms=PD_PLOT_MS)
+                        kind='scatter', color='blue', label='Kriging', lw=LW*3.5,
+                        marker='2')#, ms=PD_PLOT_MS)
     #krigingFinalDf.plot(y='MedianHouseholdIncome_est', x='Num Policies', ax=ax, kind='scatter', color='blue', s=50)
 
     popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax,
-                    kind='scatter', color='black', label='Pop. Overlap', lw=LW,
-                    marker='o')#, ms=PD_PLOT_MS)
+                    kind='scatter', color='black', label='Pop. Overlap', lw=LW*2.5,
+                    marker='s')#, ms=PD_PLOT_MS)
     #popFinalDf.plot(y='MedianHouseholdIncome_Pop', x='Num Policies', ax=ax, kind='scatter', color='black', s=50)
 
     avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax,
-                    kind='scatter', color='orange', label='Averaged Est.', lw=LW,
-                    marker='o')#, ms=PD_PLOT_MS)
+                    kind='scatter', color='orange', label='Averaged Est.', lw=LW*2.5,
+                    marker='d')#, ms=PD_PLOT_MS)
     #avgFinalDf.plot(y='AvgEstIncome', x='Num Policies', ax=ax, kind='scatter', color='orange', s=50)
 
     gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax,
-                   kind='scatter', color='green', label='Ground Truth', lw=LW,
+                   kind='scatter', color='green', label='Ground Truth', lw=LW*2.4,
                    marker='o')#, ms=PD_PLOT_MS)
     #gtFinalDf.plot(y='MedianHouseholdIncome_GT', x='Num Policies', ax=ax, kind='scatter', color='green', s=50)
 
@@ -3020,6 +3038,7 @@ def IncomeVsPolicy(dataDir: Path, sfDir: Path, loadGraph: bool = True,
         figDir.mkdir()
 
     plt.savefig(figDir / Path("policies-vs-income.svg"))#, dpi=FIG_DPI)
+    plt.savefig(figDir / Path("policies-vs-income.png"), dpi=FIG_DPI)
 
     # We also want to get a boxplot for the errors
     
@@ -3252,23 +3271,26 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
 
-    quit()
+    #quit()
     
     errorDfs = {}
     resDfs = {}
-    for stateAc in ['OR', 'TN', 'CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['NY']:#['OR', 'TN', 'CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc], resDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
     
     # Plot a boxplot of all the errors
     #fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+    plt.show()
+    quit()
 
 
     finalDf = None
@@ -3289,6 +3311,8 @@ if __name__ == "__main__":
     # For clarity's sake
     plt.cla()
     plt.close()
+
+    quit()
 
     for stateAc in errorDfs:
 
@@ -3326,8 +3350,6 @@ if __name__ == "__main__":
 
             plt.savefig(figDir / Path(f"{stateAc}-{method}-histogram.svg"))#, dpi=FIG_DPI)]
 
-
-        continue
 
         # All columns except the first should be floats
         for c in curDf.columns[1:]:
@@ -3393,8 +3415,6 @@ if __name__ == "__main__":
 
         # Save the figure out
         plt.savefig(figDir / Path(f"{stateAc}-boxplot-unbiased.svg"))#, dpi=FIG_DPI)]
-
-        continue
 
 
         # Plot all errors by minimum error to check agreement on

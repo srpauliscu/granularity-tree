@@ -151,6 +151,7 @@ TID_TO_STRING = {
     TID.YEAR: 'years',
     TID.MONTH: 'months',
     TID.DAY: 'days',
+    TID.WEEK: 'weeks',
     TID.HOUR: 'hours',
     TID.MINUTE: 'minutes',
     TID.SECOND: 'seconds'
