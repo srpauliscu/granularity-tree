@@ -796,9 +796,12 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
             dayGroup.set_index(dayGroup.index.get_level_values(0).hour, inplace=True)
             dayGroup.plot(kind='line', rot=0, ax=curAxPair, linewidth=2.5)
 
+
             # Save handles and labels to fix legend later
             handleList.append(curAxPair.get_lines()[-1])
             legendList.append(day)
+
+
 
         # Set labels
         curAxPair.set_xlabel('Hour of Day', fontsize=FIG_LABEL_FONT_SIZE)
@@ -817,6 +820,8 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
         curAxPair.tick_params(axis='x', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE)
         curAxPair.tick_params(axis='both', length=12, width=3)
 
+
+
         # Reorder the legend labels
         newHandleList = []
         for d in dayOrder:
@@ -824,6 +829,8 @@ def STEval(dataDir: Path, shapefileDir: Path = Path("./data/tiger"),
                 continue
             curI = legendList.index(d)
             newHandleList.append(handleList[curI])
+
+
 
 
         # Fix the legend label
@@ -3271,13 +3278,13 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
 
 
-    #quit()
+    quit()
     
     errorDfs = {}
     resDfs = {}

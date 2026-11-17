@@ -1446,11 +1446,6 @@ class Gator(object):
 
         '''
         Do a combination spatio-temporal scaling, grouping by spatial last
-
-        1.) Group into spatial destination type and get an interval for
-            the time periods it covers.
-            TODO: What do we do with the data?  Do we start aggregating?
-        2.) 
         
         '''
 
@@ -1485,6 +1480,7 @@ class Gator(object):
         # Print options for debugging
         pd.set_option('display.max_columns', 500)
         pd.set_option('display.width', 1000)
+        #pd.set_option('display.max_rows', None)
         
         # If we have time-series data, we need to make intervals
         if not isinstance(expandedDf[sourceTIdCol].dtype, pd.IntervalDtype):
@@ -1519,9 +1515,27 @@ class Gator(object):
             # Save the current results
             allRows.append(curResDf)
 
+
         
         # Concat them into one dataframe
         concatDf = pd.concat(allRows)
+
+        if tMethod == AggMethod.COUNT:
+            '''
+            As COUNT throws out the value (since it only adds up the factors and ignores the actual data), 
+            we lose the application of the spatial factor.  So, we need to reapply it.
+
+            We also want to save the current data for the MEDIAN operator, as it does NOT
+            use the value-factor column and instead uses the data directly (which in this case
+            is the value-factor from the spatial factor calculation step, so the spatial factor
+            is maintained).
+
+            This is a result of pre-calculating value-factors and shortcutting using them
+            for the different aggregations, like MEAN.  If the value-factors were calculated as needed,
+            this reapplication of the spatial factor would be unneccessary.
+            '''
+            concatDf[self.VALUE_FACTOR_COL] = concatDf[self.S_VALUE_FACTOR_COL]
+            concatDf[self.S_VALUE_FACTOR_COL] = concatDf[self.S_VALUE_FACTOR_COL] * concatDf[self.S_FACTOR_COL]
 
         # Do the spatial scaling now
         if type(sMethod) == AggMethod:

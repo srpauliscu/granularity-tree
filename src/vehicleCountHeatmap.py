@@ -5,7 +5,7 @@ from allEval import *
 
 def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Path("./data/tiger"),
            loadGraph: bool = True, graphsDir: Path = Path("./graphs"),
-           loadResults: bool = False, resDir: Path = Path("./evaluation/st")
+           loadResults: bool = True, resDir: Path = Path("./evaluation/st")
            ):
     
 
@@ -29,14 +29,15 @@ def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Pa
     
     vehicleDf = vehicleDf[vehicleDf[ntdas.TIMESTAMP_COL] < dateCutoff]
 
+
     # We only want Denver ZIP codes for the roads
     roadDf = roadDf[roadDf['zip'].isin(ntdas.DENVER_ZIPS)]
 
     # Take out rows with a travel time of 0 minutes
     vehicleDf = vehicleDf[vehicleDf[ntdas.TRAVEL_TIME_COL] > 0]
 
-    # TEST: make all vehicles only run for 2 seconds
-    vehicleDf[ntdas.TRAVEL_TIME_COL] = 2. / 60
+    COL_OF_I = 'speed'
+    #COL_OF_I = ntdas.SPEED_RATIO_COL
 
     if not (loadResults and resDir.exists()):
 
@@ -123,7 +124,7 @@ def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Pa
         obsResDf = gator.SpatioTemporalEqualize(joinedDf, sdGdf,
                                              TID.HOUR, GEID.ZCTA, GEID.SD,
                                              'GISJOIN', 'GISJOIN', ntdas.INTERVAL_COL,
-                                             None, ntdas.SPEED_RATIO_COL, None, None,
+                                             None, COL_OF_I, None, None,
                                              AggMethod.SUM, AggMethod.COUNT, EdgeType.AREA,
                                              True, True)
         et = time.time()
@@ -136,6 +137,12 @@ def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Pa
 
         # Save it for speed ups
         obsResDf.to_csv(resDir / Path('hmVehicleObs.csv'))
+
+        # Verify counts
+        resCount = obsResDf[COL_OF_I].sum()
+        print(resCount)
+        print(len(joinedDf))
+
         
     # Load the results file
     else:
@@ -144,7 +151,7 @@ def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Pa
         print(msg)
         logger.info(msg)
 
-        obsResDf = pd.read_csv(resDir)
+        obsResDf = pd.read_csv(resDir / Path('hmVehicleObs.csv'))
 
         # Make the interval column timestamps
         obsResDf[ntdas.INTERVAL_COL] = pd.to_datetime(obsResDf[ntdas.INTERVAL_COL])
@@ -152,10 +159,9 @@ def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Pa
         # Reform the multiindex
         obsResDf = obsResDf.set_index(['GISJOIN', ntdas.INTERVAL_COL])
     
-    # Verify counts
-    resCount = obsResDf[ntdas.SPEED_RATIO_COL].sum()
-    print(resCount)
-    print(len(joinedDf))
+    print(obsResDf.index.get_level_values(0))
+
+    
 
 
 
