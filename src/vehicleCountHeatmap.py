@@ -1,6 +1,7 @@
 
 
 from allEval import *
+import seaborn as sns
 
 
 def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Path("./data/tiger"),
@@ -24,7 +25,7 @@ def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Pa
 
     # Let's start with specific dates of data
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=6, hour=0, minute=0, second=0)
-    dateCutoff = pd.Timestamp(year=2020, month=10, day=7, hour=0, minute=0, second=0)
+    dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
     #dateCutoff = pd.Timestamp(year=2020, month=10, day=10, hour=0, minute=0, second=0)
     
     vehicleDf = vehicleDf[vehicleDf[ntdas.TIMESTAMP_COL] < dateCutoff]
@@ -143,6 +144,10 @@ def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Pa
         print(resCount)
         print(len(joinedDf))
 
+        print('\nCoS complete, run again with LoadResults=True to generate the graph.')
+
+        return
+
         
     # Load the results file
     else:
@@ -156,16 +161,55 @@ def VehicleHeatmap(dataDir: Path = Path("./data/ntdas"), shapefileDir: Path = Pa
         # Make the interval column timestamps
         obsResDf[ntdas.INTERVAL_COL] = pd.to_datetime(obsResDf[ntdas.INTERVAL_COL])
 
-        # Reform the multiindex
-        obsResDf = obsResDf.set_index(['GISJOIN', ntdas.INTERVAL_COL])
-    
-    print(obsResDf.index.get_level_values(0))
+        # Reform the multiindex (we don't actually want to do this)
+        #obsResDf = obsResDf.set_index(['GISJOIN', ntdas.INTERVAL_COL])
+
+        # The timestamps should only be up to each hour level
+        obsResDf['a_time_interval_'] = obsResDf['a_time_interval_'].dt.strftime('%d:%H')
+
+        print(obsResDf[obsResDf['GISJOIN'] == 'G08004230'])
+
+        obsResDf = obsResDf.pivot(index='a_time_interval_', columns='GISJOIN', values='speed')
+
+        fig, ax = plt.subplots()#(figsize=FIG_SIZE)
+
+        ax = sns.heatmap(obsResDf, annot=False, cmap='gnuplot', ax=ax)
+        cbar = ax.collections[0].colorbar
+
+        # Beautify
+        global FIG_LABEL_FONT_SIZE
+        FIG_LABEL_FONT_SIZE -= 5
+        ax.set_xlabel('School District (GISJOIN ID)', fontsize=FIG_LABEL_FONT_SIZE)
+        ax.set_ylabel('Timestamp (Day:Hour)', fontsize=FIG_LABEL_FONT_SIZE)
+        ax.set_title('Observations per School District, October 2020', fontsize=FIG_TITLE_FONT_SIZE)
+
+        # Fix tick sizes and fonts
+        ax.tick_params(axis='x', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE/2)
+        ax.tick_params(axis='y', which='major', labelsize=FIG_MAJOR_AXIS_TICK_SIZE/2)
+        ax.tick_params(axis='x', which='minor', labelsize=FIG_MINOR_AXIS_TICK_SIZE/2)
+        ax.tick_params(axis='both', length=12, width=3)
+
+        # Rotate the x labels to fit them better
+        plt.xticks(rotation=30, ha='right')
+        #plt.yticks(rotation=90, ha='right')
+
+        # Fix the colorbar too
+        cbar.ax.tick_params(labelsize=FIG_LABEL_FONT_SIZE/2)
+        cbar.set_label('Count', size=FIG_LABEL_FONT_SIZE)
+        cbar.ax.tick_params(axis='both', length=12, width=3)
+
+        # Set the fig size last to maintain the y-axis label separation
+        fig.set_size_inches(27.48, 15.43)
+
+        # Save it out
+        plt.savefig(resDir / Path('figures/observation-count.svg'), bbox_inches='tight', pad_inches=0)
+        plt.savefig(resDir / Path('figures/observation-count.png'), bbox_inches='tight', pad_inches=0, dpi=FIG_DPI)
+
+        plt.show()
+
+
 
     
-
-
-
-
 
 if __name__ == "__main__":
     VehicleHeatmap()
