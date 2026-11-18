@@ -3278,26 +3278,20 @@ if __name__ == "__main__":
 
     #TemporalEval(Path('./evaluation/temporal'))
 
-    STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
+    #STEval(Path('./data/ntdas'), loadGraph=True, loadResults=True)
 
 
     #IncomeVsPolicy(Path('./evaluation/incomeVsPolicy'), Path('./data/tiger'), loadGraph=True)
-
-
-    quit()
     
     errorDfs = {}
     resDfs = {}
-    for stateAc in ['NY']:#['OR', 'TN', 'CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['TN']:#['OR', 'TN', 'CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc], resDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
     
     # Plot a boxplot of all the errors
     #fig, ax = plt.subplots(figsize=FIG_SIZE)
-
-    plt.show()
-    quit()
 
 
     finalDf = None
@@ -3318,8 +3312,6 @@ if __name__ == "__main__":
     # For clarity's sake
     plt.cla()
     plt.close()
-
-    quit()
 
     for stateAc in errorDfs:
 
@@ -3380,6 +3372,13 @@ if __name__ == "__main__":
             errorCol + '_p_unbiased': 'Population (U)',
             errorCol + '_avg_unbiased': 'Averaged (U)'
         })
+
+        # Print out the counties that have the worst errors
+        curDf = curDf[(curDf['Areal'] > 600) |
+                      (curDf['Kriging'] > 600) |
+                      (curDf['Population'] > 600)]
+        print(curDf)
+        quit()
 
         # Plot all 4 error columns for this state
         indCols = ['Areal', 'Kriging', 'Population', 'Averaged']
