@@ -1338,6 +1338,20 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     cityEmissions = cityEmissions.iloc[4:].reset_index(drop=True)
     countyEmissions = countyEmissions.iloc[4:].reset_index(drop=True)
 
+    # For TN investigation: Cocke County or Jefferson County
+    #countyEmissions = countyEmissions[countyEmissions['CountyName'] == 'Cocke County']
+
+    #cityEmissions = cityEmissions[cityEmissions['StateAbbr'] == 'TN']
+    #countyEmissions = countyEmissions[countyEmissions['StateAbbr'] == "TN"]
+
+    #pd.set_option('display.max_rows', None)
+    #pd.set_option('display.max_columns', None)
+    #pd.set_option('display.width', None)
+    #print(cityEmissions)
+    #print('\n\n\n\n\n\n\n\n\n')
+    #print(countyEmissions)
+
+
     # Get rid of invalid rows
     cityEmissions = cityEmissions.dropna()
     countyEmissions = countyEmissions.dropna()
@@ -1717,7 +1731,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
                                        'EmissionsPerVM', None, None, AggMethod.KRIGING,
                                        EdgeType.AREA, ignoreMissing=True, ignoreIncomplete=True,
                                        distFunction=distFunc, model=VariogramModel.LINEAR,
-                                       binSize=50.)
+                                       binSize=5.)
     krigingRuntime = time.time() - st
 
     # Do an averaging via population as well
@@ -3285,7 +3299,7 @@ if __name__ == "__main__":
     
     errorDfs = {}
     resDfs = {}
-    for stateAc in ['TN']:#['OR', 'TN', 'CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
+    for stateAc in ['MN']:#['OR', 'TN', 'CT']:#['OR', 'TN', 'NY', 'MN']:#,'MN']:#['MN', 'VT']:#['MN', 'TX', 'VT']:#['OR']:#['CT']:#, 'OR', 'TN']:
         #break
         errorDfs[stateAc], resDfs[stateAc] = EmissionsPC(Path('./evaluation/emissions'), Path('./data/tiger'), stateAc=stateAc,
                                         loadGraph=True)
@@ -3374,6 +3388,7 @@ if __name__ == "__main__":
         })
 
         # Print out the counties that have the worst errors
+        #print(curDf)
         curDf = curDf[(curDf['Areal'] > 600) |
                       (curDf['Kriging'] > 600) |
                       (curDf['Population'] > 600)]
