@@ -1339,17 +1339,23 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     countyEmissions = countyEmissions.iloc[4:].reset_index(drop=True)
 
     # For TN investigation: Cocke County or Jefferson County
-    #countyEmissions = countyEmissions[countyEmissions['CountyName'] == 'Cocke County']
-
+    #countyEmissions = countyEmissions[countyEmissions['CountyName'] == 'Jefferson County']
     #cityEmissions = cityEmissions[cityEmissions['StateAbbr'] == 'TN']
     #countyEmissions = countyEmissions[countyEmissions['StateAbbr'] == "TN"]
 
-    #pd.set_option('display.max_rows', None)
-    #pd.set_option('display.max_columns', None)
-    #pd.set_option('display.width', None)
+    # For MN investigation: Becker County or Dodge County
+    countyEmissions = countyEmissions[countyEmissions['CountyName'] == 'Becker County']
+    cityEmissions = cityEmissions[cityEmissions['StateAbbr'] == 'MN']
+    countyEmissions = countyEmissions[countyEmissions['StateAbbr'] == "MN"]
+
+
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', None)
     #print(cityEmissions)
     #print('\n\n\n\n\n\n\n\n\n')
     #print(countyEmissions)
+    #quit()
 
 
     # Get rid of invalid rows
@@ -1383,6 +1389,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     cityEmissions['STATEFP'] = cityEmissions.apply(StateIntToFIPS, args=('StateId',), axis=1)
     countyEmissions['STATEFP'] = countyEmissions.apply(StateIntToFIPS, args=('StateId',), axis=1)
 
+
     # Now, load in info for cities and counties
 
     ### Cities, towns, etc. ###
@@ -1403,7 +1410,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     # Remove cities we don't have an ID for
     cityEmissions = cityEmissions[cityEmissions['GISJOIN'] != ""]
 
-    # TODO: For testing, pick 1 state
+    # Get the state of interest
     cityEmissions = cityEmissions[cityEmissions['StateAbbr'] == stateAc]
 
 
@@ -1711,6 +1718,12 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     #                                                          VariogramModel.EXPONENTIAL)
 
     '''
+
+    # Remove Claremont city, as it is likely erroneous
+    #cityEmissions = cityEmissions[cityEmissions['GISJOIN'] != "G27011566"]
+
+    # Remove Pine Point CDP, as it is likely erroneous
+    cityEmissions = cityEmissions[cityEmissions['GISJOIN'] != "G27051234"]
 
     # Do an averaging using both areal overlap and kriging from cities to counties
     msg = "Areal overlap equalization starting..."
@@ -3388,7 +3401,7 @@ if __name__ == "__main__":
         })
 
         # Print out the counties that have the worst errors
-        #print(curDf)
+        print(curDf)
         curDf = curDf[(curDf['Areal'] > 600) |
                       (curDf['Kriging'] > 600) |
                       (curDf['Population'] > 600)]

@@ -1,0 +1,342 @@
+CT has 93 cities and 8 counties for emissions data.
+Graph loaded successfully.
+Areal overlap equalization starting...
+
+
+
+Factor stats for Mean-Area, source col EmissionsPerVM
+
+The ratio of imperfect weights to total weights is 0.16964285714285715
+
+Factor statistics:
+Mean: 0.8302578572982403
+Median: 0.9999999999992959
+Variance: 0.14209983346667904
+
+
+
+Kriging equalization starting...
+Population overlap equalization starting...
+
+
+
+Factor stats for Mean-Population, source col EmissionsPerVM
+
+The ratio of imperfect weights to total weights is 0.0
+
+Factor statistics:
+Mean: 1.0
+Median: 1.0
+Variance: 0.0
+
+
+
+    GISJOIN RelError_a RelError_k RelError_p RelError_avg
+0  G0900010    0.00883   0.007243   0.086866     0.028426
+1  G0900030   0.014408   0.019486   0.008572     0.014155
+2  G0900050   0.141178   0.158353   0.107917     0.135816
+3  G0900070   0.009652   0.055517    0.02772     0.030963
+4  G0900090   0.026074   0.005706   0.026122     0.015497
+5  G0900110   0.013403   0.079566   0.013416     0.035462
+6  G0900130   0.089291   0.099042   0.089291     0.092542
+7  G0900150   0.030814   0.028247   0.060019     0.039693
+
+Areal - Kriging
+Average error difference (in %): -1.4938554860732243
+Median error difference (in %): -0.7414470813431466
+
+Areal - Population
+Average error difference (in %): -1.0783938726090883
+Median error difference (in %): -0.003057352377372393
+
+Population - Kriging
+Average error difference (in %): -0.415461613464136
+Median error difference (in %): -1.0332681015700098
+
+
+Averaged - Areal
+Average error difference (in %): 0.7362848886296675
+Median error difference (in %): 0.6064631220308205
+
+Averaged - Kriging
+Average error difference (in %): -0.7575705974435566
+Median error difference (in %): -0.5915717276377134
+
+Averaged - Population
+Average error difference (in %): -0.34210898397942097
+Median error difference (in %): 0.32465963854364494
+
+
+
+Areal Mean Error (in %): 4.170634687933042
+Areal Median Error (in %): 2.0241047032183914
+
+Kriging Mean Error (in %): 5.664490174006264
+Kriging Median Error (in %): 4.188165068773006
+
+Population Mean Error (in %): 5.24902856054213
+Population Median Error (in %): 4.386941306681957
+
+Averaged Estimate Mean Error (in %): 4.906919576562709
+Averaged Estimate Median Error (in %): 3.3212320240117417
+
+
+
+Areal Error Variance: 0.002310930842812105
+Kriging Error Variance: 0.002841613239293926
+Population Error Variance: 0.0014898837081087292
+Averaged Estimate Error Variance: 0.0018268500470373533
+
+
+
+Areal runtime: 0.01343536376953125
+Kriging runtime: 0.39574289321899414
+Population runtime: 0.011959552764892578
+
+
+
+Factor stats for Sum-Area, source col Vehicle Count
+
+The ratio of imperfect weights to total weights is 0.1281638853517414
+
+Factor statistics:
+Mean: 0.8716034673969878
+Median: 0.9999999999991698
+Variance: 0.1116826133619256
+
+
+
+
+
+
+Factor stats for Sum-Population, source col Vehicle Count
+
+The ratio of imperfect weights to total weights is 0.0
+
+Factor statistics:
+Mean: 1.0
+Median: 1.0
+Variance: 0.0
+
+
+
+
+Statistics for difference between areal and population-based methods for EV registrations
+Mean percent difference: -14.950689726594465
+Median percent difference: -7.13698446245252
+Error difference variance: 0.03557267799798202
+VT has 129 cities and 14 counties for emissions data.
+Graph loaded successfully.
+Areal overlap equalization starting...
+
+
+
+Factor stats for Mean-Area, source col EmissionsPerVM
+
+The ratio of imperfect weights to total weights is 0.015384615384615385
+
+Factor statistics:
+Mean: 0.9923070292788808
+Median: 0.9999999999998257
+Variance: 0.0038641117496734222
+
+
+
+Kriging equalization starting...
+Dest G5000010 threw an optimization warning.
+
+Dest G5000110 threw an optimization warning.
+
+Dest G5000150 threw an optimization warning.
+
+Population overlap equalization starting...
+
+
+
+Factor stats for Mean-Population, source col EmissionsPerVM
+
+The ratio of imperfect weights to total weights is 0.0
+
+Factor statistics:
+Mean: 1.0
+Median: 1.0
+Variance: 0.0
+
+
+
+     GISJOIN RelError_a RelError_k RelError_p RelError_avg
+0   G5000010   0.163135   0.163135   0.255756     0.194009
+1   G5000030   0.117537   0.112697   0.120269     0.116834
+2   G5000050   0.279166   0.284605   0.318996     0.294256
+3   G5000070   0.062751   0.062988   0.166258     0.013506
+4   G5000090   0.153585   0.159133   0.157877     0.156865
+5   G5000110   0.129326   0.168276   0.262198       0.1866
+6   G5000150   0.024722   0.024722    0.00511     0.018185
+7   G5000170   0.008661   0.043105   0.027923     0.007948
+8   G5000190   0.044087   0.025653    0.03165     0.033797
+9   G5000210   0.044037   0.015202   0.024627     0.027955
+10  G5000230   0.084854   0.072895   0.064717     0.074155
+11  G5000250   0.014195    0.00037    0.01145     0.008425
+12  G5000270   0.022676   0.039648   0.055555     0.039293
+
+Areal - Kriging
+Average error difference (in %): -0.18228950413348843
+Median error difference (in %): -7.230327447871332e-12
+
+Areal - Population
+Average error difference (in %): -2.7203893595146593
+Median error difference (in %): -0.4291675836934683
+
+Population - Kriging
+Average error difference (in %): 2.53809985538117
+Median error difference (in %): 0.9424523059517264
+
+
+Averaged - Areal
+Average error difference (in %): 0.1776548060259956
+Median error difference (in %): -0.07130230829623022
+
+Averaged - Kriging
+Average error difference (in %): -0.004634698107492856
+Median error difference (in %): 0.4136877494816185
+
+Averaged - Population
+Average error difference (in %): -2.5427345534886627
+Median error difference (in %): -0.34344218503644247
+
+
+
+Areal Mean Error (in %): 8.836402393352452
+Areal Median Error (in %): 6.275071180194564
+
+Kriging Mean Error (in %): 9.01869189748594
+Kriging Median Error (in %): 6.298798528301042
+
+Population Mean Error (in %): 11.556791752867111
+Population Median Error (in %): 6.471704290590284
+
+Averaged Estimate Mean Error (in %): 9.014057199378446
+Averaged Estimate Median Error (in %): 3.929295865820574
+
+
+
+Areal Error Variance: 0.005751170972936239
+Kriging Error Variance: 0.04331500310649151
+Population Error Variance: 0.011595055641371232
+Averaged Estimate Error Variance: 0.008440575072935998
+
+
+
+Areal runtime: 0.016894817352294922
+Kriging runtime: 0.5090541839599609
+Population runtime: 0.014877796173095703
+
+
+
+Factor stats for Sum-Area, source col Vehicle Count
+
+The ratio of imperfect weights to total weights is 0.4642939806265112
+
+Factor statistics:
+Mean: 0.5839476785656139
+Median: 0.9973378944811137
+Variance: 0.2228203481862356
+
+
+
+
+
+
+Factor stats for Sum-Population, source col Vehicle Count
+
+The ratio of imperfect weights to total weights is 0.0010720986330742428
+
+Factor statistics:
+Mean: 0.9994639506834628
+Median: 1.0
+Variance: 0.0002864733007603031
+
+
+
+
+Statistics for difference between areal and population-based methods for EV registrations
+Mean percent difference: -29.36523696286835
+Median percent difference: -24.52021760239042
+Error difference variance: 0.02798994781872245
+OR has 241 cities and 36 counties for emissions data.
+Graph loaded successfully.
+Areal overlap equalization starting...
+
+
+
+Factor stats for Mean-Area, source col EmissionsPerVM
+
+The ratio of imperfect weights to total weights is 0.14285714285714285
+
+Factor statistics:
+Mean: 0.8825703414330307
+Median: 0.9999999999995745
+Variance: 0.09330143656065201
+
+
+
+Kriging equalization starting...
+Dest G4100370 threw an optimization warning.
+
+Dest G4100590 threw an optimization warning.
+
+Dest G4100610 threw an optimization warning.
+
+Dest G4100690 threw an optimization warning.
+
+Population overlap equalization starting...
+
+
+
+Factor stats for Mean-Population, source col EmissionsPerVM
+
+The ratio of imperfect weights to total weights is 0.06315789473684211
+
+Factor statistics:
+Mean: 0.9526315789473684
+Median: 1.0
+Variance: 0.036188599955551425
+
+
+
+     GISJOIN RelError_a RelError_k RelError_p RelError_avg
+0   G4100010   0.536283   0.784828   0.588731     0.636614
+1   G4100030    0.31229   0.211901   0.297922     0.274038
+2   G4100050   0.194819   0.396799   0.208784     0.266801
+3   G4100070   0.100924   0.433764   0.100417     0.077474
+4   G4100090   2.979107   0.977787   3.543619     2.500171
+5   G4100110   0.541468   0.647776   0.183821     0.457688
+6   G4100130   0.348322   0.283562   0.348322     0.326736
+7   G4100150   0.299841   0.305508   0.373531     0.326293
+8   G4100170   0.007169   0.031723   0.173684      0.04493
+9   G4100190   0.648911   0.567219   0.707421     0.641184
+10  G4100210   0.585142   0.719885   0.585142     0.630056
+11  G4100230   0.891854    0.81802   1.366421     1.025431
+12  G4100270   0.019665    0.00854   0.019665     0.015957
+13  G4100290   0.392867   0.490876   0.337407      0.40705
+14  G4100310   0.809929   1.295215   2.427002     1.510715
+15  G4100330   0.285721   0.591518   0.307673     0.394971
+16  G4100350   0.369476   0.336472   0.716851     0.474267
+17  G4100370   1.035582   1.065099   1.035582     1.045421
+18  G4100390   0.154929   0.250568   0.154929     0.186809
+19  G4100410   3.163129   7.218356   3.732188     4.704558
+20  G4100430   0.621808    0.24304   0.612058     0.492302
+21  G4100450   0.717943   0.322458   0.771685     0.604029
+22  G4100470   0.794186   0.613689   0.954849     0.787575
+23  G4100490   0.595276   0.620459   0.421422     0.545719
+24  G4100510   0.116974   0.198881   0.116293     0.144049
+25  G4100530   0.539046   0.464773   0.557157     0.520325
+26  G4100550   0.370912   0.409349   0.370912     0.383724
+27  G4100570   0.029455   0.086657   0.203187     0.048662
+28  G4100590   0.668158   0.668158   0.692547     0.676287
+29  G4100610   0.865142   0.865142   0.690015     0.806766
+30  G4100630   0.841845   1.024111   1.135465     1.000474
+31  G4100650   0.190706    0.32115   0.173313      0.22839
+32  G4100670   0.406456   1.084179   0.253757     0.581464
+33  G4100690   0.898064   0.898064   0.898064     0.898064
+34  G4100710   0.275386    0.32153   0.333347     0.310087

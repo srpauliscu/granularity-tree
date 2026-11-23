@@ -1200,6 +1200,7 @@ class Gator(object):
         # estimation is worse
 
         print(f"\n\n\nFactor stats for {method}-{edgeType}, source col {sourceDataCol}")
+        #print(expandedDf)
 
         lowFactorDf = expandedDf[expandedDf[self.FACTOR_COL] <= .90]
         print(f"\nThe ratio of imperfect weights to total weights is {lowFactorDf.shape[0] / expandedDf.shape[0]}")
@@ -1209,9 +1210,16 @@ class Gator(object):
         print(f"Median: {expandedDf[self.FACTOR_COL].median()}")
         print(f"Variance: {expandedDf[self.FACTOR_COL].var()}\n\n\n")
 
+        pd.set_option('display.max_columns', None)
+
         # Additionally, do a per-destination check of weight stats
         global INTERP_FACTOR_ROWS
         for did, didDf in expandedDf.groupby(self.DEST_COL):
+            print('\n\n\n\n\n\n')
+            print(f"{did} {edgeType} weights")
+            print(didDf)
+            print('\n\n')
+        
             newRow = {'ID': did,
                       f'Weight avg': didDf[self.FACTOR_COL].mean(),
                       f'Weight stddev': didDf[self.FACTOR_COL].std(),

@@ -1,0 +1,521 @@
+MN has 901 cities and 87 counties for emissions data.
+Graph loaded successfully.
+Areal overlap equalization starting...
+
+
+
+Factor stats for Mean-Area, source col EmissionsPerVM
+
+The ratio of imperfect weights to total weights is 0.19615032080659944
+
+Factor statistics:
+Mean: 0.8258477435646514
+Median: 0.9999999999993602
+Variance: 0.13504244621246225
+
+
+
+Kriging equalization starting...
+
+Destination G2700010 had 6 matches with the following dist stats:
+Avg distance: 25681.278450546553
+Var of distance: 14577.232015656286
+
+Destination G2700030 had 32 matches with the following dist stats:
+Avg distance: 17915.321049835657
+Var of distance: 6254.594612042416
+
+Destination G2700050 had 10 matches with the following dist stats:
+Avg distance: 25073.977064706723
+Var of distance: 4806.869542122925
+
+Destination G2700070 had 12 matches with the following dist stats:
+Avg distance: 34163.003521417886
+Var of distance: 17182.688782716512
+
+Destination G2700090 had 8 matches with the following dist stats:
+Avg distance: 16180.908979210946
+Var of distance: 7450.874110040676
+
+Destination G2700110 had 9 matches with the following dist stats:
+Avg distance: 20694.351682862936
+Var of distance: 9671.690152033532
+
+Destination G2700130 had 15 matches with the following dist stats:
+Avg distance: 17842.920400559356
+Var of distance: 8145.9184164431135
+
+Destination G2700150 had 8 matches with the following dist stats:
+Avg distance: 17392.289812196057
+Var of distance: 6114.121395847911
+
+Destination G2700170 had 13 matches with the following dist stats:
+Avg distance: 21552.245251797893
+Var of distance: 9625.409091048237
+
+Destination G2700190 had 17 matches with the following dist stats:
+Avg distance: 16334.60952809201
+Var of distance: 7286.064873410836
+
+Destination G2700210 had 23 matches with the following dist stats:
+Avg distance: 38163.288571690886
+Var of distance: 18351.356577569713
+
+Destination G2700230 had 7 matches with the following dist stats:
+Avg distance: 20507.9090454144
+Var of distance: 5702.842553873237
+
+Destination G2700250 had 13 matches with the following dist stats:
+Avg distance: 18561.090645129225
+Var of distance: 7230.006626961437
+
+Destination G2700270 had 12 matches with the following dist stats:
+Avg distance: 21079.022693038547
+Var of distance: 7405.956199474352
+
+Destination G2700290 had 8 matches with the following dist stats:
+Avg distance: 17260.852223735463
+Var of distance: 8959.958905633353
+
+Destination G2700310 had 6 matches with the following dist stats:
+Avg distance: 63553.011042270264
+Var of distance: 30805.71427602002
+
+Destination G2700330 had 8 matches with the following dist stats:
+Avg distance: 17329.52458630941
+Var of distance: 6544.016056407514
+
+Destination G2700350 had 22 matches with the following dist stats:
+Avg distance: 20353.694512760318
+Var of distance: 10805.947638481679
+
+Destination G2700370 had 27 matches with the following dist stats:
+Avg distance: 18943.58647870256
+Var of distance: 6957.92809422614
+
+Destination G2700390 had 7 matches with the following dist stats:
+Avg distance: 12000.051620160111
+Var of distance: 6738.454516305582
+
+Destination G2700410 had 11 matches with the following dist stats:
+Avg distance: 15881.467719276681
+Var of distance: 6576.859036423992
+
+Destination G2700430 had 11 matches with the following dist stats:
+Avg distance: 17483.767375178144
+Var of distance: 5243.150128302048
+
+Destination G2700450 had 14 matches with the following dist stats:
+Avg distance: 19404.758593344064
+Var of distance: 9103.501099447223
+
+Destination G2700470 had 14 matches with the following dist stats:
+Avg distance: 15660.94908029991
+Var of distance: 6693.13355081479
+
+Destination G2700490 had 12 matches with the following dist stats:
+Avg distance: 21210.834305217377
+Var of distance: 7900.6141391556275
+
+Destination G2700510 had 7 matches with the following dist stats:
+Avg distance: 15213.785268098834
+Var of distance: 5892.278816726681
+
+Destination G2700530 had 61 matches with the following dist stats:
+Avg distance: 17657.600486385356
+Var of distance: 7891.395806162592
+
+Destination G2700550 had 8 matches with the following dist stats:
+Avg distance: 16843.406728408125
+Var of distance: 7197.43937941874
+
+Destination G2700570 had 5 matches with the following dist stats:
+Avg distance: 17301.279647432104
+Var of distance: 4811.132895920137
+
+Destination G2700590 had 7 matches with the following dist stats:
+Avg distance: 16991.18951538147
+Var of distance: 7881.316599436511
+
+Destination G2700610 had 19 matches with the following dist stats:
+Avg distance: 33650.67965532197
+Var of distance: 8266.535082277616
+
+Destination G2700630 had 8 matches with the following dist stats:
+Avg distance: 17010.875645842916
+Var of distance: 7331.591154916288
+
+Destination G2700650 had 5 matches with the following dist stats:
+Avg distance: 15987.516685394923
+Var of distance: 7666.357592145066
+
+Destination G2700670 had 12 matches with the following dist stats:
+Avg distance: 19113.80334709228
+Var of distance: 8829.559679203756
+
+Destination G2700690 had 9 matches with the following dist stats:
+Avg distance: 20882.056935807224
+Var of distance: 10137.78063120847
+
+Destination G2700710 had 7 matches with the following dist stats:
+Avg distance: 40983.57665507511
+Var of distance: 18198.279951241926
+
+Destination G2700730 had 8 matches with the following dist stats:
+Avg distance: 19041.469512292788
+Var of distance: 9071.183202364917
+
+Destination G2700750 had 6 matches with the following dist stats:
+Avg distance: 43319.97365352192
+Var of distance: 14131.842720682302
+
+Destination G2700770 had 5 matches with the following dist stats:
+Avg distance: 28574.03323061901
+Var of distance: 23242.923132550848
+
+Destination G2700790 had 13 matches with the following dist stats:
+Avg distance: 17564.147948311784
+Var of distance: 6841.610189113975
+
+Destination G2700810 had 6 matches with the following dist stats:
+Avg distance: 15289.182078010888
+Var of distance: 7649.2091089728165
+
+Destination G2700830 had 11 matches with the following dist stats:
+Avg distance: 18446.905017019624
+Var of distance: 8464.456691194575
+
+Destination G2700850 had 9 matches with the following dist stats:
+Avg distance: 14138.985443884912
+Var of distance: 7081.177480897396
+
+Destination G2700870 had 12 matches with the following dist stats:
+Avg distance: 14486.314690823254
+Var of distance: 7574.298606251318
+
+Destination G2700890 had 11 matches with the following dist stats:
+Avg distance: 31036.99085083652
+Var of distance: 19097.328381662537
+
+Destination G2700910 had 10 matches with the following dist stats:
+Avg distance: 15249.341707772555
+Var of distance: 5876.398335041482
+
+Destination G2700930 had 10 matches with the following dist stats:
+Avg distance: 16838.386292643343
+Var of distance: 7516.411493528056
+
+Destination G2700950 had 9 matches with the following dist stats:
+Avg distance: 24664.669429159396
+Var of distance: 7648.665122485278
+
+Destination G2700970 had 18 matches with the following dist stats:
+Avg distance: 23244.638832410434
+Var of distance: 9452.485608431154
+
+Destination G2700990 had 15 matches with the following dist stats:
+Avg distance: 16007.023296850812
+Var of distance: 6430.223067003455
+
+Destination G2701010 had 10 matches with the following dist stats:
+Avg distance: 13135.472085963114
+Var of distance: 5297.658402983097
+
+Destination G2701030 had 9 matches with the following dist stats:
+Avg distance: 20655.20202262131
+Var of distance: 7323.50286637769
+
+Destination G2701050 had 12 matches with the following dist stats:
+Avg distance: 20639.555155460428
+Var of distance: 7614.108402225534
+
+Destination G2701070 had 8 matches with the following dist stats:
+Avg distance: 21549.652319339984
+Var of distance: 9413.697065327919
+
+Destination G2701090 had 9 matches with the following dist stats:
+Avg distance: 19911.99427664288
+Var of distance: 6897.652653333891
+
+Destination G2701110 had 22 matches with the following dist stats:
+Avg distance: 27482.902547931702
+Var of distance: 10119.545627007992
+
+Destination G2701130 had 3 matches with the following dist stats:
+Avg distance: 15240.22042186129
+Var of distance: 3922.317393596664
+
+Destination G2701150 had 14 matches with the following dist stats:
+Avg distance: 25128.158418328025
+Var of distance: 10606.223408470505
+
+Destination G2701170 had 9 matches with the following dist stats:
+Avg distance: 14438.771147052332
+Var of distance: 5893.287972626476
+
+Destination G2701190 had 16 matches with the following dist stats:
+Avg distance: 39644.14289001821
+Var of distance: 13736.09192419029
+
+Destination G2701210 had 10 matches with the following dist stats:
+Avg distance: 17343.687922021058
+Var of distance: 7560.36579327462
+
+Destination G2701230 had 31 matches with the following dist stats:
+Avg distance: 11323.621517637399
+Var of distance: 4691.26074848967
+
+Destination G2701250 had 4 matches with the following dist stats:
+Avg distance: 11955.870701078187
+Var of distance: 5478.171950962602
+
+Destination G2701270 had 17 matches with the following dist stats:
+Avg distance: 19667.405205089235
+Var of distance: 8035.113558440684
+
+Destination G2701290 had 12 matches with the following dist stats:
+Avg distance: 23346.451984284842
+Var of distance: 11955.049806970668
+
+Destination G2701310 had 8 matches with the following dist stats:
+Avg distance: 15146.307072709897
+Var of distance: 5041.509360862382
+
+Destination G2701330 had 8 matches with the following dist stats:
+Avg distance: 14736.692085267907
+Var of distance: 5746.16846190868
+
+Destination G2701350 had 6 matches with the following dist stats:
+Avg distance: 30147.08833425627
+Var of distance: 16213.540276431899
+
+Destination G2701370 had 33 matches with the following dist stats:
+Avg distance: 46882.37271581628
+Var of distance: 29837.232668147808
+
+Destination G2701390 had 14 matches with the following dist stats:
+Avg distance: 18194.97906689123
+Var of distance: 5487.8908350900165
+
+Destination G2701410 had 14 matches with the following dist stats:
+Avg distance: 22508.873927008717
+Var of distance: 8349.617022942055
+
+Destination G2701430 had 9 matches with the following dist stats:
+Avg distance: 19382.52208443689
+Var of distance: 10866.104538517036
+
+Destination G2701450 had 34 matches with the following dist stats:
+Avg distance: 24778.255653986856
+Var of distance: 10038.217424387925
+
+Destination G2701470 had 4 matches with the following dist stats:
+Avg distance: 15917.696306022264
+Var of distance: 5963.306806557568
+
+Destination G2701490 had 5 matches with the following dist stats:
+Avg distance: 11113.715286557475
+Var of distance: 5662.047780938342
+
+Destination G2701510 had 8 matches with the following dist stats:
+Avg distance: 17570.729305795874
+Var of distance: 9318.397200367697
+
+Destination G2701530 had 14 matches with the following dist stats:
+Avg distance: 24597.53877900694
+Var of distance: 10940.777131398772
+
+Destination G2701550 had 5 matches with the following dist stats:
+Avg distance: 21398.171845079145
+Var of distance: 14473.03668503768
+
+Destination G2701570 had 11 matches with the following dist stats:
+Avg distance: 18306.459655830877
+Var of distance: 6254.87844509576
+
+Destination G2701590 had 7 matches with the following dist stats:
+Avg distance: 18791.777781232195
+Var of distance: 6734.6795619047625
+
+Destination G2701610 had 5 matches with the following dist stats:
+Avg distance: 15052.1458713084
+Var of distance: 4507.933716277403
+
+Destination G2701630 had 36 matches with the following dist stats:
+Avg distance: 16697.95309558829
+Var of distance: 9484.529336965154
+
+Destination G2701650 had 8 matches with the following dist stats:
+Avg distance: 13884.786823132552
+Var of distance: 5767.664578983373
+
+Destination G2701670 had 8 matches with the following dist stats:
+Avg distance: 22873.180583074798
+Var of distance: 8559.31226649447
+
+Destination G2701690 had 15 matches with the following dist stats:
+Avg distance: 18109.165515927765
+Var of distance: 10040.84354056178
+
+Destination G2701710 had 25 matches with the following dist stats:
+Avg distance: 22018.434456305462
+Var of distance: 7960.640870735395
+
+Destination G2701730 had 10 matches with the following dist stats:
+Avg distance: 23501.108032755954
+Var of distance: 9074.558780621315
+Population overlap equalization starting...
+
+
+
+Factor stats for Mean-Population, source col EmissionsPerVM
+
+The ratio of imperfect weights to total weights is 0.03949044585987261
+
+Factor statistics:
+Mean: 0.9707006369426752
+Median: 1.0
+Variance: 0.02372768768131886
+
+
+
+     GISJOIN RelError_a RelError_k RelError_p RelError_avg
+0   G2700010   0.414127   0.412124   0.422364     0.416205
+1   G2700030   0.659784  26.441021   0.659317     9.253374
+2   G2700050   4.236551  10.335607   0.389132     4.987096
+3   G2700070    1.20128   4.204363   1.539059     0.488008
+4   G2700090   0.278462   0.211268   0.292348     0.260693
+5   G2700110   1.107368   1.194052   0.872674     1.058031
+6   G2700130   0.681709   0.626789   0.680556     0.663018
+7   G2700150   0.543196   0.468161   0.565298     0.525552
+8   G2700170   0.002655   1.774712   0.069559     0.567499
+9   G2700190   0.689257   0.581506   0.500583     0.590449
+10  G2700210   0.364135   0.829931   0.296371     0.496813
+11  G2700230   0.288977   0.304036    0.25707     0.283361
+12  G2700250    0.19352   0.181302   0.299746     0.224856
+13  G2700270   2.510308   0.212923    1.14202     1.288417
+14  G2700290    0.67253   0.698169   0.753639     0.708113
+15  G2700310   0.231239   0.352672   0.314413     0.299441
+16  G2700330   0.104797   0.001647   0.093815     0.066753
+17  G2700350   0.098583   0.112291   0.144164     0.118346
+18  G2700370   0.040082   0.048614   0.041358     0.010942
+19  G2700390  15.438936  17.031228   15.46241    15.977525
+20  G2700410   1.302407   1.294617   1.075516      1.22418
+21  G2700430   3.966573   4.098981   3.972815      4.01279
+22  G2700450    1.34541   0.772927   1.328484      1.14894
+23  G2700470   0.935099    0.99573   0.935099     0.955309
+24  G2700490   0.365663   0.431939   0.445641     0.414414
+25  G2700510   2.821141   1.918414   2.821141     2.520232
+26  G2700530   0.333118   0.889091   0.363341     0.528517
+27  G2700550   1.093861    0.86578   1.131074     1.030238
+28  G2700570   0.071158   0.096891   0.071158     0.079735
+29  G2700590   0.729151   0.526814   0.732939     0.662968
+30  G2700610   0.075367   0.005444   0.024866     0.031596
+31  G2700630   2.441023   1.577035    3.43695     2.485003
+32  G2700650   0.159674   0.335884    0.15167     0.215743
+33  G2700670   0.109405   0.110482   0.109024     0.109637
+34  G2700690   1.138564   1.078311   0.943387     1.053421
+35  G2700710   0.013734   0.044607   0.604131     0.191086
+36  G2700730   1.351607   1.519109   1.580763     1.483826
+37  G2700750   0.056576   0.007258   0.195597     0.048759
+38  G2700770   0.578317   4.459507   2.021599     2.353141
+39  G2700790   0.753234   0.937058   1.001175     0.897155
+40  G2700810   1.222413   1.098791   1.222413     1.181206
+41  G2700830   0.078159   0.277625   0.019314     0.125033
+42  G2700850   1.120552   1.120552   1.303447     1.181517
+43  G2700870   1.067693   1.708428   1.078702     1.284941
+44  G2700890   1.698419   1.538238   1.698419     1.645026
+45  G2700910   3.516244   3.458052   3.494139     3.489479
+46  G2700930    0.67987   0.666886   0.731559     0.692772
+47  G2700950   0.423218   0.409483   0.435313     0.422671
+48  G2700970   0.625036   0.945193   0.669867      0.11657
+49  G2700990   0.976933   1.725125   0.976933      1.22633
+50  G2701010   2.365594   1.950874   2.563766     2.293411
+51  G2701030   0.455008   0.953712   0.453978     0.620899
+52  G2701050   0.792712   0.835983   0.792712     0.807135
+53  G2701070   1.756698   1.724492   1.647934     1.709708
+54  G2701090   0.508369   0.535321   0.731713     0.591801
+55  G2701110   0.850671   0.449461   0.867561     0.722564
+56  G2701130   1.572343   1.751683   1.572343     1.632123
+57  G2701150   0.157544   0.161652   0.142428     0.153875
+58  G2701170   0.286537   0.240758   0.352195     0.293163
+59  G2701190     1.1688   1.446855   1.229944     1.281866
+60  G2701210   3.096172   2.676043   3.095014     2.955743
+61  G2701230   0.186511   0.232528   0.167178     0.040387
+62  G2701250   1.484751   1.448107   1.484751     1.472536
+63  G2701270   0.330475   0.293745   0.330475     0.122402
+64  G2701290   0.636517   0.673176   0.636517     0.648737
+65  G2701310   0.622239   0.544616   0.549848     0.572234
+66  G2701330   1.473682   1.078201   1.529599     1.360494
+67  G2701350   1.516912   1.527762   1.943467     1.662714
+68  G2701370   2.174278   1.054937   2.859852     2.029689
+69  G2701390   0.447481   0.572257   0.354124     0.457954
+70  G2701410     0.2627   0.139603   0.122818      0.17504
+71  G2701430    3.32849   3.170081   3.369036     3.289203
+72  G2701450    0.95048   0.999861   1.150283     1.033541
+73  G2701470    0.91005   0.851942   0.912396     0.891463
+74  G2701490    0.98926    0.98926    0.98926      0.98926
+75  G2701510   0.004331    0.04882   0.004331     0.013386
+76  G2701530   1.231757   1.581652   1.316741     1.376717
+77  G2701550   0.935819   0.867045   0.935819     0.912894
+78  G2701570   0.803736   0.722258   0.843784     0.789926
+79  G2701590   0.748962   1.358384   0.301923     0.803089
+80  G2701610   0.304729   0.274915   0.305257     0.294967
+81  G2701630   1.309471   1.148822   1.048393     1.168895
+82  G2701650   2.514262    2.57083   2.531651     2.538914
+83  G2701670   1.325595   1.487923   1.523865     1.445794
+84  G2701690   0.662174   0.488304   0.799767     0.650082
+85  G2701710   0.987263    0.99206     0.8997     0.959674
+86  G2701730   1.467545  38.429661   1.711234     13.86948
+
+Areal - Kriging
+Average error difference (in %): -87.10714750436526
+Median error difference (in %): -0.41085489882354276
+
+Areal - Population
+Average error difference (in %): -0.019531268683852524
+Median error difference (in %): -0.1275793821334137
+
+Population - Kriging
+Average error difference (in %): -87.08761623568145
+Median error difference (in %): 1.024018927540038
+
+
+Averaged - Areal
+Average error difference (in %): 25.633856703430663
+Median error difference (in %): 9.291456493087935e-11
+
+Averaged - Kriging
+Average error difference (in %): -61.473290800934656
+Median error difference (in %): -4.6418424659577795e-11
+
+Averaged - Population
+Average error difference (in %): 25.614325434746803
+Median error difference (in %): -1.2214543054293259
+
+
+
+Areal Mean Error (in %): 116.58279911365122
+Areal Median Error (in %): 75.32335113405611
+
+Kriging Mean Error (in %): 203.68994661801648
+Kriging Median Error (in %): 86.70445754005168
+
+Population Mean Error (in %): 116.60233038233505
+Population Median Error (in %): 79.97668861573479
+
+Averaged Estimate Mean Error (in %): 142.21665581708186
+Averaged Estimate Median Error (in %): 80.30893115338216
+
+
+
+Areal Error Variance: 3.237563232863473
+Kriging Error Variance: 27.58973700228527
+Population Error Variance: 3.196117377604797
+Averaged Estimate Error Variance: 6.017942619306556
+
+
+
+Areal runtime: 0.17833161354064941
+Kriging runtime: 7.912775039672852
+Population runtime: 0.18543410301208496
