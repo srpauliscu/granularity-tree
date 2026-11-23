@@ -1215,10 +1215,10 @@ class Gator(object):
         # Additionally, do a per-destination check of weight stats
         global INTERP_FACTOR_ROWS
         for did, didDf in expandedDf.groupby(self.DEST_COL):
-            print('\n\n\n\n\n\n')
-            print(f"{did} {edgeType} weights")
-            print(didDf)
-            print('\n\n')
+            #print('\n\n\n\n\n\n')
+            #print(f"{did} {edgeType} weights")
+            #print(didDf)
+            #print('\n\n')
         
             newRow = {'ID': did,
                       f'Weight avg': didDf[self.FACTOR_COL].mean(),

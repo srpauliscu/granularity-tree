@@ -1723,7 +1723,7 @@ def EmissionsPC(dataDir: Path, sfDir: Path, loadGraph: bool = True,
     #cityEmissions = cityEmissions[cityEmissions['GISJOIN'] != "G27011566"]
 
     # Remove Pine Point CDP, as it is likely erroneous
-    cityEmissions = cityEmissions[cityEmissions['GISJOIN'] != "G27051234"]
+    #cityEmissions = cityEmissions[cityEmissions['GISJOIN'] != "G27051234"]
 
     # Do an averaging using both areal overlap and kriging from cities to counties
     msg = "Areal overlap equalization starting..."
